@@ -22,39 +22,29 @@ if "NOME_USUARIO_LOGADO" not in st.session_state:
 
 # --- FLUXO DE TELAS ---
 
-# 1. SE O USUÁRIO NÃO ESTIVER LOGADO (TELA DE LOGIN COM LOGO DO ICMBio)
+# 1. SE O USUÁRIO NÃO ESTIVER LOGADO
 if not st.session_state.autenticado:
     
     # Tela de Login Padrão
     if st.session_state.sub_tela_login == "login":
+        st.title("🔑 Login - Gestão de Estoque")
         
-        # Colunas para centralizar a logo do ICMBio
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col2:
-            # Exibe a logo do ICMBio centralizada
-            st.image(
-                "https://www.gov.br/icmbio/pt-br/acesso-a-informacao/dados-abertos/imagens/logo-icmbio.png", 
-                use_container_width=True
-            )
-        
-        st.markdown("<h2 style='text-align: center;'>Gestão de Estoque - NGI Carajás</h2>", unsafe_allow_html=True)
-        
-        # Formulário de login
         usuario = st.text_input("Usuário")
         senha = st.text_input("Senha", type="password")
         
-        if st.button("Entrar", type="primary", use_container_width=True):
+        if st.button("Entrar", type="primary"):
+            # Substitua pela sua lógica real de validação se necessário
             if usuario and senha: 
                 st.session_state.autenticado = True
                 st.rerun()
             else:
-                st.error("Por favor, preencha todos os campos.")
+                st.error("Por favor, preencha os campos.")
                 
-        if st.button("Esqueci a senha", use_container_width=True):
+        if st.button("Esqueci a senha"):
             st.session_state.sub_tela_login = "esqueci"
             st.rerun()
 
-    # Tela de Esqueci a Senha
+    # Tela de Esqueci a Senha (Sua Imagem 1)
     elif st.session_state.sub_tela_login == "esqueci":
         st.markdown("<p style='text-align: left; font-size: 0.9rem;'>Insira seu e-mail corporativo para recuperar a senha.</p>", unsafe_allow_html=True)
         email_recuperar = st.text_input("E-mail corporativo", placeholder="exemplo@icmbio.gov.br")
@@ -65,6 +55,8 @@ if not st.session_state.autenticado:
         if st.button("Voltar para o Login", use_container_width=True):
             st.session_state.sub_tela_login = "login"
             st.rerun()
+            
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # 2. SE O USUÁRIO ESTIVER LOGADO (SISTEMA PRINCIPAL)
 else:
@@ -106,14 +98,15 @@ else:
         st.title("🔄 Movimentação de Entrada e Saída")
 
     elif escolha == "👤 Perfil":
+        # Tela de Perfil (Sua Imagem 4)
         st.title("👤 Meu Perfil")
         st.write(f"**Usuário Atual:** {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("**Lotação:** NGI Carajás / ICMBio")
 
     elif escolha == "🔴 Sair":
-        # Limpa o estado de login e volta para a tela inicial
+        # Altera os estados para deslogar e joga o usuário para a tela de login
         st.session_state.autenticado = False
         st.session_state.sub_tela_login = "login"
         
-        # Recarrega o app imediatamente para exibir a tela de login com a logo
+        # Recarrega o Streamlit instantaneamente para aplicar a mudança
         st.rerun()
