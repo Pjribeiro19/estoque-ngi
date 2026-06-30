@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -169,3 +170,32 @@ if st.session_state.usuario_logado is None:
                 st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
+
+# -----------------------------------------------------------------------------
+# TELA PRINCIPAL (APÓS LOGIN)
+# -----------------------------------------------------------------------------
+else:
+    # Barra Superior / Sidebar de Navegação
+    st.sidebar.title(f"Olá, {st.session_state.usuario_logado}!")
+    opcao = st.sidebar.radio("Navegação", ["Estoque Atual", "Movimentações", "Configurações"])
+    
+    if st.sidebar.button("Sair do Sistema"):
+        st.session_state.usuario_logado = None
+        st.rerun()
+        
+    st.title("Painel de Controle - Almoxarifado")
+    
+    if opcao == "Estoque Atual":
+        st.subheader("Itens em Estoque")
+        st.dataframe(st.session_state.produtos, use_container_width=True)
+        
+    elif opcao == "Movimentações":
+        st.subheader("Histórico de Entradas e Saídas")
+        if st.session_state.movimentacoes.empty:
+            st.info("Nenhuma movimentação registrada até o momento.")
+        else:
+            st.dataframe(st.session_state.movimentacoes, use_container_width=True)
+            
+    elif opcao == "Configurações":
+        st.subheader("Configurações do Sistema")
+        st.write("Gerencie usuários, coordenações e categorias aqui.")
