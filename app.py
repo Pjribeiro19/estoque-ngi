@@ -19,9 +19,15 @@ if "sub_tela_login" not in st.session_state:
 if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = "João Paulo"
 
-# --- INJECT DE CSS PARA ESTILIZAÇÃO CUSTOMIZADA ---
+# --- INJECT DE CSS PARA ESTILIZAÇÃO CUSTOMIZADA E CONTRAPARTIDA DE RESPONSIVIDADE ---
 st.markdown("""
     <style>
+    /* DESATIVAR RESPONSIVIDADE: Força o layout a se comportar como desktop em telas pequenas */
+    .stApp {
+        min-width: 1200px !important;
+        overflow-x: auto !important;
+    }
+    
     /* Regras do Menu Lateral e Header quando logado */
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stHeader"] {background: transparent !important; z-index: 100;}
@@ -39,6 +45,7 @@ st.markdown("""
         padding: 0 30px;
         z-index: 999999;
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        min-width: 1200px !important; /* Mantém o topo alinhado à largura fixa */
     }
     .header-title {
         color: white !important;
@@ -120,7 +127,6 @@ if not st.session_state.autenticado:
         
         col_l1, col_l2, col_l3 = st.columns([1, 1.3, 1])
         with col_l2:
-            # HTML customizado para forçar centralização perfeita da imagem e ajustar o tamanho proporcionalmente
             st.markdown("""
                 <div class="img-container">
                     <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="280">
@@ -164,7 +170,6 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (APÓS ESTAR AUTENTICADO)
 # =============================================================================
 else:
-    # Header dinâmico com o novo nome oficial do sistema
     st.markdown(f"""
         <div class="custom-header">
             <div class="header-title">SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS</div>
@@ -173,7 +178,7 @@ else:
     """, unsafe_allow_html=True)
 
     # -----------------------------------------------------------------------------
-    # BANCO DE DADOS EM MEMÓRIA (Session State)
+    # BANCO DE DADOS EM MEMÓRIA
     # -----------------------------------------------------------------------------
     if "produtos" not in st.session_state or not isinstance(st.session_state.produtos, pd.DataFrame):
         st.session_state.produtos = pd.DataFrame([
@@ -245,7 +250,7 @@ else:
                 df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)
             ]
             
-        if category_selection := categoria_selecionada != "Todas":
+        if categoria_selecionada != "Todas":
             df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
         st.write("### 📋 Estoque Atualizado")
