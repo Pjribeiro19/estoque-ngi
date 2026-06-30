@@ -20,7 +20,6 @@ if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = "João Paulo"
 
 # --- REMOVE A RESPONSIVIDADE FORÇANDO MODO DESKTOP NO CELULAR ---
-# Este script força o navegador do celular a simular uma tela de PC (1024px) e ajustar o zoom
 st.components.v1.html(
     """
     <script>
@@ -34,13 +33,28 @@ st.components.v1.html(
     width=0
 )
 
-# --- INJECT DE CSS LIMPO ---
+# --- INJECT DE CSS AJUSTADO ---
 st.markdown("""
     <style>
-    /* Regras do Menu Lateral e Header */
+    /* Oculta a navegação padrão de arquivos do Streamlit */
     [data-testid="stSidebarNav"] {display: none;}
-    [data-testid="stHeader"] {background: transparent !important; z-index: 100;}
     
+    /* Ajusta o Header padrão para não sumir com o botão do menu do celular */
+    [data-testid="stHeader"] {
+        background: transparent !important; 
+        z-index: 9999991 !important;
+    }
+    
+    /* Garante que o botão de abrir a barra lateral (setinha) fique por cima de tudo e visível */
+    [data-testid="stHeader"] button {
+        background-color: #1e5934 !important;
+        color: white !important;
+        border-radius: 50% !important;
+        margin-left: 10px !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3) !important;
+    }
+    
+    /* Cabeçalho personalizado */
     .custom-header {
         position: fixed;
         top: 0;
@@ -51,8 +65,8 @@ st.markdown("""
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 0 30px;
-        z-index: 999999;
+        padding: 0 30px 0 80px; /* Espaço na esquerda para o botão do menu não cobrir o texto */
+        z-index: 999990;
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
     .header-title {
@@ -69,15 +83,17 @@ st.markdown("""
     }
     
     .block-container {
-        padding-top: 5rem !important;
+        padding-top: 6rem !important;
     }
     [data-testid="stSidebarUserContent"] {
-        padding-top: 3.5rem !important;
+        padding-top: 1.5rem !important;
     }
     
+    /* Estilização da Barra Lateral */
     [data-testid="stSidebar"] {
         background-color: #fcfaff !important;
         border-right: 1px solid #efe9f5;
+        z-index: 999995 !important;
     }
     
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
@@ -448,7 +464,7 @@ else:
                     if st.button("Salvar Edição", type="primary"):
                         st.session_state.coordenacoes.loc[idx_c, "Sigla"] = edit_sigla.upper()
                         st.session_state.coordenacoes.loc[idx_c, "Nome"] = edit_nc
-                        st.success("Nome atualizado!")
+                        st.success("Nome updated!")
                         st.rerun()
                 with c_btn_co2:
                     if st.button("❌ Excluir Coordenação"):
