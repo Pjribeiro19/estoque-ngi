@@ -46,7 +46,7 @@ if "sub_tela_login" not in st.session_state:
     st.session_state.sub_tela_login = "login"
 
 # -----------------------------------------------------------------------------
-# TELA DE ACESSO (ESTILO PORTAL MINIMALISTA CHICO CAR - CENTRALIZADO)
+# TELA DE ACESSO (CENTRALIZADA)
 # -----------------------------------------------------------------------------
 if st.session_state.usuario_logado is None:
     
@@ -109,7 +109,6 @@ if st.session_state.usuario_logado is None:
             color: #1e5934 !important;
         }
         
-        /* Força o botão primário (Entrar) a ficar verde na tela de login */
         div.stButton > button:first-child[kind="primary"] {
             background-color: #1e5934 !important;
             border-color: #1e5934 !important;
@@ -121,27 +120,22 @@ if st.session_state.usuario_logado is None:
         }
         
         [data-testid="stHeader"] { display: none !important; }
-        .custom-header { display: none !important; }
         </style>
     """, unsafe_allow_html=True)
 
-    # Colunas estruturais para garantir o alinhamento no miolo da página
     _, col_central, _ = st.columns([1.1, 1, 1.1])
     
     with col_central:
         st.markdown('<div class="login-container">', unsafe_allow_html=True)
         
-        # Bloco do Logo Centralizado
         st.markdown('<div class="logo-wrapper">', unsafe_allow_html=True)
         logo_url = "https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png/@@images/93d85e33-e72b-423a-bc35-5d1b1f09b402.png"
         st.image(logo_url, width=190)
         st.markdown('</div>', unsafe_allow_html=True)
             
-        # Bloco do Nome Completo Alinhado
         st.markdown('<div class="system-title">GESTÃO DE ALMOXARIFADO</div>', unsafe_allow_html=True)
         st.markdown('<div class="system-subtitle">NGI CARAJÁS</div>', unsafe_allow_html=True)
         
-        # SUB-TELA: FORMULÁRIO DE LOGIN
         if st.session_state.sub_tela_login == "login":
             login_email = st.text_input("E-mail corporativo", placeholder="E-mail", key="login_email_input", label_visibility="collapsed")
             login_senha = st.text_input("Senha", placeholder="Senha", type="password", key="login_senha_input", label_visibility="collapsed")
@@ -153,9 +147,10 @@ if st.session_state.usuario_logado is None:
             st.markdown('</div>', unsafe_allow_html=True)
             
             if st.button("Entrar", type="primary", use_container_width=True, key="btn_entrar_confirmar"):
+                # .str.strip() previne erros de espaços invisíveis digitados no cadastro ou login
                 usuario_valido = st.session_state.usuarios[
-                    (st.session_state.usuarios["E-mail"] == login_email) & 
-                    (st.session_state.usuarios["Senha"] == login_senha)
+                    (st.session_state.usuarios["E-mail"].str.strip() == login_email.strip()) & 
+                    (st.session_state.usuarios["Senha"].astype(str) == login_senha)
                 ]
                 if not usuario_valido.empty:
                     st.session_state.usuario_logado = usuario_valido.iloc[0]["Nome"]
@@ -163,14 +158,13 @@ if st.session_state.usuario_logado is None:
                 else:
                     st.error("E-mail ou senha incorretos.")
                     
-        # SUB-TELA: RECUPERAÇÃO DE SENHA
         elif st.session_state.sub_tela_login == "esqueci":
             st.markdown("<p style='text-align: left; font-size: 0.9rem; color: #444; margin-bottom: 15px;'>Insira seu e-mail funcional cadastrado:</p>", unsafe_allow_html=True)
             email_recupera = st.text_input("E-mail para recuperação", placeholder="seu.email@icmbio.gov.br", key="email_recup_input", label_visibility="collapsed")
             
             st.write("")
             if st.button("Enviar Instruções", type="primary", use_container_width=True, key="btn_enviar_recup"):
-                if email_recupera in st.session_state.usuarios["E-mail"].values:
+                if email_recupera.strip() in st.session_state.usuarios["E-mail"].str.strip().values:
                     st.success("Instruções enviadas para o e-mail informado!")
                 else:
                     st.error("E-mail não localizado na base de dados.")
@@ -185,7 +179,7 @@ if st.session_state.usuario_logado is None:
 NOME_USUARIO_LOGADO = st.session_state.usuario_logado
 
 # -----------------------------------------------------------------------------
-# ESTILIZAÇÃO CUSTOMIZADA DO PAINEL INTERNO (PÓS-LOGIN)
+# ESTILIZAÇÃO CUSTOMIZADA DO PAINEL INTERNO
 # -----------------------------------------------------------------------------
 st.markdown(f"""
     <style>
@@ -350,7 +344,6 @@ elif escolha == "➕ Cadastrar Produto":
                         novo_p = {"Código": cod, "Item": nome_it, "Quantidade": 0, "Categoria": cat_it, "Valor Unitário": float(val_unit)}
                         st.session_state.produtos = pd.concat([st.session_state.produtos, pd.DataFrame([novo_p])], ignore_index=True)
                         st.success(f"Sucesso! {nome_it} adicionado ao catálogo com saldo zerado.")
-                        st.rerun()
                 else:
                     st.error("Preencha o Código e o Nome do Material!")
                     
@@ -383,12 +376,10 @@ elif escolha == "➕ Cadastrar Produto":
                     st.session_state.produtos.loc[idx_p, "Categoria"] = edit_cat
                     st.session_state.produtos.loc[idx_p, "Valor Unitário"] = float(edit_val)
                     st.success("Produto atualizado com sucesso!")
-                    st.rerun()
             with col_b_prod2:
                 if st.button("❌ Excluir Produto do Sistema"):
                     st.session_state.produtos = st.session_state.produtos.drop(idx_p).reset_index(drop=True)
                     st.warning("Produto removido definitivamente.")
-                    st.rerun()
 
 # --- TELA: CADASTRAR CATEGORIA ---
 elif escolha == "🗂️ Cadastrar Categoria":
@@ -403,7 +394,6 @@ elif escolha == "🗂️ Cadastrar Categoria":
                 if nova_cat and nova_cat.strip() not in st.session_state.categorias:
                     st.session_state.categorias.append(nova_cat.strip())
                     st.success("Categoria adicionada!")
-                    st.rerun()
         with col_cat2:
             st.dataframe(pd.DataFrame(st.session_state.categorias, columns=["Categorias Ativas"]), use_container_width=True, hide_index=True)
 
@@ -418,12 +408,10 @@ elif escolha == "🗂️ Cadastrar Categoria":
                 if st.button("Salvar Edição", type="primary"):
                     st.session_state.categorias[cat_selecionada_idx] = edit_nome_cat.strip()
                     st.success("Atualizado!")
-                    st.rerun()
             with c_btn_cat2:
                 if st.button("❌ Excluir Categoria"):
                     st.session_state.categorias.pop(cat_selecionada_idx)
                     st.warning("Categoria removida do sistema.")
-                    st.rerun()
 
 # --- TELA: CADASTRAR USUÁRIO ---
 elif escolha == "👥 Cadastrar Usuário":
@@ -438,10 +426,9 @@ elif escolha == "👥 Cadastrar Usuário":
             p = st.selectbox("Perfil", ["Administrador", "Usuário Comum"])
             if st.form_submit_button("Salvar", type="primary"):
                 if n and e:
-                    new_u = {"Nome": n, "E-mail": e, "Senha": s if s else "123", "Perfil": p}
+                    new_u = {"Nome": n, "E-mail": e.strip(), "Senha": str(s) if s else "123", "Perfil": p}
                     st.session_state.usuarios = pd.concat([st.session_state.usuarios, pd.DataFrame([new_u])], ignore_index=True)
                     st.success("Usuário Criado!")
-                    st.rerun()
                 else:
                     st.error("Nome e E-mail são obrigatórios.")
 
@@ -458,16 +445,14 @@ elif escolha == "👥 Cadastrar Usuário":
             with c_btn_u1:
                 if st.button("Atualizar Dados", type="primary"):
                     st.session_state.usuarios.loc[idx, "Nome"] = edit_n
-                    st.session_state.usuarios.loc[idx, "E-mail"] = edit_e
-                    st.session_state.usuarios.loc[idx, "Senha"] = edit_s
+                    st.session_state.usuarios.loc[idx, "E-mail"] = edit_e.strip()
+                    st.session_state.usuarios.loc[idx, "Senha"] = str(edit_s)
                     st.session_state.usuarios.loc[idx, "Perfil"] = edit_p
                     st.success("Usuário atualizado!")
-                    st.rerun()
             with c_btn_u2:
                 if st.button("❌ Excluir Usuário"):
                     st.session_state.usuarios = st.session_state.usuarios.drop(idx).reset_index(drop=True)
                     st.warning("Usuário removido com sucesso.")
-                    st.rerun()
 
 # --- TELA: CADASTRAR COORDENAÇÃO ---
 elif escolha == "🏢 Cadastrar Coordenação":
@@ -483,7 +468,6 @@ elif escolha == "🏢 Cadastrar Coordenação":
                     nova_coord = {"Sigla": s.upper(), "Nome": nc}
                     st.session_state.coordenacoes = pd.concat([st.session_state.coordenacoes, pd.DataFrame([nova_coord])], ignore_index=True)
                     st.success("Coordenação cadastrada!")
-                    st.rerun()
 
     with aba_c2:
         if not st.session_state.coordenacoes.empty:
@@ -497,13 +481,11 @@ elif escolha == "🏢 Cadastrar Coordenação":
                 if st.button("Salvar Edição", type="primary"):
                     st.session_state.coordenacoes.loc[idx_c, "Sigla"] = edit_sigla.upper()
                     st.session_state.coordenacoes.loc[idx_c, "Nome"] = edit_nc
-                    st.success("Nome atualizado com sucesso!")
-                    st.rerun()
+                    st.success("Nome updated com sucesso!")
             with c_btn_co2:
                 if st.button("❌ Excluir Coordenação"):
                     st.session_state.coordenacoes = st.session_state.coordenacoes.drop(idx_c).reset_index(drop=True)
                     st.warning("Coordenação removida do sistema.")
-                    st.rerun()
 
 # --- TELA: MOVIMENTAÇÃO DE ENTRADA E SAÍDA ---
 elif escolha == "🔄 Movimentação de Entrada e Saída":
@@ -522,7 +504,6 @@ elif escolha == "🔄 Movimentação de Entrada e Saída":
                 nova_mov = {"Data": data_entrada.strftime("%d/%m/%Y"), "Tipo": "Entrada", "Código": st.session_state.produtos.loc[idx_prod_ent, "Código"], "Item": st.session_state.produtos.loc[idx_prod_ent, "Item"], "Quantidade": qtd_entrada, "Responsável pela Retirada": "Almoxarifado", "Coordenação": "-"}
                 st.session_state.movimentacoes = pd.concat([st.session_state.movimentacoes, pd.DataFrame([nova_mov])], ignore_index=True)
                 st.success(f"Entrada de {qtd_entrada} unidades registrada com sucesso!")
-                st.rerun()
 
     with aba_saida:
         with st.form("form_registrar_saida", clear_on_submit=True):
@@ -546,7 +527,6 @@ elif escolha == "🔄 Movimentação de Entrada e Saída":
                     nova_mov = {"Data": data_saida.strftime("%d/%m/%Y"), "Tipo": "Saída", "Código": st.session_state.produtos.loc[idx_prod_sai, "Código"], "Item": st.session_state.produtos.loc[idx_prod_sai, "Item"], "Quantidade": qtd_saida, "Responsável pela Retirada": resp_retirada, "Coordenação": coord_retirada}
                     st.session_state.movimentacoes = pd.concat([st.session_state.movimentacoes, pd.DataFrame([nova_mov])], ignore_index=True)
                     st.success("Saída efetuada!")
-                    st.rerun()
 
     with aba_historico:
         st.dataframe(st.session_state.movimentacoes, use_container_width=True, hide_index=True)
