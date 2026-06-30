@@ -147,7 +147,25 @@ if st.session_state.usuario_logado is None:
             st.markdown('</div>', unsafe_allow_html=True)
             
             if st.button("Entrar", type="primary", use_container_width=True, key="btn_entrar_confirmar"):
-                # .str.strip() previne erros de espaços invisíveis digitados no cadastro ou login
                 usuario_valido = st.session_state.usuarios[
                     (st.session_state.usuarios["E-mail"].str.strip() == login_email.strip()) & 
-                    (st.session_state.usuarios["Senha"].astype(str)
+                    (st.session_state.usuarios["Senha"].astype(str) == login_senha)
+                ]
+                if not usuario_valido.empty:
+                    st.session_state.usuario_logado = usuario_valido.iloc[0]["Nome"]
+                    st.rerun()
+                else:
+                    st.error("E-mail ou senha incorretos.")
+                    
+        elif st.session_state.sub_tela_login == "esqueci":
+            st.markdown("<p style='text-align: left; font-size: 0.9rem; color: #444444;'>Insira seu e-mail cadastrado para recuperar a senha.</p>", unsafe_allow_html=True)
+            email_recuperar = st.text_input("E-mail corporativo", placeholder="E-mail", key="recuperar_email_input", label_visibility="collapsed")
+            
+            if st.button("Enviar Instruções", type="primary", use_container_width=True, key="btn_enviar_recuperar"):
+                st.success("Se o e-mail estiver correto, as instruções foram enviadas.")
+                
+            if st.button("Voltar para o Login", use_container_width=True, key="btn_voltar_login"):
+                st.session_state.sub_tela_login = "login"
+                st.rerun()
+        
+        st.markdown('</div>', unsafe_allow_html=True)
