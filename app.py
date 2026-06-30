@@ -19,29 +19,24 @@ if "sub_tela_login" not in st.session_state:
 if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = "João Paulo"
 
-# --- INJECT DE CSS PARA EVITAR QUEBRAS VERTICAIS E PERMITIR SCROLL ---
+# --- REMOVE A RESPONSIVIDADE FORÇANDO MODO DESKTOP NO CELULAR ---
+# Este script força o navegador do celular a simular uma tela de PC (1024px) e ajustar o zoom
+st.components.v1.html(
+    """
+    <script>
+        var meta = document.createElement('meta');
+        meta.name = 'viewport';
+        meta.content = 'width=1024, initial-scale=0.3, maximum-scale=1.0, user-scalable=yes';
+        parent.document.getElementsByTagName('head')[0].appendChild(meta);
+    </script>
+    """,
+    height=0,
+    width=0
+)
+
+# --- INJECT DE CSS LIMPO ---
 st.markdown("""
     <style>
-    /* Permite rolagem suave global sem travar o carregamento do app */
-    html, body {
-        overflow-x: auto !important;
-    }
-    
-    /* Evita que as colunas clássicas do Streamlit quebrem em linha em telas menores */
-    [data-testid="stHorizontalBlock"] {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        overflow-x: auto !important;
-        gap: 1rem !important;
-    }
-    
-    /* Força uma largura mínima para as colunas internas não esmagarem completamente */
-    [data-testid="stHorizontalBlock"] > div {
-        min-width: 280px !important;
-        flex-shrink: 0 !important;
-    }
-    
     /* Regras do Menu Lateral e Header */
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stHeader"] {background: transparent !important; z-index: 100;}
