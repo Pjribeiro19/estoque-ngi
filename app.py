@@ -109,14 +109,17 @@ if not st.session_state.autenticado:
     if st.session_state.sub_tela_login == "login":
         st.markdown("<br><br>", unsafe_allow_html=True)
         
-        col_l1, col_l2, col_l3 = st.columns([1.2, 1, 1.2])
+        col_l1, col_l2, col_l3 = st.columns([1, 1.2, 1])
         with col_l2:
-            # Imagem/Logo oficial do ICMBio corrigida
-            st.image(
-                "https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png", 
-                use_container_width=True
-            )
-            st.markdown("<h3 style='text-align: center; color: #1e5934; margin-bottom: 25px;'>Gestão de Almoxarifado<br>NGI Carajás</h3>", unsafe_allow_html=True)
+            # Colunas internas para garantir a centralização perfeita da imagem menor
+            c_img1, c_img2, c_img3 = st.columns([1, 2, 1])
+            with c_img2:
+                st.image(
+                    "https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png", 
+                    width=280
+                )
+            
+            st.markdown("<h3 style='text-align: center; color: #1e5934; margin-top: 15px; margin-bottom: 25px;'>Gestão de Almoxarifado<br>NGI Carajás</h3>", unsafe_allow_html=True)
             
             usuario_input = st.text_input("Usuário / E-mail", placeholder="Digite seu usuário...")
             senha_input = st.text_input("Senha", type="password", placeholder="Digite sua senha...")
@@ -311,7 +314,7 @@ else:
                         st.session_state.produtos.loc[idx_p, "Quantidade"] = edit_qtd
                         st.session_state.produtos.loc[idx_p, "Categoria"] = edit_cat
                         st.session_state.produtos.loc[idx_p, "Valor Unitário"] = float(edit_val)
-                        st.success("Produto updated!")
+                        st.success("Produto atualizado!")
                         st.rerun()
                 with col_b_prod2:
                     if st.button("❌ Excluir Produto do Sistema"):
@@ -320,7 +323,7 @@ else:
                         st.rerun()
 
     # --- TELA: CADASTRAR CATEGORIA ---
-    elif escolha == "🗂️ Cadastrar Categoria":
+    elif presidential_selection := escolha == "🗂️ Cadastrar Categoria":
         st.title("🗂️ Gerenciamento de Categorias")
         aba_nova_cat, aba_gerenciar_cat = st.tabs(["➕ Nova Categoria", "✏️ Editar / Excluir Categorias"])
         
