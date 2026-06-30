@@ -4,107 +4,10 @@ from datetime import datetime
 
 # Configuração da Página
 st.set_page_config(
-    page_title="Gestão de Estoque - NGI Carajás", 
+    page_title="Gestão de Almoxarifado - NGI Carajás", 
     page_icon="🌿", 
     layout="wide"
 )
-
-# --- CONFIGURAÇÃO DO USUÁRIO ATUAL ---
-NOME_USUARIO_LOGADO = "João Paulo"
-
-# -----------------------------------------------------------------------------
-# ESTILIZAÇÃO CUSTOMIZADA (BARRA SUPERIOR FIXA E MENU LATERAL INTEGRADO)
-# -----------------------------------------------------------------------------
-st.markdown(f"""
-    <style>
-    /* Oculta elementos padrões desnecessários do Streamlit */
-    [data-testid="stSidebarNav"] {{display: none;}}
-    [data-testid="stHeader"] {{background: transparent !important; z-index: 100;}}
-    
-    /* Criação da Barra Superior (Header) Estilo NGI Carajás */
-    .custom-header {{
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 60px;
-        background-color: #4CAF50 !important;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0 30px;
-        z-index: 999999;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }}
-    .header-title {{
-        color: white !important;
-        font-size: 1.25rem !important;
-        font-weight: bold !important;
-        font-family: sans-serif;
-    }}
-    .header-user {{
-        color: white !important;
-        font-size: 1.05rem !important;
-        font-weight: 500 !important;
-        font-family: sans-serif;
-    }}
-    
-    /* Ajusta o espaçamento do topo da página por causa da barra fixa */
-    .block-container {{
-        padding-top: 5rem !important;
-    }}
-    [data-testid="stSidebarUserContent"] {{
-        padding-top: 3.5rem !important;
-    }}
-    
-    /* Menu Lateral Claro e Suave */
-    [data-testid="stSidebar"] {{
-        background-color: #fcfaff !important;
-        border-right: 1px solid #efe9f5;
-    }}
-    
-    /* Customização dos itens de menu (Radio) */
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {{
-        color: #333333 !important;
-        font-weight: 500;
-        padding: 12px 16px;
-        border-radius: 4px;
-        margin-bottom: 2px;
-        transition: all 0.2s ease;
-    }}
-    
-    /* Efeito de passar o mouse (Hover) */
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {{
-        background-color: #e2eed7 !important;
-        color: #1e5934 !important;
-        cursor: pointer;
-    }}
-    
-    /* Item Selecionado no Menu */
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] input:checked + div {{
-        background-color: #cce2b4 !important;
-        border-radius: 4px;
-        color: #1e5934 !important;
-        font-weight: bold !important;
-    }}
-    
-    /* Estilização para botões primários padrão */
-    div.stButton > button:first-child[kind="primary"] {{
-        background-color: #4CAF50 !important;
-        border-color: #4CAF50 !important;
-        color: white !important;
-    }}
-    div.stButton > button:first-child[kind="primary"]:hover {{
-        background-color: #43a047 !important;
-        border-color: #43a047 !important;
-    }}
-    </style>
-    
-    <div class="custom-header">
-        <div class="header-title">Gestão de Estoque - NGI Carajás</div>
-        <div class="header-user">👤 {NOME_USUARIO_LOGADO}</div>
-    </div>
-""", unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
 # BANCO DE DADOS EM MEMÓRIA (Session State)
@@ -135,6 +38,228 @@ if "movimentacoes" not in st.session_state or not isinstance(st.session_state.mo
         "Data", "Tipo", "Código", "Item", "Quantidade", "Responsável pela Retirada", "Coordenação"
     ])
 
+# --- CONTROLADOR DE SESSÃO ---
+if "usuario_logado" not in st.session_state:
+    st.session_state.usuario_logado = None
+
+if "sub_tela_login" not in st.session_state:
+    st.session_state.sub_tela_login = "login"
+
+# -----------------------------------------------------------------------------
+# TELA DE ACESSO (ESTILO PORTAL MINIMALISTA CHICO CAR - CENTRALIZADO)
+# -----------------------------------------------------------------------------
+if st.session_state.usuario_logado is None:
+    
+    st.markdown("""
+        <style>
+        .stApp {
+            background-color: #fcfbfe !important;
+        }
+        .login-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            margin: 0 auto;
+            max-width: 380px;
+            padding-top: 5vh;
+        }
+        .logo-wrapper {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 15px;
+            width: 100%;
+        }
+        .system-title {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #1e5934;
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            margin-top: 10px;
+            margin-bottom: 5px;
+            text-align: center;
+            width: 100%;
+        }
+        .system-subtitle {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            color: #555555;
+            font-size: 1.05rem;
+            font-weight: 500;
+            margin-bottom: 30px;
+            text-align: center;
+            width: 100%;
+        }
+        .forgot-wrapper {
+            text-align: right;
+            margin-top: -12px;
+            margin-bottom: 20px;
+            width: 100%;
+        }
+        .forgot-wrapper button {
+            background: none !important;
+            border: none !important;
+            color: #666666 !important;
+            font-size: 0.85rem !important;
+            text-decoration: none !important;
+            padding: 0 !important;
+        }
+        .forgot-wrapper button:hover {
+            color: #1e5934 !important;
+        }
+        
+        /* Força o botão primário (Entrar) a ficar verde na tela de login */
+        div.stButton > button:first-child[kind="primary"] {
+            background-color: #1e5934 !important;
+            border-color: #1e5934 !important;
+            color: white !important;
+        }
+        div.stButton > button:first-child[kind="primary"]:hover {
+            background-color: #143d23 !important;
+            border-color: #143d23 !important;
+        }
+        
+        [data-testid="stHeader"] { display: none !important; }
+        .custom-header { display: none !important; }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Colunas estruturais para garantir o alinhamento no miolo da página
+    _, col_central, _ = st.columns([1.1, 1, 1.1])
+    
+    with col_central:
+        st.markdown('<div class="login-container">', unsafe_allow_html=True)
+        
+        # Bloco do Logo Centralizado
+        st.markdown('<div class="logo-wrapper">', unsafe_allow_html=True)
+        logo_url = "https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png/@@images/93d85e33-e72b-423a-bc35-5d1b1f09b402.png"
+        st.image(logo_url, width=190)
+        st.markdown('</div>', unsafe_allow_html=True)
+            
+        # Bloco do Nome Completo Alinhado
+        st.markdown('<div class="system-title">GESTÃO DE ALMOXARIFADO</div>', unsafe_allow_html=True)
+        st.markdown('<div class="system-subtitle">NGI CARAJÁS</div>', unsafe_allow_html=True)
+        
+        # SUB-TELA: FORMULÁRIO DE LOGIN
+        if st.session_state.sub_tela_login == "login":
+            login_email = st.text_input("E-mail corporativo", placeholder="E-mail", key="login_email_input", label_visibility="collapsed")
+            login_senha = st.text_input("Senha", placeholder="Senha", type="password", key="login_senha_input", label_visibility="collapsed")
+            
+            st.markdown('<div class="forgot-wrapper">', unsafe_allow_html=True)
+            if st.button("Esqueceu sua senha?", key="lnk_esqueci"):
+                st.session_state.sub_tela_login = "esqueci"
+                st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            if st.button("Entrar", type="primary", use_container_width=True, key="btn_entrar_confirmar"):
+                usuario_valido = st.session_state.usuarios[
+                    (st.session_state.usuarios["E-mail"] == login_email) & 
+                    (st.session_state.usuarios["Senha"] == login_senha)
+                ]
+                if not usuario_valido.empty:
+                    st.session_state.usuario_logado = usuario_valido.iloc[0]["Nome"]
+                    st.rerun()
+                else:
+                    st.error("E-mail ou senha incorretos.")
+                    
+        # SUB-TELA: RECUPERAÇÃO DE SENHA
+        elif st.session_state.sub_tela_login == "esqueci":
+            st.markdown("<p style='text-align: left; font-size: 0.9rem; color: #444; margin-bottom: 15px;'>Insira seu e-mail funcional cadastrado:</p>", unsafe_allow_html=True)
+            email_recupera = st.text_input("E-mail para recuperação", placeholder="seu.email@icmbio.gov.br", key="email_recup_input", label_visibility="collapsed")
+            
+            st.write("")
+            if st.button("Enviar Instruções", type="primary", use_container_width=True, key="btn_enviar_recup"):
+                if email_recupera in st.session_state.usuarios["E-mail"].values:
+                    st.success("Instruções enviadas para o e-mail informado!")
+                else:
+                    st.error("E-mail não localizado na base de dados.")
+            
+            if st.button("Voltar para o Login", use_container_width=True, key="btn_voltar_login"):
+                st.session_state.sub_tela_login = "login"
+                st.rerun()
+                
+        st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()
+
+NOME_USUARIO_LOGADO = st.session_state.usuario_logado
+
+# -----------------------------------------------------------------------------
+# ESTILIZAÇÃO CUSTOMIZADA DO PAINEL INTERNO (PÓS-LOGIN)
+# -----------------------------------------------------------------------------
+st.markdown(f"""
+    <style>
+    [data-testid="stSidebarNav"] {{display: none;}}
+    [data-testid="stHeader"] {{background: transparent !important; z-index: 100;}}
+    
+    .custom-header {{
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 60px;
+        background-color: #1e5934 !important;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 30px;
+        z-index: 999999;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }}
+    .header-title {{
+        color: white !important;
+        font-size: 1.25rem !important;
+        font-weight: bold !important;
+        font-family: sans-serif;
+    }}
+    .header-user {{
+        color: white !important;
+        font-size: 1.05rem !important;
+        font-weight: 500 !important;
+        font-family: sans-serif;
+    }}
+    
+    .block-container {{
+        padding-top: 5rem !important;
+    }}
+    [data-testid="stSidebarUserContent"] {{
+        padding-top: 3.5rem !important;
+    }}
+    
+    [data-testid="stSidebar"] {{
+        background-color: #fcfaff !important;
+        border-right: 1px solid #efe9f5;
+    }}
+    
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {{
+        color: #333333 !important;
+        font-weight: 500;
+        padding: 12px 16px;
+        border-radius: 4px;
+        margin-bottom: 2px;
+        transition: all 0.2s ease;
+    }}
+    
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {{
+        background-color: #e2eed7 !important;
+        color: #1e5934 !important;
+        cursor: pointer;
+    }}
+    
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] input:checked + div {{
+        background-color: #cce2b4 !important;
+        border-radius: 4px;
+        color: #1e5934 !important;
+        font-weight: bold !important;
+    }}
+    </style>
+    
+    <div class="custom-header">
+        <div class="header-title">Gestão de Almoxarifado - NGI Carajás</div>
+        <div class="header-user">👤 {NOME_USUARIO_LOGADO}</div>
+    </div>
+""", unsafe_allow_html=True)
+
 # -----------------------------------------------------------------------------
 # BARRA LATERAL (MENU DE NAVEGAÇÃO)
 # -----------------------------------------------------------------------------
@@ -152,12 +277,12 @@ with st.sidebar:
     escolha = st.radio("", menu_opcoes, label_visibility="collapsed")
 
 # -----------------------------------------------------------------------------
-# LÓGICA DAS TELAS
+# LÓGICA DAS TELAS INTERNAS
 # -----------------------------------------------------------------------------
 
 # --- TELA: PAINEL GERAL ---
 if escolha == "🎛️ Painel Geral":
-    st.title("🎛️ Painel Geral de Estoque")
+    st.title("🎛️ Painel Geral do Almoxarifado")
     
     c1, c2, c3 = st.columns(3)
     c1.metric("Total de Itens Cadastrados", len(st.session_state.produtos))
@@ -285,8 +410,8 @@ elif escolha == "🗂️ Cadastrar Categoria":
     with aba_gerenciar_cat:
         if st.session_state.categorias:
             cat_selecionada_idx = st.selectbox("Selecione qual deseja modificar/excluir:", range(len(st.session_state.categorias)), format_func=lambda x: st.session_state.categorias[x])
-            nome_antigo_cat = st.session_state.categorias[cat_selecionada_idx]
-            edit_nome_cat = st.text_input("Editar Nome:", value=nome_antigo_cat)
+            text_antigo = st.session_state.categorias[cat_selecionada_idx]
+            edit_nome_cat = st.text_input("Editar Nome:", value=text_antigo)
             
             c_btn_cat1, c_btn_cat2 = st.columns([1, 4])
             with c_btn_cat1:
@@ -309,7 +434,7 @@ elif escolha == "👥 Cadastrar Usuário":
         with st.form("cad_user", clear_on_submit=True):
             n = st.text_input("Nome")
             e = st.text_input("E-mail")
-            s = st.text_input("Senha de Acesso", type="password")  # Adicionado campo de senha
+            s = st.text_input("Senha de Acesso", type="password")
             p = st.selectbox("Perfil", ["Administrador", "Usuário Comum"])
             if st.form_submit_button("Salvar", type="primary"):
                 if n and e:
@@ -372,7 +497,7 @@ elif escolha == "🏢 Cadastrar Coordenação":
                 if st.button("Salvar Edição", type="primary"):
                     st.session_state.coordenacoes.loc[idx_c, "Sigla"] = edit_sigla.upper()
                     st.session_state.coordenacoes.loc[idx_c, "Nome"] = edit_nc
-                    st.success("Nome atualizado!")
+                    st.success("Nome atualizado com sucesso!")
                     st.rerun()
             with c_btn_co2:
                 if st.button("❌ Excluir Coordenação"):
@@ -434,5 +559,10 @@ elif escolha == "👤 Perfil":
 
 # --- TELA: SAIR ---
 elif escolha == "🚪 Sair":
-    st.title("🚪 Sessão Encerrada")
-    st.success("Você saiu do sistema de forma segura.")
+    st.title("🚪 Encerrar Sessão")
+    st.write("Tem certeza de que deseja sair do sistema de gestão?")
+    
+    if st.button("Confirmar Saída", type="primary"):
+        st.session_state.usuario_logado = None
+        st.session_state.sub_tela_login = "login"
+        st.rerun()
