@@ -35,33 +35,33 @@ st.markdown(f"""
         padding: 0 30px;
         z-index: 999999;
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }}
+    }
     .header-title {{
         color: white !important;
         font-size: 1.25rem !important;
         font-weight: bold !important;
         font-family: sans-serif;
-    }}
+    }
     .header-user {{
         color: white !important;
         font-size: 1.05rem !important;
         font-weight: 500 !important;
         font-family: sans-serif;
-    }}
+    }
     
     /* Ajusta o espaçamento do topo da página por causa da barra fixa */
     .block-container {{
         padding-top: 5rem !important;
-    }}
+    }
     [data-testid="stSidebarUserContent"] {{
         padding-top: 3.5rem !important;
-    }}
+    }
     
     /* Menu Lateral Claro e Suave */
     [data-testid="stSidebar"] {{
         background-color: #fcfaff !important;
         border-right: 1px solid #efe9f5;
-    }}
+    }
     
     /* Customização dos itens de menu (Radio) */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {{
@@ -71,14 +71,14 @@ st.markdown(f"""
         border-radius: 4px;
         margin-bottom: 2px;
         transition: all 0.2s ease;
-    }}
+    }
     
     /* Efeito de passar o mouse (Hover) */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {{
         background-color: #e2eed7 !important;
         color: #1e5934 !important;
         cursor: pointer;
-    }}
+    }
     
     /* Item Selecionado no Menu */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] input:checked + div {{
@@ -86,18 +86,18 @@ st.markdown(f"""
         border-radius: 4px;
         color: #1e5934 !important;
         font-weight: bold !important;
-    }}
+    }
     
     /* Estilização para botões primários padrão */
     div.stButton > button:first-child[kind="primary"] {{
         background-color: #4CAF50 !important;
         border-color: #4CAF50 !important;
         color: white !important;
-    }}
+    }
     div.stButton > button:first-child[kind="primary"]:hover {{
         background-color: #43a047 !important;
         border-color: #43a047 !important;
-    }}
+    }
     </style>
     
     <div class="custom-header">
@@ -195,7 +195,7 @@ if escolha == "🎛️ Painel Geral":
         df_estilizado = df_filtrado.style.apply(destacar_zerados, axis=1)
         st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
 
-# --- TELA: CADASTRAR PRODUTO (MODIFICADA) ---
+# --- TELA: CADASTRAR PRODUTO ---
 elif escolha == "➕ Cadastrar Produto":
     st.title("➕ Gerenciamento de Produtos")
     aba_cad_prod, aba_gerenciar_prod = st.tabs(["➕ Novo Material", "✏️ Editar / Excluir Produtos"])
@@ -207,7 +207,6 @@ elif escolha == "➕ Cadastrar Produto":
             nome_it = col_b.text_input("Nome do Material")
             cat_it = col_a.selectbox("Categoria", st.session_state.categorias)
             
-            # Nota explicativa discreta para o usuário
             st.caption("ℹ️ Novos materiais são registrados com saldo inicial 0. Para adicionar quantidades, utilize o menu 'Movimentação de Entrada e Saída'.")
             
             if st.form_submit_button("Finalizar Cadastro", type="primary"):
@@ -215,14 +214,13 @@ elif escolha == "➕ Cadastrar Produto":
                     if cod in st.session_state.produtos["Código"].values:
                         st.error(f"Erro! Já existe um produto cadastrado com o código {cod}.")
                     else:
-                        # O produto nasce com a quantidade zerada obrigatoriamente
                         novo_p = {"Código": cod, "Item": nome_it, "Quantidade": 0, "Categoria": cat_it}
                         st.session_state.produtos = pd.concat([st.session_state.produtos, pd.DataFrame([novo_p])], ignore_index=True)
                         st.success(f"Sucesso! {nome_it} adicionado ao catálogo com saldo zerado.")
                         st.rerun()
                 else:
                     st.error("Preencha o Código e o Nome do Material!")
-                    
+                        
     with aba_gerenciar_prod:
         if not st.session_state.produtos.empty:
             st.dataframe(st.session_state.produtos, use_container_width=True, hide_index=True)
@@ -248,7 +246,7 @@ elif escolha == "➕ Cadastrar Produto":
                     st.session_state.produtos.loc[idx_p, "Item"] = edit_item
                     st.session_state.produtos.loc[idx_p, "Quantidade"] = edit_qtd
                     st.session_state.produtos.loc[idx_p, "Categoria"] = edit_cat
-                    st.success("Produto atualizado com sucesso!")
+                    st.success("Produto updated com sucesso!")
                     st.rerun()
             with col_b_prod2:
                 if st.button("❌ Excluir Produto do Sistema"):
@@ -393,5 +391,12 @@ elif escolha == "👤 Perfil":
 
 # --- TELA: SAIR ---
 elif escolha == "🚪 Sair":
-    st.title("🚪 Sessão Encerrada")
-    st.success("Você saiu do sistema de forma segura.")
+    # 1. Limpa todas as variáveis temporárias para desconectar com segurança
+    st.session_state.clear()
+    
+    # 2. Exibe a mensagem de sucesso na tela limpa
+    st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
+    st.success("🔒 Sua sessão foi encerrada com segurança. Para entrar novamente, atualize a página.")
+    
+    # 3. Interrompe a execução para congelar a tela de encerramento de forma segura
+    st.stop()
