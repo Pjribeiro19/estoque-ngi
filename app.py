@@ -4,7 +4,7 @@ from datetime import datetime
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="Gestão de Estoque - NGI Carajás", 
+    page_title="Gestão de Almoxarifado - NGI Carajás", 
     page_icon="🌿", 
     layout="wide"
 )
@@ -20,7 +20,6 @@ if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = "João Paulo"
 
 # --- INJECT DE CSS PARA ESTILIZAÇÃO CUSTOMIZADA ---
-# Removido o 'f' antes da string tripla para evitar conflito com as chaves {} do CSS
 st.markdown("""
     <style>
     /* Regras do Menu Lateral e Header quando logado */
@@ -112,12 +111,12 @@ if not st.session_state.autenticado:
         
         col_l1, col_l2, col_l3 = st.columns([1.2, 1, 1.2])
         with col_l2:
-            # Imagem/Logo centralizada do Chico Car NGI Carajás
+            # Imagem/Logo oficial do ICMBio corrigida
             st.image(
-                "https://www.gov.br/icmbio/pt-br/acesso-a-informacao/dados-abertos/imagens/logo-icmbio.png", 
+                "https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png", 
                 use_container_width=True
             )
-            st.markdown("<h3 style='text-align: center; color: #1e5934; margin-bottom: 25px;'>Almoxarifado - NGI Carajás</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='text-align: center; color: #1e5934; margin-bottom: 25px;'>Gestão de Almoxarifado<br>NGI Carajás</h3>", unsafe_allow_html=True)
             
             usuario_input = st.text_input("Usuário / E-mail", placeholder="Digite seu usuário...")
             senha_input = st.text_input("Senha", type="password", placeholder="Digite sua senha...")
@@ -157,7 +156,7 @@ else:
     # Header dinâmico utilizando a variável de estado de forma segura
     st.markdown(f"""
         <div class="custom-header">
-            <div class="header-title">Gestão de Estoque - NGI Carajás</div>
+            <div class="header-title">Gestão de Almoxarifado - NGI Carajás</div>
             <div class="header-user">👤 {st.session_state.NOME_USUARIO_LOGADO}</div>
         </div>
     """, unsafe_allow_html=True)
@@ -312,7 +311,7 @@ else:
                         st.session_state.produtos.loc[idx_p, "Quantidade"] = edit_qtd
                         st.session_state.produtos.loc[idx_p, "Categoria"] = edit_cat
                         st.session_state.produtos.loc[idx_p, "Valor Unitário"] = float(edit_val)
-                        st.success("Produto atualizado com sucesso!")
+                        st.success("Produto updated!")
                         st.rerun()
                 with col_b_prod2:
                     if st.button("❌ Excluir Produto do Sistema"):
@@ -427,7 +426,7 @@ else:
                     if st.button("Salvar Edição", type="primary"):
                         st.session_state.coordenacoes.loc[idx_c, "Sigla"] = edit_sigla.upper()
                         st.session_state.coordenacoes.loc[idx_c, "Nome"] = edit_nc
-                        st.success("Nome updated!")
+                        st.success("Nome atualizado!")
                         st.rerun()
                 with c_btn_co2:
                     if st.button("❌ Excluir Coordenação"):
