@@ -9,40 +9,20 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- INJECT DE CSS PARA ESTILIZAÇÃO CUSTOMIZADA (TELA DE LOGIN E DESIGN GERAL) ---
+# --- INICIALIZAÇÃO DO GERENCIAMENTO DE SESSÃO (LOGIN) ---
+if "autenticado" not in st.session_state:
+    st.session_state.autenticado = False
+
+if "sub_tela_login" not in st.session_state:
+    st.session_state.sub_tela_login = "login"
+
+if "NOME_USUARIO_LOGADO" not in st.session_state:
+    st.session_state.NOME_USUARIO_LOGADO = "João Paulo"
+
+# --- INJECT DE CSS PARA ESTILIZAÇÃO CUSTOMIZADA ---
+# Removido o 'f' antes da string tripla para evitar conflito com as chaves {} do CSS
 st.markdown("""
     <style>
-    /* Estilização do título do sistema na tela de login */
-    .sistema-titulo {
-        color: #1E4620; /* Verde escuro institucional */
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-        font-size: 1.4rem;
-        font-weight: bold;
-        margin-top: 15px;
-        margin-bottom: 30px;
-        text-align: center;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    
-    /* Força o botão ENTRAR da tela de login a ficar verde, largo e destacado */
-    div.stButton > button:first-child[kind="primary"] {
-        background-color: #4CAF50 !important;
-        border-color: #4CAF50 !important;
-        color: white !important;
-        font-size: 18px !important;
-        font-weight: bold !important;
-        width: 100% !important;
-        border-radius: 4px !important;
-        padding: 0.6rem 0 !important;
-        transition: background-color 0.3s ease;
-    }
-    
-    div.stButton > button:first-child[kind="primary"]:hover {
-        background-color: #43a047 !important;
-        border-color: #43a047 !important;
-    }
-
     /* Regras do Menu Lateral e Header quando logado */
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stHeader"] {background: transparent !important; z-index: 100;}
@@ -107,18 +87,19 @@ st.markdown("""
         color: #1e5934 !important;
         font-weight: bold !important;
     }
+    
+    /* Força botões primários a ficarem verdes */
+    div.stButton > button:first-child[kind="primary"] {
+        background-color: #4CAF50 !important;
+        border-color: #4CAF50 !important;
+        color: white !important;
+    }
+    div.stButton > button:first-child[kind="primary"]:hover {
+        background-color: #43a047 !important;
+        border-color: #43a047 !important;
+    }
     </style>
-""", unsafe_with_html=True)
-
-# --- INICIALIZAÇÃO DO GERENCIAMENTO DE SESSÃO (LOGIN) ---
-if "autenticado" not in st.session_state:
-    st.session_state.autenticado = False
-
-if "sub_tela_login" not in st.session_state:
-    st.session_state.sub_tela_login = "login"
-
-if "NOME_USUARIO_LOGADO" not in st.session_state:
-    st.session_state.NOME_USUARIO_LOGADO = "João Paulo"
+""", unsafe_allow_html=True)
 
 
 # =============================================================================
@@ -126,49 +107,37 @@ if "NOME_USUARIO_LOGADO" not in st.session_state:
 # =============================================================================
 if not st.session_state.autenticado:
     
-    # --- TELA DE LOGIN FORMATADA E CENTRALIZADA ---
     if st.session_state.sub_tela_login == "login":
+        st.markdown("<br><br>", unsafe_allow_html=True)
         
-        col_l1, col_l2, col_l3 = st.columns([1, 1.3, 1])
-        
+        col_l1, col_l2, col_l3 = st.columns([1.2, 1, 1.2])
         with col_l2:
-            st.write("")
-            st.write("")
-            st.write("")
+            # Imagem/Logo centralizada do Chico Car NGI Carajás
+            st.image(
+                "https://www.gov.br/icmbio/pt-br/acesso-a-informacao/dados-abertos/imagens/logo-icmbio.png", 
+                use_container_width=True
+            )
+            st.markdown("<h3 style='text-align: center; color: #1e5934; margin-bottom: 25px;'>Almoxarifado - NGI Carajás</h3>", unsafe_allow_html=True)
             
-            # URL Direta do arquivo de imagem do ICMBio corrigida para renderização perfeita
-            logo_url = "https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png"
-            st.markdown(f'<div style="text-align: center;"><img src="{logo_url}" width="160"></div>', unsafe_with_html=True)
-            
-            # Nome oficial do sistema parametrizado
-            st.markdown('<div class="sistema-titulo">SISTEMA DE GESTÃO DE ALMOXARIFADO<br><span style="font-size:1.1rem; color:#555;">NGI CARAJÁS</span></div>', unsafe_with_html=True)
-            
-            # Inputs estruturados de acesso
-            usuario_input = st.text_input("Usuário / E-mail", placeholder="Digite seu usuário ou e-mail...")
+            usuario_input = st.text_input("Usuário / E-mail", placeholder="Digite seu usuário...")
             senha_input = st.text_input("Senha", type="password", placeholder="Digite sua senha...")
             
-            # Link discreto alinhado à direita para recuperação de credenciais
-            st.markdown('<div style="text-align: right; margin-top: -10px; margin-bottom: 20px;"><a href="#" style="color: #777; text-decoration: none; font-size: 13px;">Esqueceu sua senha?</a></div>', unsafe_with_html=True)
-            
-            # Botão de Login Estilizado em Verde
-            if st.button("Entrar", type="primary", use_container_width=True):
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("Entrar no Sistema", type="primary", use_container_width=True):
                 if usuario_input and senha_input:
                     st.session_state.autenticado = True
                     st.rerun()
                 else:
                     st.error("Por favor, preencha todos os campos!")
-            
-            # Botão secundário discreto para mudar para tela de recuperação
-            if st.button("Solicitar Recuperação de Acesso", use_container_width=True):
+                    
+            if st.button("Esqueci a senha", use_container_width=True):
                 st.session_state.sub_tela_login = "esqueci"
                 st.rerun()
 
-    # --- TELA DE RECUPERAÇÃO DE SENHA ---
     elif st.session_state.sub_tela_login == "esqueci":
-        col_r1, col_r2, col_r3 = st.columns([1, 1.3, 1])
+        col_r1, col_r2, col_r3 = st.columns([1, 1.2, 1])
         with col_r2:
-            st.write("")
-            st.write("")
+            st.write("<br><br>", unsafe_allow_html=True)
             st.markdown("### 🔑 Recuperar Acesso")
             st.markdown("<p style='font-size: 0.9rem; color: gray;'>Insira seu e-mail corporativo cadastrado para recuperar a senha.</p>", unsafe_allow_html=True)
             email_recuperar = st.text_input("E-mail corporativo", placeholder="exemplo@icmbio.gov.br")
@@ -185,13 +154,13 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (APÓS ESTAR AUTENTICADO)
 # =============================================================================
 else:
-    # Renderização da barra fixa superior verde do sistema logado
+    # Header dinâmico utilizando a variável de estado de forma segura
     st.markdown(f"""
         <div class="custom-header">
-            <div class="header-title">SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS</div>
+            <div class="header-title">Gestão de Estoque - NGI Carajás</div>
             <div class="header-user">👤 {st.session_state.NOME_USUARIO_LOGADO}</div>
         </div>
-    """, unsafe_with_html=True)
+    """, unsafe_allow_html=True)
 
     # -----------------------------------------------------------------------------
     # BANCO DE DADOS EM MEMÓRIA (Session State)
@@ -239,7 +208,7 @@ else:
         escolha = st.radio("", menu_opcoes, label_visibility="collapsed")
 
     # -----------------------------------------------------------------------------
-    # LÓGICA DAS TELAS INTERNAS
+    # LÓGICA DAS TELAS
     # -----------------------------------------------------------------------------
 
     # --- TELA: PAINEL GERAL ---
@@ -343,7 +312,7 @@ else:
                         st.session_state.produtos.loc[idx_p, "Quantidade"] = edit_qtd
                         st.session_state.produtos.loc[idx_p, "Categoria"] = edit_cat
                         st.session_state.produtos.loc[idx_p, "Valor Unitário"] = float(edit_val)
-                        st.success("Produto updated com sucesso!")
+                        st.success("Produto atualizado com sucesso!")
                         st.rerun()
                 with col_b_prod2:
                     if st.button("❌ Excluir Produto do Sistema"):
@@ -458,7 +427,7 @@ else:
                     if st.button("Salvar Edição", type="primary"):
                         st.session_state.coordenacoes.loc[idx_c, "Sigla"] = edit_sigla.upper()
                         st.session_state.coordenacoes.loc[idx_c, "Nome"] = edit_nc
-                        st.success("Nome atualizado!")
+                        st.success("Nome updated!")
                         st.rerun()
                 with c_btn_co2:
                     if st.button("❌ Excluir Coordenação"):
