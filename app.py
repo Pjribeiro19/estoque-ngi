@@ -19,32 +19,27 @@ if "sub_tela_login" not in st.session_state:
 if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = "João Paulo"
 
-# --- INJECT DE CSS PARA RETIRAR COMPLETAMENTE A RESPONSIVIDADE ---
+# --- INJECT DE CSS PARA EVITAR QUEBRAS VERTICAIS E PERMITIR SCROLL ---
 st.markdown("""
     <style>
-    /* Força o tamanho mínimo do app e adiciona rolagem horizontal se necessário */
-    .stApp {
-        min-width: 1250px !important;
+    /* Permite rolagem suave global sem travar o carregamento do app */
+    html, body {
         overflow-x: auto !important;
     }
     
-    /* Impede que o container principal reduza ou quebre os elementos */
-    .block-container {
-        min-width: 1250px !important;
-        padding-top: 5rem !important;
-    }
-    
-    /* Bloqueia a quebra automática das colunas do Streamlit em telas pequenas */
+    /* Evita que as colunas clássicas do Streamlit quebrem em linha em telas menores */
     [data-testid="stHorizontalBlock"] {
         display: flex !important;
         flex-direction: row !important;
         flex-wrap: nowrap !important;
-        width: 100% !important;
+        overflow-x: auto !important;
+        gap: 1rem !important;
     }
     
-    /* Garante que as colunas internas mantenham sua proporção original */
+    /* Força uma largura mínima para as colunas internas não esmagarem completamente */
     [data-testid="stHorizontalBlock"] > div {
-        min-width: 0 !important;
+        min-width: 280px !important;
+        flex-shrink: 0 !important;
     }
     
     /* Regras do Menu Lateral e Header */
@@ -64,7 +59,6 @@ st.markdown("""
         padding: 0 30px;
         z-index: 999999;
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        min-width: 1250px !important;
     }
     .header-title {
         color: white !important;
@@ -79,6 +73,9 @@ st.markdown("""
         font-family: sans-serif;
     }
     
+    .block-container {
+        padding-top: 5rem !important;
+    }
     [data-testid="stSidebarUserContent"] {
         padding-top: 3.5rem !important;
     }
@@ -341,7 +338,7 @@ else:
                         st.session_state.produtos.loc[idx_p, "Quantidade"] = edit_qtd
                         st.session_state.produtos.loc[idx_p, "Categoria"] = edit_cat
                         st.session_state.produtos.loc[idx_p, "Valor Unitário"] = float(edit_val)
-                        st.success("Produto updated!")
+                        st.success("Produto atualizado!")
                         st.rerun()
                 with col_b_prod2:
                     if st.button("❌ Excluir Produto do Sistema"):
