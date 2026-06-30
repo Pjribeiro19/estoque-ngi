@@ -35,33 +35,33 @@ st.markdown(f"""
         padding: 0 30px;
         z-index: 999999;
         box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
+    }}
     .header-title {{
         color: white !important;
         font-size: 1.25rem !important;
         font-weight: bold !important;
         font-family: sans-serif;
-    }
+    }}
     .header-user {{
         color: white !important;
         font-size: 1.05rem !important;
         font-weight: 500 !important;
         font-family: sans-serif;
-    }
+    }}
     
     /* Ajusta o espaçamento do topo da página por causa da barra fixa */
     .block-container {{
         padding-top: 5rem !important;
-    }
+    }}
     [data-testid="stSidebarUserContent"] {{
         padding-top: 3.5rem !important;
-    }
+    }}
     
     /* Menu Lateral Claro e Suave */
     [data-testid="stSidebar"] {{
         background-color: #fcfaff !important;
         border-right: 1px solid #efe9f5;
-    }
+    }}
     
     /* Customização dos itens de menu (Radio) */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {{
@@ -71,14 +71,14 @@ st.markdown(f"""
         border-radius: 4px;
         margin-bottom: 2px;
         transition: all 0.2s ease;
-    }
+    }}
     
     /* Efeito de passar o mouse (Hover) */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {{
         background-color: #e2eed7 !important;
         color: #1e5934 !important;
         cursor: pointer;
-    }
+    }}
     
     /* Item Selecionado no Menu */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] input:checked + div {{
@@ -86,18 +86,18 @@ st.markdown(f"""
         border-radius: 4px;
         color: #1e5934 !important;
         font-weight: bold !important;
-    }
+    }}
     
     /* Estilização para botões primários padrão */
     div.stButton > button:first-child[kind="primary"] {{
         background-color: #4CAF50 !important;
         border-color: #4CAF50 !important;
         color: white !important;
-    }
+    }}
     div.stButton > button:first-child[kind="primary"]:hover {{
         background-color: #43a047 !important;
         border-color: #43a047 !important;
-    }
+    }}
     </style>
     
     <div class="custom-header">
@@ -246,7 +246,7 @@ elif escolha == "➕ Cadastrar Produto":
                     st.session_state.produtos.loc[idx_p, "Item"] = edit_item
                     st.session_state.produtos.loc[idx_p, "Quantidade"] = edit_qtd
                     st.session_state.produtos.loc[idx_p, "Categoria"] = edit_cat
-                    st.success("Produto updated com sucesso!")
+                    st.success("Produto atualizado com sucesso!")
                     st.rerun()
             with col_b_prod2:
                 if st.button("❌ Excluir Produto do Sistema"):
@@ -334,7 +334,7 @@ elif escolha == "🏢 Cadastrar Coordenação":
             edit_nc = st.text_input("Nome:", value=st.session_state.coordenacoes.loc[idx_c, "Nome"])
             if st.button("Salvar Edição", type="primary"):
                 st.session_state.coordenacoes.loc[idx_c, "Nome"] = edit_nc
-                st.success("Nome atualizado!")
+                st.success("Nome updated com sucesso!")
                 st.rerun()
 
 # --- TELA: MOVIMENTAÇÃO DE ENTRADA E SAÍDA ---
