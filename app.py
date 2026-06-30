@@ -135,6 +135,10 @@ if "movimentacoes" not in st.session_state or not isinstance(st.session_state.mo
         "Data", "Tipo", "Código", "Item", "Quantidade", "Responsável pela Retirada", "Coordenação"
     ])
 
+# Controla o índice do menu via session state para permitir o reset
+if "menu_index" not in st.session_state:
+    st.session_state.menu_index = 0
+
 # -----------------------------------------------------------------------------
 # BARRA LATERAL (MENU DE NAVEGAÇÃO)
 # -----------------------------------------------------------------------------
@@ -149,7 +153,7 @@ with st.sidebar:
         "👤 Perfil",
         "🚪 Sair"
     ]
-    escolha = st.radio("", menu_opcoes, label_visibility="collapsed")
+    escolha = st.radio("", menu_opcoes, index=st.session_state.menu_index, label_visibility="collapsed")
 
 # -----------------------------------------------------------------------------
 # LÓGICA DAS TELAS
@@ -157,6 +161,7 @@ with st.sidebar:
 
 # --- TELA: PAINEL GERAL ---
 if escolha == "🎛️ Painel Geral":
+    st.session_state.menu_index = 0
     st.title("🎛️ Painel Geral de Estoque")
     
     c1, c2, c3 = st.columns(3)
@@ -197,6 +202,7 @@ if escolha == "🎛️ Painel Geral":
 
 # --- TELA: CADASTRAR PRODUTO ---
 elif escolha == "➕ Cadastrar Produto":
+    st.session_state.menu_index = 1
     st.title("➕ Gerenciamento de Produtos")
     aba_cad_prod, aba_gerenciar_prod = st.tabs(["➕ Novo Material", "✏️ Editar / Excluir Produtos"])
     
@@ -256,6 +262,7 @@ elif escolha == "➕ Cadastrar Produto":
 
 # --- TELA: CADASTRAR CATEGORIA ---
 elif escolha == "🗂️ Cadastrar Categoria":
+    st.session_state.menu_index = 2
     st.title("🗂️ Gerenciamento de Categorias")
     aba_nova_cat, aba_gerenciar_cat = st.tabs(["➕ Nova Categoria", "✏️ Editar / Excluir Categorias"])
     
@@ -284,6 +291,7 @@ elif escolha == "🗂️ Cadastrar Categoria":
 
 # --- TELA: CADASTRAR USUÁRIO ---
 elif escolha == "👥 Cadastrar Usuário":
+    st.session_state.menu_index = 3
     st.title("👥 Cadastrar Usuário")
     aba_cad, aba_edit = st.tabs(["➕ Novo Usuário", "✏️ Editar / Excluir Usuários"])
     
@@ -313,6 +321,7 @@ elif escolha == "👥 Cadastrar Usuário":
 
 # --- TELA: CADASTRAR COORDENAÇÃO ---
 elif escolha == "🏢 Cadastrar Coordenação":
+    st.session_state.menu_index = 4
     st.title("🏢 Cadastrar Coordenação")
     aba_c1, aba_c2 = st.tabs(["➕ Nova Coordenação", "✏️ Editar / Excluir Coordenação"])
     
@@ -334,11 +343,12 @@ elif escolha == "🏢 Cadastrar Coordenação":
             edit_nc = st.text_input("Nome:", value=st.session_state.coordenacoes.loc[idx_c, "Nome"])
             if st.button("Salvar Edição", type="primary"):
                 st.session_state.coordenacoes.loc[idx_c, "Nome"] = edit_nc
-                st.success("Nome updated com sucesso!")
+                st.success("Nome atualizado!")
                 st.rerun()
 
 # --- TELA: MOVIMENTAÇÃO DE ENTRADA E SAÍDA ---
 elif escolha == "🔄 Movimentação de Entrada e Saída":
+    st.session_state.menu_index = 5
     st.title("🔄 Movimentação de Entrada e Saída")
     aba_entrada, aba_saida, aba_historico = st.tabs(["📥 Registrar Entrada", "📤 Registrar Saída", "📋 Histórico de Entradas/Saídas"])
     
@@ -385,18 +395,23 @@ elif escolha == "🔄 Movimentação de Entrada e Saída":
 
 # --- TELA: PERFIL ---
 elif escolha == "👤 Perfil":
+    st.session_state.menu_index = 6
     st.title("👤 Meu Perfil")
     st.write(f"**Usuário Atual:** {NOME_USUARIO_LOGADO}")
     st.write("**Lotação:** NGI Carajás / ICMBio")
 
 # --- TELA: SAIR ---
 elif escolha == "🚪 Sair":
-    # 1. Limpa todas as variáveis temporárias para desconectar com segurança
+    # 1. Limpa todas as variáveis e tabelas carregadas na memória
     st.session_state.clear()
     
-    # 2. Exibe a mensagem de sucesso na tela limpa
-    st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
-    st.success("🔒 Sua sessão foi encerrada com segurança. Para entrar novamente, atualize a página.")
+    # 2. Força o componente do menu a voltar para a primeira aba ("🎛️ Painel Geral") no próximo carregamento
+    st.session_state.menu_index = 0
     
-    # 3. Interrompe a execução para congelar a tela de encerramento de forma segura
-    st.stop()
+    # 3. Exibe o aviso visual de encerramento temporário na tela
+    st.markdown("<div style='height: 40px;'></div>", unsafe_allow_html=True)
+    st.warning("🔒 Sua sessão foi limpa e encerrada com segurança!")
+    
+    # 4. Cria um botão para o usuário atualizar a página manualmente e redefinir o app
+    if st.button("Recarregar Sistema", type="primary"):
+        st.rerun()
