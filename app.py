@@ -4,7 +4,7 @@ from datetime import datetime
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="Gestão de Almoxarifado - NGI Carajás", 
+    page_title="SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS", 
     page_icon="🌿", 
     layout="wide"
 )
@@ -97,6 +97,15 @@ st.markdown("""
         background-color: #43a047 !important;
         border-color: #43a047 !important;
     }
+    
+    /* Container para garantir centralização perfeita da imagem */
+    .img-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        margin-bottom: 10px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -109,17 +118,16 @@ if not st.session_state.autenticado:
     if st.session_state.sub_tela_login == "login":
         st.markdown("<br><br>", unsafe_allow_html=True)
         
-        col_l1, col_l2, col_l3 = st.columns([1, 1.2, 1])
+        col_l1, col_l2, col_l3 = st.columns([1, 1.3, 1])
         with col_l2:
-            # Colunas internas para garantir a centralização perfeita da imagem menor
-            c_img1, c_img2, c_img3 = st.columns([1, 2, 1])
-            with c_img2:
-                st.image(
-                    "https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png", 
-                    width=280
-                )
+            # HTML customizado para forçar centralização perfeita da imagem e ajustar o tamanho proporcionalmente
+            st.markdown("""
+                <div class="img-container">
+                    <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="280">
+                </div>
+            """, unsafe_allow_html=True)
             
-            st.markdown("<h3 style='text-align: center; color: #1e5934; margin-top: 15px; margin-bottom: 25px;'>Gestão de Almoxarifado<br>NGI Carajás</h3>", unsafe_allow_html=True)
+            st.markdown("<h3 style='text-align: center; color: #1e5934; margin-top: 10px; margin-bottom: 25px;'>SISTEMA DE GESTÃO DE<br>ALMOXARIFADO NGI CARAJÁS</h3>", unsafe_allow_html=True)
             
             usuario_input = st.text_input("Usuário / E-mail", placeholder="Digite seu usuário...")
             senha_input = st.text_input("Senha", type="password", placeholder="Digite sua senha...")
@@ -156,10 +164,10 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (APÓS ESTAR AUTENTICADO)
 # =============================================================================
 else:
-    # Header dinâmico utilizando a variável de estado de forma segura
+    # Header dinâmico com o novo nome oficial do sistema
     st.markdown(f"""
         <div class="custom-header">
-            <div class="header-title">Gestão de Almoxarifado - NGI Carajás</div>
+            <div class="header-title">SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS</div>
             <div class="header-user">👤 {st.session_state.NOME_USUARIO_LOGADO}</div>
         </div>
     """, unsafe_allow_html=True)
@@ -237,7 +245,7 @@ else:
                 df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)
             ]
             
-        if categoria_selecionada != "Todas":
+        if category_selection := categoria_selecionada != "Todas":
             df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
         st.write("### 📋 Estoque Atualizado")
@@ -323,7 +331,7 @@ else:
                         st.rerun()
 
     # --- TELA: CADASTRAR CATEGORIA ---
-    elif presidential_selection := escolha == "🗂️ Cadastrar Categoria":
+    elif escolha == "🗂️ Cadastrar Categoria":
         st.title("🗂️ Gerenciamento de Categorias")
         aba_nova_cat, aba_gerenciar_cat = st.tabs(["➕ Nova Categoria", "✏️ Editar / Excluir Categorias"])
         
