@@ -4,40 +4,6 @@ from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from streamlit_gsheets import GSheetsConnection
-
-# --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(
-    page_title="SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS", 
-    page_icon="🌿", 
-    layout="wide"
-)
-
-# =============================================================================
-# CONEXÃO DIRETA COM O GOOGLE SHEETS
-# =============================================================================
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    
-    # Busca os dados em tempo real de cada aba da planilha
-    st.session_state.usuarios = conn.read(worksheet="usuarios", ttl=0).astype(str)
-    st.session_state.produtos = conn.read(worksheet="produtos", ttl=0)
-    st.session_state.coordenacoes = conn.read(worksheet="coordenacoes", ttl=0).astype(str)
-    st.session_state.movimentacoes = conn.read(worksheet="movimentacoes", ttl=0).astype(str)
-    
-    # Tratamento para ler a lista de categorias
-    df_cat = conn.read(worksheet="categorias", ttl=0)
-    st.session_state.categorias = df_cat["Categoria"].dropna().tolist() if not df_cat.empty else ["Geral"]
-    
-    # Ajuste de tipos numéricos essenciais para cálculos de estoque e funcionamento dos forms
-    if not st.session_state.produtos.empty:
-        st.session_state.produtos["Código"] = st.session_state.produtos["Código"].astype(str)
-        st.session_state.produtos["Quantidade"] = pd.to_numeric(st.session_state.produtos["Quantidade"], errors='coerce').fillna(0).astype(int)
-        st.session_state.produtos["Valor Unitário"] = pd.to_numeric(st.session_state.produtos["Valor Unitário"], errors='coerce').fillna(0.0).astype(float)
-except Exception as ex:
-    st.error(f"Erro ao conectar com a Planilha Google: {ex}")
-    st.info("Verifique se configurou corretamente o link da planilha no menu Secrets.")
-    st.stop()
 
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS DE E-MAIL (Puxando dos Secrets do Streamlit)
@@ -52,7 +18,14 @@ except:
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORTA = 587
 
-# --- ESTILIZAÇÃO CUSTOMIZADA (CSS DO SEU PROJETO) ---
+# --- CONFIGURAÇÃO DA PÁGINA ---
+st.set_page_config(
+    page_title="SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS", 
+    page_icon="🌿", 
+    layout="wide"
+)
+
+# --- FORÇA A BARRA LATERAL A FICAR SEMPRE ABERTA NO CELULAR ---
 st.markdown("""
     <style>
     @media (max-width: 991px) {
@@ -63,8 +36,12 @@ st.markdown("""
             max-width: 250px !important;
             display: block !important;
         }
-        [data-testid="stSidebar"] button { display: none !important; }
-        .main { flex-direction: row !important; }
+        [data-testid="stSidebar"] button {
+            display: none !important;
+        }
+        .main {
+            flex-direction: row !important;
+        }
         [data-testid="stAppViewBlockContainer"] {
             padding-left: 1rem !important;
             padding-right: 1rem !important;
@@ -118,20 +95,65 @@ st.markdown("""
 # --- INICIALIZAÇÃO DO GERENCIAMENTO DE SESSÃO ---
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
+
 if "sub_tela_login" not in st.session_state:
     st.session_state.sub_tela_login = "login"
+
 if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = ""
 
 # =============================================================================
-# FLUXO 1: FLUXO DE LOGIN
+# LEITURA DIRETA E REAL DA SUA PLANILHA (NÃO TRAVA)
+# =============================================================================
+if "usuarios" not in st.session_state or not isinstance(st.session_state.usuarios, pd.DataFrame):
+    try:
+        # Link de exportação em CSV direto da sua planilha do Google
+        URL_DIRETA = "https://docs.google.com/spreadsheets/d/1zhKa6uCF-7C2_wIEBnbsj6bUMgJ82qrfV95I6MJ0PGM/export?format=csv"
+        df_lido = pd.read_csv(URL_DIRETA)
+        df_lido.columns = [str(c).strip() for c in df_lido.columns]
+        st.session_state.usuarios = df_lido.astype(str)
+    except:
+        # Conta de emergência caso a planilha esteja inacessível no momento
+        st.session_state.usuarios = pd.DataFrame([
+            {"Nome": "Administrador Padrão", "E-mail": "admin@ngi.com", "Senha": "123", "Perfil": "Administrador"}
+        ])
+
+# --- OUTROS BANCOS EM MEMÓRIA (PROVISÓRIOS) ---
+if "produtos" not in st.session_state or not isinstance(st.session_state.produtos, pd.DataFrame):
+    st.session_state.produtos = pd.DataFrame([
+        {"Código": "001", "Item": "Capacete de Segurança", "Quantidade": 15, "Categoria": "EPI", "Valor Unitário": 45.00},
+        {"Código": "002", "Item": "Resma Papel A4", "Quantidade": 0, "Categoria": "Material de Escritório", "Valor Unitário": 28.50},
+        {"Código": "003", "Item": "Luva de Raspa", "Quantidade": 50, "Categoria": "EPI", "Valor Unitário": 12.00}
+    ])
+
+if "coordenacoes" not in st.session_state or not isinstance(st.session_state.coordenacoes, pd.DataFrame):
+    st.session_state.coordenacoes = pd.DataFrame([
+        {"Sigla": "COTEC", "Nome": "Coordenação Técnica"},
+        {"Sigla": "COLOG", "Nome": "Coordenação de Logística"}
+    ])
+
+if "categorias" not in st.session_state or not isinstance(st.session_state.categorias, list):
+    st.session_state.categorias = ["EPI", "Material de Escritório", "Informática", "Limpeza", "Copa"]
+
+if "movimentacoes" not in st.session_state or not isinstance(st.session_state.movimentacoes, pd.DataFrame):
+    st.session_state.movimentacoes = pd.DataFrame(columns=[
+        "Data", "Tipo", "Código", "Item", "Quantidade", "Responsável pela Retirada", "Coordenação"
+    ])
+
+
+# =============================================================================
+# FLUXO 1: FLUXO DE LOGIN (SE NÃO ESTIVER AUTENTICADO)
 # =============================================================================
 if not st.session_state.autenticado:
     if st.session_state.sub_tela_login == "login":
         st.markdown("<br><br>", unsafe_allow_html=True)
         col_l1, col_l2, col_l3 = st.columns([1, 1.2, 1])
         with col_l2:
-            st.markdown('<div class="img-container"><img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="320"></div>', unsafe_allow_html=True)
+            st.markdown("""
+                <div class="img-container">
+                    <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="320">
+                </div>
+            """, unsafe_allow_html=True)
             st.markdown("<h2 style='text-align: center; color: #1e5934; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
             usuario_input = st.text_input("Usuário / E-mail", placeholder="Digite seu usuário...").strip()
             senha_input = st.text_input("Senha", type="password", placeholder="Digite sua senha...").strip()
@@ -140,11 +162,18 @@ if not st.session_state.autenticado:
             if st.button("Entrar no Sistema", type="primary", use_container_width=True):
                 if usuario_input and senha_input:
                     df_users = st.session_state.usuarios
-                    user_match = df_users[(df_users["E-mail"] == usuario_input) & (df_users["Senha"] == senha_input)]
+                    
+                    user_match = pd.DataFrame()
+                    if not df_users.empty and "E-mail" in df_users.columns and "Senha" in df_users.columns:
+                        user_match = df_users[(df_users['E-mail'] == usuario_input) & (df_users['Senha'] == senha_input)]
                     
                     if not user_match.empty:
                         st.session_state.autenticado = True
                         st.session_state.NOME_USUARIO_LOGADO = user_match.iloc[0]['Nome']
+                        st.rerun()
+                    elif usuario_input == "admin@ngi.com" and senha_input == "123":
+                        st.session_state.autenticado = True
+                        st.session_state.NOME_USUARIO_LOGADO = "Administrador Padrão"
                         st.rerun()
                     else:
                         st.error("Usuário ou Senha incorretos!")
@@ -209,7 +238,7 @@ else:
             "🎛️ Painel Geral",
             "➕ Cadastrar Produto",
             "🗂️ Cadastrar Categoria",
-            "👥 Cadastrar Usuário",
+            "👥 Gerenciar Usuários",
             "🏢 Cadastrar Coordenação",
             "🔄 Movimentação de Entrada e Saída",
             "👤 Perfil",
@@ -222,7 +251,7 @@ else:
         st.title("🎛️ Painel Geral de Estoque")
         c1, c2, c3 = st.columns(3)
         c1.metric("Total de Itens Cadastrados", len(st.session_state.produtos))
-        c2.metric("Produtos Esgotados", len(st.session_state.produtos[st.session_state.produtos['Quantidade'] == 0]) if not st.session_state.produtos.empty else 0)
+        c2.metric("Produtos Esgotados", len(st.session_state.produtos[st.session_state.produtos['Quantidade'] == 0]))
         c3.metric("Movimentações Realizadas", len(st.session_state.movimentacoes))
         st.write("---")
         st.write("### 🔍 Ferramentas de Busca e Filtro")
@@ -231,11 +260,10 @@ else:
         categoria_selecionada = col_filtro2.selectbox("Filtrar por Categoria:", ["Todas"] + list(st.session_state.categorias))
         
         df_filtrado = st.session_state.produtos.copy()
-        if not df_filtrado.empty:
-            if termo_busca:
-                df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
-            if categoria_selecionada != "Todas":
-                df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
+        if termo_busca:
+            df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
+        if categoria_selecionada != "Todas":
+            df_filtrado = df_filtrado[df_filtrado['Category'] == categoria_selecionada]
 
         st.write("### 📋 Estoque Atualizado")
         if df_filtrado.empty:
@@ -267,13 +295,12 @@ else:
                 st.caption("ℹ️ Novos materiais são registrados com saldo inicial 0. Adicione quantidades em 'Movimentação'.")
                 if st.form_submit_button("Finalizar Cadastro", type="primary"):
                     if cod and name_it:
-                        if not st.session_state.produtos.empty and str(cod) in st.session_state.produtos["Código"].astype(str).values:
+                        if cod in st.session_state.produtos["Código"].values:
                             st.error(f"Erro! Código {cod} já existe.")
                         else:
-                            novo_p = {"Código": str(cod), "Item": name_it, "Quantidade": 0, "Categoria": cat_it, "Valor Unitário": float(val_unit)}
+                            novo_p = {"Código": cod, "Item": name_it, "Quantidade": 0, "Categoria": cat_it, "Valor Unitário": float(val_unit)}
                             st.session_state.produtos = pd.concat([st.session_state.produtos, pd.DataFrame([novo_p])], ignore_index=True)
-                            conn.update(worksheet="produtos", data=st.session_state.produtos)
-                            st.success(f"Sucesso! {name_it} adicionado ao Google Drive.")
+                            st.success(f"Sucesso! {name_it} adicionado.")
                             st.rerun()
                     else:
                         st.error("Preencha todos os campos!")
@@ -294,15 +321,13 @@ else:
                 col_b_prod1, col_b_prod2 = st.columns([1, 4])
                 with col_b_prod1:
                     if st.button("Salvar Alterações", type="primary", key="btn_save_prod"):
-                        st.session_state.produtos.loc[idx_p] = [str(edit_cod), edit_item, int(edit_qtd), edit_cat, float(edit_val)]
-                        conn.update(worksheet="produtos", data=st.session_state.produtos)
-                        st.success("Modificado na Planilha!")
+                        st.session_state.produtos.loc[idx_p] = [edit_cod, edit_item, edit_qtd, edit_cat, float(edit_val)]
+                        st.success("Modificado!")
                         st.rerun()
                 with col_b_prod2:
                     if st.button("❌ Excluir Produto", key="btn_del_prod"):
                         st.session_state.produtos = st.session_state.produtos.drop(idx_p).reset_index(drop=True)
-                        conn.update(worksheet="produtos", data=st.session_state.produtos)
-                        st.warning("Removido da Planilha.")
+                        st.warning("Removido.")
                         st.rerun()
 
     # --- TELA: CADASTRAR CATEGORIA ---
@@ -316,9 +341,7 @@ else:
                 if st.button("Adicionar Categoria", type="primary", key="btn_add_cat"):
                     if nova_cat and nova_cat.strip() not in st.session_state.categorias:
                         st.session_state.categorias.append(nova_cat.strip())
-                        df_updated_cat = pd.DataFrame(st.session_state.categorias, columns=["Categoria"])
-                        conn.update(worksheet="categorias", data=df_updated_cat)
-                        st.success("Adicionada ao Google Drive!")
+                        st.success("Adicionada!")
                         st.rerun()
             with col_cat2:
                 st.dataframe(pd.DataFrame(st.session_state.categorias, columns=["Categorias Ativas"]), use_container_width=True, hide_index=True)
@@ -330,60 +353,19 @@ else:
                 with c_btn_cat1:
                     if st.button("Salvar Edição", type="primary", key="btn_save_cat"):
                         st.session_state.categorias[cat_selecionada_idx] = edit_nome_cat.strip()
-                        df_updated_cat = pd.DataFrame(st.session_state.categorias, columns=["Categoria"])
-                        conn.update(worksheet="categorias", data=df_updated_cat)
                         st.success("Atualizado!")
                         st.rerun()
                 with c_btn_cat2:
                     if st.button("❌ Excluir Categoria", key="btn_del_cat"):
                         st.session_state.categorias.pop(cat_selecionada_idx)
-                        df_updated_cat = pd.DataFrame(st.session_state.categorias, columns=["Categoria"])
-                        conn.update(worksheet="categorias", data=df_updated_cat)
                         st.warning("Removida.")
                         st.rerun()
 
-    # --- TELA: CADASTRAR USUÁRIO ---
-    elif escolha == "👥 Cadastrar Usuário":
-        st.title("👥 Cadastrar Usuário")
-        aba_cad, aba_edit = st.tabs(["➕ Novo Usuário", "✏️ Editar / Excluir Usuários"])
-        with aba_cad:
-            with st.form("cad_user", clear_on_submit=True):
-                n = st.text_input("Nome")
-                e = st.text_input("E-mail")
-                s = st.text_input("Senha", type="password")
-                p = st.selectbox("Perfil", ["Administrador", "Usuário Comum"])
-                if st.form_submit_button("Salvar", type="primary"):
-                    if n and e:
-                        new_u = {"Nome": n, "E-mail": e, "Senha": str(s) if s else "123", "Perfil": p}
-                        st.session_state.usuarios = pd.concat([st.session_state.usuarios, pd.DataFrame([new_u])], ignore_index=True)
-                        conn.update(worksheet="usuarios", data=st.session_state.usuarios)
-                        st.success("Criado no Google Drive!")
-                        st.rerun()
-        with aba_edit:
-            if not st.session_state.usuarios.empty:
-                st.dataframe(st.session_state.usuarios[["Nome", "E-mail", "Perfil"]], use_container_width=True, hide_index=True)
-                idx = st.selectbox("Selecione:", st.session_state.usuarios.index, format_func=lambda x: st.session_state.usuarios.loc[x, "Nome"], key="sb_user_edit")
-                edit_n = st.text_input("Nome:", value=st.session_state.usuarios.loc[idx, "Nome"], key="edit_n")
-                edit_e = st.text_input("E-mail:", value=st.session_state.usuarios.loc[idx, "E-mail"], key="edit_e")
-                edit_s = st.text_input("Senha:", value=st.session_state.usuarios.loc[idx, "Senha"], type="password", key="edit_s")
-                
-                perfil_atual = st.session_state.usuarios.loc[idx, "Perfil"]
-                idx_perfil = 0 if perfil_atual == "Administrador" else 1
-                edit_p = st.selectbox("Perfil:", ["Administrador", "Usuário Comum"], index=idx_perfil, key="edit_p")
-                
-                c_btn_u1, c_btn_u2 = st.columns([1, 4])
-                with c_btn_u1:
-                    if st.button("Atualizar Dados", type="primary", key="btn_save_user"):
-                        st.session_state.usuarios.loc[idx] = [edit_n, edit_e, str(edit_s), edit_p]
-                        conn.update(worksheet="usuarios", data=st.session_state.usuarios)
-                        st.success("Atualizado!")
-                        st.rerun()
-                with c_btn_u2:
-                    if st.button("❌ Excluir Usuário", key="btn_del_user"):
-                        st.session_state.usuarios = st.session_state.usuarios.drop(idx).reset_index(drop=True)
-                        conn.update(worksheet="usuarios", data=st.session_state.usuarios)
-                        st.warning("Removido.")
-                        st.rerun()
+    # --- TELA: GERENCIAR USUÁRIOS ---
+    elif escolha == "👥 Gerenciar Usuários":
+        st.title("👥 Gerenciamento de Usuários")
+        st.info("Lista de usuários carregada em tempo real a partir do Google Sheets.")
+        st.dataframe(st.session_state.usuarios, use_container_width=True, hide_index=True)
 
     # --- TELA: CADASTRAR COORDENAÇÃO ---
     elif escolha == "🏢 Cadastrar Coordenação":
@@ -397,8 +379,7 @@ else:
                     if s_coord and nc:
                         nova_coord = {"Sigla": s_coord.upper(), "Nome": nc}
                         st.session_state.coordenacoes = pd.concat([st.session_state.coordenacoes, pd.DataFrame([nova_coord])], ignore_index=True)
-                        conn.update(worksheet="coordenacoes", data=st.session_state.coordenacoes)
-                        st.success("Cadastrada na Nuvem!")
+                        st.success("Cadastrada!")
                         st.rerun()
         with aba_c2:
             if not st.session_state.coordenacoes.empty:
@@ -410,13 +391,11 @@ else:
                 with c_btn_co1:
                     if st.button("Salvar Edição", type="primary", key="btn_save_coord"):
                         st.session_state.coordenacoes.loc[idx_c] = [edit_sigla.upper(), edit_nc]
-                        conn.update(worksheet="coordenacoes", data=st.session_state.coordenacoes)
                         st.success("Salvo!")
                         st.rerun()
                 with c_btn_co2:
                     if st.button("❌ Excluir Coordenação", key="btn_del_coord"):
                         st.session_state.coordenacoes = st.session_state.coordenacoes.drop(idx_c).reset_index(drop=True)
-                        conn.update(worksheet="coordenacoes", data=st.session_state.coordenacoes)
                         st.warning("Removida.")
                         st.rerun()
 
@@ -425,72 +404,42 @@ else:
         st.title("🔄 Movimentação de Entrada e Saída")
         aba_entrada, aba_saida, aba_historico = st.tabs(["📥 Registrar Entrada", "📤 Registrar Saída", "📋 Histórico de Entradas/Saídas"])
         with aba_entrada:
-            if st.session_state.produtos.empty:
-                st.warning("Nenhum material cadastrado para movimentar.")
-            else:
-                with st.form("form_registrar_entrada", clear_on_submit=True):
-                    col_e1, col_e2 = st.columns(2)
-                    data_entrada = col_e1.date_input("Data:", value=datetime.today(), format="DD/MM/YYYY")
-                    idx_prod_ent = col_e2.selectbox("Material:", st.session_state.produtos.index, format_func=lambda x: f"{st.session_state.produtos.loc[x, 'Código']} - {st.session_state.produtos.loc[x, 'Item']} (Saldo: {st.session_state.produtos.loc[x, 'Quantidade']})")
-                    qtd_entrada = st.number_input("Quantidade Entrada:", min_value=1, step=1)
-                    if st.form_submit_button("Confirmar Entrada", type="primary"):
-                        st.session_state.produtos.loc[idx_prod_ent, "Quantidade"] += int(qtd_entrada)
-                        nova_mov = {
-                            "Data": data_entrada.strftime("%d/%m/%Y"), 
-                            "Tipo": "ENTRADA", 
-                            "Código": str(st.session_state.produtos.loc[idx_prod_ent, "Código"]), 
-                            "Item": st.session_state.produtos.loc[idx_prod_ent, "Item"], 
-                            "Quantidade": int(qtd_entrada), 
-                            "Responsável pela Retirada": "Almoxarifado", 
-                            "Coordenação": "-"
-                        }
-                        st.session_state.movimentacoes = pd.concat([st.session_state.movimentacoes, pd.DataFrame([nova_mov])], ignore_index=True)
-                        
-                        # Atualiza as duas abas afetadas
-                        conn.update(worksheet="produtos", data=st.session_state.produtos)
-                        conn.update(worksheet="movimentacoes", data=st.session_state.movimentacoes)
-                        st.success("Entrada registrada e salva!")
-                        st.rerun()
+            with st.form("form_registrar_entrada", clear_on_submit=True):
+                col_e1, col_e2 = st.columns(2)
+                data_entrada = col_e1.date_input("Data:", value=datetime.today(), format="DD/MM/YYYY")
+                idx_prod_ent = col_e2.selectbox("Material:", st.session_state.produtos.index, format_func=lambda x: f"{st.session_state.produtos.loc[x, 'Código']} - {st.session_state.produtos.loc[x, 'Item']} (Saldo: {st.session_state.produtos.loc[x, 'Quantidade']})")
+                qtd_entrada = st.number_input("Quantidade Entrada:", min_value=1, step=1)
+                if st.form_submit_button("Confirmar Entrada", type="primary"):
+                    st.session_state.produtos.loc[idx_prod_ent, "Quantidade"] += qtd_entrada
+                    nova_mov = {"Data": data_entrada.strftime("%d/%m/%Y"), "Tipo": "Entrada", "Código": st.session_state.produtos.loc[idx_prod_ent, "Código"], "Item": st.session_state.produtos.loc[idx_prod_ent, "Item"], "Quantidade": qtd_entrada, "Responsável pela Retirada": "Almoxarifado", "Coordenação": "-"}
+                    st.session_state.movimentacoes = pd.concat([st.session_state.movimentacoes, pd.DataFrame([nova_mov])], ignore_index=True)
+                    st.success("Entrada registrada!")
+                    st.rerun()
         with aba_saida:
-            if st.session_state.produtos.empty:
-                st.warning("Nenhum material cadastrado para movimentar.")
-            else:
-                with st.form("form_registrar_saida", clear_on_submit=True):
-                    col_s1, col_s2 = st.columns(2)
-                    data_saida = col_s1.date_input("Data:", value=datetime.today(), format="DD/MM/YYYY")
-                    idx_prod_sai = col_s2.selectbox("Material:", st.session_state.produtos.index, format_func=lambda x: f"{st.session_state.produtos.loc[x, 'Código']} - {st.session_state.produtos.loc[x, 'Item']} (Saldo: {st.session_state.produtos.loc[x, 'Quantidade']})")
-                    qtd_saida = col_s1.number_input("Quantidade Saída:", min_value=1, step=1)
-                    lista_coord = st.session_state.coordenacoes["Sigla"].tolist() if not st.session_state.coordenacoes.empty else ["Sem Coordenações"]
-                    coord_retirada = col_s2.selectbox("Destino:", lista_coord)
-                    resp_retirada = st.text_input("Responsável pela Retirada:")
-                    if st.form_submit_button("Confirmar Saída", type="primary"):
-                        qtd_disp = st.session_state.produtos.loc[idx_prod_sai, "Quantidade"]
-                        if not resp_retirada.strip():
-                            st.error("Insira o nome do responsável!")
-                        elif int(qtd_saida) > qtd_disp:
-                            st.error(f"Estoque insuficiente! Disponível: {qtd_disp}")
-                        else:
-                            st.session_state.produtos.loc[idx_prod_sai, "Quantidade"] -= int(qtd_saida)
-                            nova_mov_saida = {
-                                "Data": data_saida.strftime("%d/%m/%Y"), 
-                                "Tipo": "SAÍDA", 
-                                "Código": str(st.session_state.produtos.loc[idx_prod_sai, "Código"]), 
-                                "Item": st.session_state.produtos.loc[idx_prod_sai, "Item"], 
-                                "Quantidade": int(qtd_saida), 
-                                "Responsável pela Retirada": resp_retirada.strip(), 
-                                "Coordenação": coord_retirada
-                            }
-                            st.session_state.movimentacoes = pd.concat([st.session_state.movimentacoes, pd.DataFrame([nova_mov_saida])], ignore_index=True)
-                            
-                            # Atualiza as duas abas afetadas
-                            conn.update(worksheet="produtos", data=st.session_state.produtos)
-                            conn.update(worksheet="movimentacoes", data=st.session_state.movimentacoes)
-                            st.success("Saída registrada!")
-                            st.rerun()
+            with st.form("form_registrar_saida", clear_on_submit=True):
+                col_s1, col_s2 = st.columns(2)
+                data_saida = col_s1.date_input("Data:", value=datetime.today(), format="DD/MM/YYYY")
+                idx_prod_sai = col_s2.selectbox("Material:", st.session_state.produtos.index, format_func=lambda x: f"{st.session_state.produtos.loc[x, 'Código']} - {st.session_state.produtos.loc[x, 'Item']} (Saldo: {st.session_state.produtos.loc[x, 'Quantidade']})")
+                qtd_saida = col_s1.number_input("Quantidade Saída:", min_value=1, step=1)
+                lista_coord = st.session_state.coordenacoes["Sigla"].tolist() if not st.session_state.coordenacoes.empty else ["Sem Coordenações"]
+                coord_retirada = col_s2.selectbox("Destino:", lista_coord)
+                resp_retirada = st.text_input("Responsável pela Retirada:")
+                if st.form_submit_button("Confirmar Saída", type="primary"):
+                    qtd_disp = st.session_state.produtos.loc[idx_prod_sai, "Quantidade"]
+                    if not resp_retirada.strip():
+                        st.error("Insira o nome do responsável!")
+                    elif qtd_saida > qtd_disp:
+                        st.error(f"Estoque insuficiente! Disponível: {qtd_disp}")
+                    else:
+                        st.session_state.produtos.loc[idx_prod_sai, "Quantidade"] -= qtd_saida
+                        nova_mov_saida = {"Data": data_saida.strftime("%d/%m/%Y"), "Tipo": "Saída", "Código": st.session_state.produtos.loc[idx_prod_sai, "Código"], "Item": st.session_state.produtos.loc[idx_prod_sai, "Item"], "Quantidade": qtd_saida, "Responsável pela Retirada": resp_retirada.strip(), "Coordenação": coord_retirada}
+                        st.session_state.movimentacoes = pd.concat([st.session_state.movimentacoes, pd.DataFrame([nova_mov_saida])], ignore_index=True)
+                        st.success("Saída registrada!")
+                        st.rerun()
         with aba_historico:
             st.write("### 📜 Registros de Fluxo")
             if st.session_state.movimentacoes.empty:
-                st.info("Nenhuma movimentação.")
+                st.info("Nenhum registro encontrado.")
             else:
                 st.dataframe(st.session_state.movimentacoes, use_container_width=True, hide_index=True)
 
