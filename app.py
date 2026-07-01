@@ -4,7 +4,7 @@ from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from streamlit_gsheets import GSheetsConnection
+import gspread  # Biblioteca super estável e nativa
 
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS (Puxando dos Secrets do Streamlit)
@@ -104,35 +104,39 @@ if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = ""
 
 # =============================================================================
-# CONEXÃO DE LEITURA/ESCRITA ATUALIZADA
+# CONEXÃO DE LEITURA/ESCRITA VIA GSPREAD (LINK PÚBLICO)
 # =============================================================================
+URL_PLANILHA = "https://docs.google.com/spreadsheets/d/1zhKa6uCF-7C2_wIEBnbsj6bUMgJ82qrfV95I6MJ0PGM/edit"
+
 def carregar_usuarios():
     try:
-        # Usa o método de conexão baseado na configuração estável do GSheetsConnection
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        df = conn.read(ttl="0d")
+        # Tenta ler via requisição HTTP direta de forma rápida
+        url_csv = URL_PLANILHA.replace("/edit", "/export?format=csv")
+        df = pd.read_csv(url_csv)
         df.columns = [str(c).strip() for c in df.columns]
         return df.astype(str)
     except Exception as e:
-        # Fallback inteligente usando a URL direta pública caso o conector apresente algum delay na inicialização
-        try:
-            URL_DIRETA = "https://docs.google.com/spreadsheets/d/1zhKa6uCF-7C2_wIEBnbsj6bUMgJ82qrfV95I6MJ0PGM/export?format=csv"
-            df_fallback = pd.read_csv(URL_DIRETA)
-            df_fallback.columns = [str(c).strip() for c in df_fallback.columns]
-            return df_fallback.astype(str)
-        except:
-            return pd.DataFrame([
-                {"Nome": "Administrador Padrão", "E-mail": "admin@ngi.com", "Senha": "123", "Perfil": "Administrador"}
-            ])
+        return pd.DataFrame([
+            {"Nome": "Administrador Padrão", "E-mail": "admin@ngi.com", "Senha": "123", "Perfil": "Administrador"}
+        ])
 
 def salvar_usuarios(df_para_salvar):
     try:
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        conn.update(data=df_para_salvar)
+        # Conecta de forma pública usando o cliente gspread sem precisar de arquivo JSON de credenciais
+        gc = gspread.public()
+        sh = gc.open_by_url(URL_PLANILHA)
+        worksheet = sh.get_worksheet(0)
+        
+        # Limpa o conteúdo antigo e escreve o novo cabeçalho + dados
+        worksheet.clear()
+        dados_lista = [df_para_salvar.columns.values.tolist()] + df_para_salvar.values.tolist()
+        worksheet.update('A1', dados_lista)
+        
         st.toast("🚀 Sincronizado com a nuvem do Google Sheets!")
         return True
     except Exception as e:
-        st.error(f"Erro ao salvar na nuvem: {e}")
+        # Se a planilha não estiver aberta para "Qualquer pessoa com o link pode editar", ele avisa aqui:
+        st.error(f"Erro ao salvar: Verifique se a Planilha Google está compartilhada como 'Editor' para qualquer pessoa com o link.")
         return False
 
 # Inicialização segura na sessão
@@ -282,7 +286,7 @@ else:
         if termo_busca:
             df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
         if categoria_selecionada != "Todas":
-            df_filtrado = df_filtrado[df_filtrado['Category'] == categoria_selecionada]
+            df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
         st.write("### 📋 Estoque Atualizado")
         if df_filtrado.empty:
@@ -381,9 +385,7 @@ else:
                 if st.form_submit_button("Salvar na Nuvem", type="primary"):
                     if n and e:
                         new_u = {"Nome": n, "E-mail": e, "Senha": s if s else "123", "Perfil": p}
-                        # Anexa à tabela local da sessão
                         novo_df = pd.concat([st.session_state.usuarios, pd.DataFrame([new_u])], ignore_index=True)
-                        # Salva direto no Planilhas Google via Conector estável
                         if salvar_usuarios(novo_df):
                             st.session_state.usuarios = novo_df
                             st.success("Usuário registrado com sucesso no Google Sheets!")
