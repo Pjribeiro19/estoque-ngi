@@ -1,56 +1,53 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
-# --- CONFIGURAÇÃO DA PÁGINA (Padrão limpo) ---
+# --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
     page_title="SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS", 
     page_icon="🌿", 
     layout="wide"
 )
 
-# --- FORÇA MODO DESKTOP NO CELULAR (BLOQUEIO DE RESPONSIVIDADE) ---
-# Este script roda a cada 300ms garantindo que o celular trate a página como um PC de 1200px de largura
-st.components.v1.html(
-    """
-    <script>
-        function forcarDesktop() {
-            var meta = parent.document.querySelector('meta[name="viewport"]');
-            if (!meta) {
-                meta = parent.document.createElement('meta');
-                meta.name = 'viewport';
-                parent.document.getElementsByTagName('head')[0].appendChild(meta);
-            }
-            if (meta.content !== 'width=1200, initial-scale=0.35, minimum-scale=0.25, user-scalable=yes') {
-                meta.content = 'width=1200, initial-scale=0.35, minimum-scale=0.25, user-scalable=yes';
-            }
-        }
-        forcarDesktop();
-        setInterval(forcarDesktop, 300);
-    </script>
-    """,
-    height=0,
-    width=0
-)
-
-# --- INICIALIZAÇÃO DO GERENCIAMENTO DE SESSÃO (LOGIN) ---
-if "autenticado" not in st.session_state:
-    st.session_state.autenticado = False
-
-if "sub_tela_login" not in st.session_state:
-    st.session_state.sub_tela_login = "login"
-
-if "NOME_USUARIO_LOGADO" not in st.session_state:
-    st.session_state.NOME_USUARIO_LOGADO = "João Paulo"
-
-# --- INJECT DE CSS INTEGRADO E LIMPO ---
+# --- FORÇA A BARRA LATERAL A FICAR SEMPRE ABERTA NO CELULAR ---
 st.markdown("""
     <style>
-    /* Esconde elementos desnecessários do Streamlit para o usuário final */
+    /* Desativa o fechamento automático da Sidebar em telas menores */
+    @media (max-width: 991px) {
+        [data-testid="stSidebar"] {
+            transform: none !important;
+            position: relative !important;
+            min-width: 250px !important;
+            max-width: 250px !important;
+            display: block !important;
+        }
+        
+        /* Esconde o botão de fechar/setinha */
+        [data-testid="stSidebar"] button {
+            display: none !important;
+        }
+        
+        /* Ajusta o contêiner principal para dividir espaço horizontalmente */
+        .main {
+            flex-direction: row !important;
+        }
+        
+        /* Força o contêiner de conteúdo a ocupar o restante da tela */
+        [data-testid="stAppViewBlockContainer"] {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            min-width: calc(100vw - 250px) !important;
+        }
+    }
+
+    /* Esconde elementos nativos do Streamlit */
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
     
-    /* Customização dos botões do menu lateral */
+    /* Customização estética dos botões do menu lateral */
     [data-testid="stSidebar"] {
         background-color: #fcfaff !important;
         border-right: 1px solid #efe9f5;
@@ -89,7 +86,7 @@ st.markdown("""
         border-color: #43a047 !important;
     }
     
-    /* Container para centralizar logotipos */
+    /* Centralizador dos logotipos */
     .img-container {
         display: flex;
         justify-content: center;
@@ -99,6 +96,17 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+
+# --- INICIALIZAÇÃO DO GERENCIAMENTO DE SESSÃO (LOGIN) ---
+if "autenticado" not in st.session_state:
+    st.session_state.autenticado = False
+
+if "sub_tela_login" not in st.session_state:
+    st.session_state.sub_tela_login = "login"
+
+if "NOME_USUARIO_LOGADO" not in st.session_state:
+    st.session_state.NOME_USUARIO_LOGADO = "João Paulo"
 
 
 # =============================================================================
@@ -143,7 +151,49 @@ if not st.session_state.autenticado:
             email_recuperar = st.text_input("E-mail corporativo", placeholder="exemplo@icmbio.gov.br")
 
             if st.button("Enviar Instruções", type="primary", use_container_width=True):
-                st.success("Se o e-mail estiver correto, as instruções foram enviadas.")
+                if email_recuperar.strip():
+                    try:
+                        # -------------------------------------------------------------
+                        # CONFIGURAÇÃO DO SERVIDOR DE E-MAIL (SMTP)
+                        # -------------------------------------------------------------
+                        remetente_email = "seu_email@gmail.com"  # Substitua pelo e-mail de envio
+                        remetente_senha = "sua_senha_app"      # Substitua pela senha de app do e-mail
+                        
+                        smtp_host = "smtp.gmail.com"
+                        smtp_porta = 587
+                        
+                        msg = MIMEMultipart()
+                        msg['From'] = remetente_email
+                        msg['To'] = email_recuperar.strip()
+                        msg['Subject'] = "Recuperação de Senha - Sistema de Almoxarifado NGI Carajás"
+                        
+                        corpo_email = f"""
+                        Olá,
+                        
+                        Recebemos uma solicitação de recuperação de acesso para o seu usuário.
+                        
+                        Para acessar o Sistema de Gestão de Almoxarifado NGI Carajás, utilize as credenciais padrão:
+                        Link de acesso: https://almoxarifado-carajas.streamlit.app/
+                        Sua senha provisória é: 123
+                        
+                        Por favor, altere sua senha no menu 'Perfil' assim que efetuar o login.
+                        
+                        Atenciosamente,
+                        Suporte NGI Carajás
+                        """
+                        msg.attach(MIMEText(corpo_email, 'plain'))
+                        
+                        server = smtplib.SMTP(smtp_host, smtp_porta)
+                        server.starttls()
+                        server.login(remetente_email, remetente_senha)
+                        server.sendmail(remetente_email, email_recuperar.strip(), msg.as_string())
+                        server.quit()
+                        
+                        st.success(f"Sucesso! Instruções de recuperação enviadas para {email_recuperar}")
+                    except Exception as e:
+                        st.error(f"Erro ao tentar enviar o e-mail: {e}")
+                else:
+                    st.warning("Por favor, digite um e-mail válido.")
 
             if st.button("Voltar para o Login", use_container_width=True):
                 st.session_state.sub_tela_login = "login"
@@ -184,7 +234,7 @@ else:
         ])
 
     # -----------------------------------------------------------------------------
-    # BARRA LATERAL (MENU DE NAVEGAÇÃO)
+    # BARRA LATERAL (MENU DE NAVEGAÇÃO COMPLETO)
     # -----------------------------------------------------------------------------
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
@@ -306,7 +356,7 @@ else:
                         st.session_state.produtos.loc[idx_p, "Quantidade"] = edit_qtd
                         st.session_state.produtos.loc[idx_p, "Categoria"] = edit_cat
                         st.session_state.produtos.loc[idx_p, "Valor Unitário"] = float(edit_val)
-                        st.success("Produto atualizado!")
+                        st.success("Produto updated!")
                         st.rerun()
                 with col_b_prod2:
                     if st.button("❌ Excluir Produto do Sistema"):
