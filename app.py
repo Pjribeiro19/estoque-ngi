@@ -4,7 +4,7 @@ from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import gspread  # Biblioteca super estável e nativa
+import gspread
 
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS (Puxando dos Secrets do Streamlit)
@@ -26,7 +26,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- FORÇA A BARRA LATERAL A FICAR SEMPRE ABERTA NO CELULAR ---
+# --- ESTILIZAÇÃO E CORREÇÃO DE LAYOUT MOBILE ---
 st.markdown("""
     <style>
     @media (max-width: 991px) {
@@ -104,46 +104,50 @@ if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = ""
 
 # =============================================================================
-# CONEXÃO DE LEITURA/ESCRITA VIA GSPREAD (LINK PÚBLICO)
+# CONEXÃO OTIMIZADA COM CACHE (VELOCIDADE MÁXIMA)
 # =============================================================================
 URL_PLANILHA = "https://docs.google.com/spreadsheets/d/1zhKa6uCF-7C2_wIEBnbsj6bUMgJ82qrfV95I6MJ0PGM/edit"
 
-def carregar_usuarios():
+# O cache guarda os usuários na memória por 5 minutos, evitando lentidão ao abrir o app
+@st.cache_data(ttl=300)
+def buscar_dados_planilha():
     try:
-        # Tenta ler via requisição HTTP direta de forma rápida
         url_csv = URL_PLANILHA.replace("/edit", "/export?format=csv")
         df = pd.read_csv(url_csv)
         df.columns = [str(c).strip() for c in df.columns]
         return df.astype(str)
-    except Exception as e:
+    except:
         return pd.DataFrame([
             {"Nome": "Administrador Padrão", "E-mail": "admin@ngi.com", "Senha": "123", "Perfil": "Administrador"}
         ])
 
+def carregar_usuarios(force_reload=False):
+    if force_reload:
+        st.cache_data.clear() # Limpa o cache se o usuário clicar no botão de atualizar
+    return buscar_dados_planilha()
+
 def salvar_usuarios(df_para_salvar):
     try:
-        # Conecta de forma pública usando o cliente gspread sem precisar de arquivo JSON de credenciais
         gc = gspread.public()
         sh = gc.open_by_url(URL_PLANILHA)
         worksheet = sh.get_worksheet(0)
-        
-        # Limpa o conteúdo antigo e escreve o novo cabeçalho + dados
         worksheet.clear()
         dados_lista = [df_para_salvar.columns.values.tolist()] + df_para_salvar.values.tolist()
         worksheet.update('A1', dados_lista)
         
+        # Limpa o cache para que a próxima leitura já traga o usuário novo
+        st.cache_data.clear()
         st.toast("🚀 Sincronizado com a nuvem do Google Sheets!")
         return True
     except Exception as e:
-        # Se a planilha não estiver aberta para "Qualquer pessoa com o link pode editar", ele avisa aqui:
-        st.error(f"Erro ao salvar: Verifique se a Planilha Google está compartilhada como 'Editor' para qualquer pessoa com o link.")
+        st.error(f"Erro ao salvar: Verifique as permissões de compartilhamento da planilha.")
         return False
 
-# Inicialização segura na sessão
+# Inicialização rápida
 if "usuarios" not in st.session_state:
     st.session_state.usuarios = carregar_usuarios()
 
-# --- OUTROS COMPONENTES DO BANCO DE DADOS LOCAL ---
+# --- COMPONENTES LOCAIS EM MEMÓRIA (INSTANTÂNEOS) ---
 if "produtos" not in st.session_state:
     st.session_state.produtos = pd.DataFrame([
         {"Código": "001", "Item": "Capacete de Segurança", "Quantidade": 15, "Categoria": "EPI", "Valor Unitário": 45.00},
@@ -186,7 +190,6 @@ if not st.session_state.autenticado:
             
             if st.button("Entrar no Sistema", type="primary", use_container_width=True):
                 if usuario_input and senha_input:
-                    st.session_state.usuarios = carregar_usuarios()
                     df_users = st.session_state.usuarios
                     user_match = pd.DataFrame()
                     
@@ -277,37 +280,44 @@ else:
         c2.metric("Produtos Esgotados", len(st.session_state.produtos[st.session_state.produtos['Quantidade'] == 0]))
         c3.metric("Movimentações Realizadas", len(st.session_state.movimentacoes))
         st.write("---")
-        st.write("### 🔍 Ferramentas de Busca e Filtro")
-        col_filtro1, col_filtro2 = st.columns([2, 1])
-        termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite para pesquisar...")
-        categoria_selecionada = col_filtro2.selectbox("Filtrar por Categoria:", ["Todas"] + list(st.session_state.categorias))
         
-        df_filtrado = st.session_state.produtos.copy()
-        if termo_busca:
-            df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
-        if categoria_selecionada != "Todas":
-            df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
+        # Uso do st.fragment isola a busca para não dar lag na digitação
+        @st.fragment
+        def renderizar_busca_estoque():
+            st.write("### 🔍 Ferramentas de Busca e Filtro")
+            col_filtro1, col_filtro2 = st.columns([2, 1])
+            termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite para pesquisar...")
+            categoria_selecionada = col_filtro2.selectbox("Filtrar por Categoria:", ["Todas"] + list(st.session_state.categorias))
+            
+            df_filtrado = st.session_state.produtos.copy()
+            if termo_busca:
+                df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
+            if categoria_selecionada != "Todas":
+                df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
-        st.write("### 📋 Estoque Atualizado")
-        if df_filtrado.empty:
-            st.info("Nenhum material encontrado com os filtros aplicados.")
-        else:
-            df_display = df_filtrado.copy()
-            df_display["Valor Unitário"] = df_display["Valor Unitário"].astype(float)
-            df_display["Valor Total"] = df_display["Quantidade"] * df_display["Valor Unitário"]
-            df_display["Valor Unitário"] = df_display["Valor Unitário"].map("R$ {:.2f}".format)
-            df_display["Valor Total"] = df_display["Valor Total"].map("R$ {:.2f}".format)
+            st.write("### 📋 Estoque Atualizado")
+            if df_filtrado.empty:
+                st.info("Nenhum material encontrado com os filtros aplicados.")
+            else:
+                df_display = df_filtrado.copy()
+                df_display["Valor Unitário"] = df_display["Valor Unitário"].astype(float)
+                df_display["Valor Total"] = df_display["Quantidade"] * df_display["Valor Unitário"]
+                df_display["Valor Unitário"] = df_display["Valor Unitário"].map("R$ {:.2f}".format)
+                df_display["Valor Total"] = df_display["Valor Total"].map("R$ {:.2f}".format)
 
-            def destacar_zerados(row):
-                if row['Quantidade'] == 0:
-                    return ['background-color: #ffebee; color: #c62828; font-weight: bold'] * len(row)
-                return [''] * len(row)
-            st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
+                def destacar_zerados(row):
+                    if row['Quantidade'] == 0:
+                        return ['background-color: #ffebee; color: #c62828; font-weight: bold'] * len(row)
+                    return [''] * len(row)
+                st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
+        
+        renderizar_busca_estoque()
 
     # --- TELA: CADASTRAR PRODUTO ---
     elif escolha == "➕ Cadastrar Produto":
         st.title("➕ Gerenciamento de Produtos")
         aba_cad_prod, aba_gerenciar_prod = st.tabs(["➕ Novo Material", "✏️ Editar / Excluir Produtos"])
+        
         with aba_cad_prod:
             with st.form("form_novo_produto", clear_on_submit=True):
                 col_a, col_b = st.columns(2)
@@ -326,6 +336,7 @@ else:
                             st.rerun()
                     else:
                         st.error("Preencha todos os campos!")
+                        
         with aba_gerenciar_prod:
             if not st.session_state.produtos.empty:
                 st.dataframe(st.session_state.produtos, use_container_width=True, hide_index=True)
@@ -370,9 +381,9 @@ else:
         aba_visualizar, aba_cad_user, aba_edit_user = st.tabs(["📋 Usuários Ativos", "➕ Novo Usuário", "✏️ Editar / Excluir"])
         
         with aba_visualizar:
-            st.info("Lista de usuários sincronizada em tempo real com o Google Sheets.")
-            if st.button("🔄 Forçar Atualização da Nuvem"):
-                st.session_state.usuarios = carregar_usuarios()
+            st.info("Lista de usuários armazenada em cache para performance.")
+            if st.button("🔄 Forçar Atualização da Nuvem (Limpar Cache)"):
+                st.session_state.usuarios = carregar_usuarios(force_reload=True)
                 st.rerun()
             st.dataframe(st.session_state.usuarios, use_container_width=True, hide_index=True)
             
@@ -388,7 +399,7 @@ else:
                         novo_df = pd.concat([st.session_state.usuarios, pd.DataFrame([new_u])], ignore_index=True)
                         if salvar_usuarios(novo_df):
                             st.session_state.usuarios = novo_df
-                            st.success("Usuário registrado com sucesso no Google Sheets!")
+                            st.success("Usuário registrado com sucesso!")
                             st.rerun()
                     else:
                         st.error("Preencha Nome e E-mail.")
