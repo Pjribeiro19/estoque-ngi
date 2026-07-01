@@ -94,7 +94,6 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- INICIALIZAÇÃO DA CONEXÃO GOOGLE SHEETS AUTOMÁTICA VIA SECRETS ---
-# Carrega automaticamente as credenciais em formato estruturado limpo definidas no Passo 1
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- INICIALIZAÇÃO DO GERENCIAMENTO DE SESSÃO ---
@@ -216,7 +215,6 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (APÓS ESTAR AUTENTICADO)
 # =============================================================================
 else:
-    # Carga inicial dinâmica de tabelas úteis
     df_produtos = ler_aba("produtos")
     df_categorias = ler_aba("categorias")
     df_usuarios = ler_aba("usuários")
@@ -289,7 +287,7 @@ else:
                 name_it = col_b.text_input("Nome do Material")
                 cat_it = col_a.selectbox("Categoria", lista_categorias)
                 val_unit = col_b.number_input("Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
-                st.caption("ℹ️ Novos materiais são registrados com saldo inicial 0. Adicione quantidades in 'Movimentação'.")
+                st.caption("ℹ️ Novos materiais são registrados com saldo inicial 0. Adicione quantidades em 'Movimentação'.")
                 if st.form_submit_button("Finalizar Cadastro", type="primary"):
                     if cod and name_it:
                         if not df_produtos.empty and str(cod) in df_produtos["Código"].astype(str).values:
@@ -509,3 +507,4 @@ else:
         st.session_state.sub_tela_login = "login"
         st.session_state.NOME_USUARIO_LOGADO = ""
         st.rerun()
+    
