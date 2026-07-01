@@ -1,2 +1,3 @@
-st-gsheets-connection
+streamlit
 pandas
+st-supabase-connection
