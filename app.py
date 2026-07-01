@@ -100,7 +100,35 @@ if "sub_tela_login" not in st.session_state:
     st.session_state.sub_tela_login = "login"
 
 if "NOME_USUARIO_LOGADO" not in st.session_state:
-    st.session_state.NOME_USUARIO_LOGADO = "João Paulo"
+    st.session_state.NOME_USUARIO_LOGADO = ""
+
+# --- INICIALIZAÇÃO DO BANCO DE DADOS EM MEMÓRIA ---
+if "produtos" not in st.session_state or not isinstance(st.session_state.produtos, pd.DataFrame):
+    st.session_state.produtos = pd.DataFrame([
+        {"Código": "001", "Item": "Capacete de Segurança", "Quantidade": 15, "Categoria": "EPI", "Valor Unitário": 45.00},
+        {"Código": "002", "Item": "Resma Papel A4", "Quantidade": 0, "Categoria": "Material de Escritório", "Valor Unitário": 28.50},
+        {"Código": "003", "Item": "Luva de Raspa", "Quantidade": 50, "Categoria": "EPI", "Valor Unitário": 12.00}
+    ])
+
+if "usuarios" not in st.session_state or not isinstance(st.session_state.usuarios, pd.DataFrame):
+    st.session_state.usuarios = pd.DataFrame([
+        {"Nome": "Administrador Padrão", "E-mail": "admin@ngi.com", "Senha": "123", "Perfil": "Administrador"}
+    ])
+
+if "coordenacoes" not in st.session_state or not isinstance(st.session_state.coordenacoes, pd.DataFrame):
+    st.session_state.coordenacoes = pd.DataFrame([
+        {"Sigla": "COTEC", "Nome": "Coordenação Técnica"},
+        {"Sigla": "COLOG", "Nome": "Coordenação de Logística"}
+    ])
+
+if "categorias" not in st.session_state or not isinstance(st.session_state.categorias, list):
+    st.session_state.categorias = ["EPI", "Material de Escritório", "Informática", "Limpeza", "Copa"]
+
+if "movimentacoes" not in st.session_state or not isinstance(st.session_state.movimentacoes, pd.DataFrame):
+    st.session_state.movimentacoes = pd.DataFrame(columns=[
+        "Data", "Tipo", "Código", "Item", "Quantidade", "Responsável pela Retirada", "Coordenação"
+    ])
+
 
 # =============================================================================
 # FLUXO 1: FLUXO DE LOGIN (SE NÃO ESTIVER AUTENTICADO)
@@ -116,15 +144,28 @@ if not st.session_state.autenticado:
                 </div>
             """, unsafe_allow_html=True)
             st.markdown("<h2 style='text-align: center; color: #1e5934; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
-            usuario_input = st.text_input("Usuário / E-mail", placeholder="Digite seu usuário...")
-            senha_input = st.text_input("Senha", type="password", placeholder="Digite sua senha...")
+            usuario_input = st.text_input("Usuário / E-mail", placeholder="Digite seu usuário...").strip()
+            senha_input = st.text_input("Senha", type="password", placeholder="Digite sua senha...").strip()
             st.markdown("<br>", unsafe_allow_html=True)
+            
             if st.button("Entrar no Sistema", type="primary", use_container_width=True):
                 if usuario_input and senha_input:
-                    st.session_state.autenticado = True
-                    st.rerun()
+                    # Busca o usuário de forma dinâmica dentro do DataFrame de usuários cadastrados
+                    user_match = st.session_state.usuarios[
+                        (st.session_state.usuarios['E-mail'] == usuario_input) & 
+                        (st.session_state.usuarios['Senha'] == senha_input)
+                    ]
+                    
+                    if not user_match.empty:
+                        st.session_state.autenticado = True
+                        # Captura o Nome correto do usuário que acabou de logar
+                        st.session_state.NOME_USUARIO_LOGADO = user_match.iloc[0]['Nome']
+                        st.rerun()
+                    else:
+                        st.error("Usuário ou Senha incorretos!")
                 else:
                     st.error("Por favor, preencha todos os campos!")
+                    
             if st.button("Esqueci a senha", use_container_width=True):
                 st.session_state.sub_tela_login = "esqueci"
                 st.rerun()
@@ -176,32 +217,6 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (APÓS ESTAR AUTENTICADO)
 # =============================================================================
 else:
-    if "produtos" not in st.session_state or not isinstance(st.session_state.produtos, pd.DataFrame):
-        st.session_state.produtos = pd.DataFrame([
-            {"Código": "001", "Item": "Capacete de Segurança", "Quantidade": 15, "Categoria": "EPI", "Valor Unitário": 45.00},
-            {"Código": "002", "Item": "Resma Papel A4", "Quantidade": 0, "Categoria": "Material de Escritório", "Valor Unitário": 28.50},
-            {"Código": "003", "Item": "Luva de Raspa", "Quantidade": 50, "Categoria": "EPI", "Valor Unitário": 12.00}
-        ])
-
-    if "usuarios" not in st.session_state or not isinstance(st.session_state.usuarios, pd.DataFrame):
-        st.session_state.usuarios = pd.DataFrame([
-            {"Nome": "Administrador Padrão", "E-mail": "admin@ngi.com", "Senha": "123", "Perfil": "Administrador"}
-        ])
-
-    if "coordenacoes" not in st.session_state or not isinstance(st.session_state.coordenacoes, pd.DataFrame):
-        st.session_state.coordenacoes = pd.DataFrame([
-            {"Sigla": "COTEC", "Nome": "Coordenação Técnica"},
-            {"Sigla": "COLOG", "Nome": "Coordenação de Logística"}
-        ])
-
-    if "categorias" not in st.session_state or not isinstance(st.session_state.categorias, list):
-        st.session_state.categorias = ["EPI", "Material de Escritório", "Informática", "Limpeza", "Copa"]
-
-    if "movimentacoes" not in st.session_state or not isinstance(st.session_state.movimentacoes, pd.DataFrame):
-        st.session_state.movimentacoes = pd.DataFrame(columns=[
-            "Data", "Tipo", "Código", "Item", "Quantidade", "Responsável pela Retirada", "Coordenação"
-        ])
-
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("---")
@@ -260,18 +275,18 @@ else:
             with st.form("form_novo_produto", clear_on_submit=True):
                 col_a, col_b = st.columns(2)
                 cod = col_a.text_input("Código")
-                nome_it = col_b.text_input("Nome do Material")
+                name_it = col_b.text_input("Nome do Material")
                 cat_it = col_a.selectbox("Categoria", st.session_state.categorias)
                 val_unit = col_b.number_input("Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
                 st.caption("ℹ️ Novos materiais são registrados com saldo inicial 0. Adicione quantidades em 'Movimentação'.")
                 if st.form_submit_button("Finalizar Cadastro", type="primary"):
-                    if cod and nome_it:
+                    if cod and name_it:
                         if cod in st.session_state.produtos["Código"].values:
                             st.error(f"Erro! Código {cod} já existe.")
                         else:
-                            novo_p = {"Código": cod, "Item": nome_it, "Quantidade": 0, "Categoria": cat_it, "Valor Unitário": float(val_unit)}
+                            novo_p = {"Código": cod, "Item": name_it, "Quantidade": 0, "Categoria": cat_it, "Valor Unitário": float(val_unit)}
                             st.session_state.produtos = pd.concat([st.session_state.produtos, pd.DataFrame([novo_p])], ignore_index=True)
-                            st.success(f"Sucesso! {nome_it} adicionado.")
+                            st.success(f"Sucesso! {name_it} adicionado.")
                             st.rerun()
                     else:
                         st.error("Preencha todos os campos!")
@@ -458,4 +473,5 @@ else:
     elif escolha == "🚪 Sair":
         st.session_state.autenticado = False
         st.session_state.sub_tela_login = "login"
+        st.session_state.NOME_USUARIO_LOGADO = ""
         st.rerun()
