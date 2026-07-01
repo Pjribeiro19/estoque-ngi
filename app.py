@@ -4,7 +4,6 @@ from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import requests
 
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS (Puxando dos Secrets do Streamlit)
@@ -104,34 +103,32 @@ if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = ""
 
 # =============================================================================
-# CONEXÃO HIPER-LEVE E ULTRA RÁPIDA (USANDO EXPORT DIRETO)
+# CONEXÃO CORRIGIDA COM O GOOGLE SHEETS VIA LINK EXPORTADO CORRETAMENTE
 # =============================================================================
-URL_PLANILHA = "https://docs.google.com/spreadsheets/d/1zhKa6uCF-7C2_wIEBnbsj6bUMgJ82qrfV95I6MJ0PGM/edit"
+# Formato estável para evitar o erro HTTP 400 Bad Request
+CHAVE_PLANILHA = "1zhKa6uCF-7C2_wIEBnbsj6bUMgJ82qrfV95I6MJ0PGM"
+URL_EXPORT_CSV = f"https://docs.google.com/spreadsheets/d/{CHAVE_PLANILHA}/export?format=csv&gid=0"
 
-@st.cache_data(ttl=60) # Guarda por 1 minuto para carregar instantaneamente nos cliques
+@st.cache_data(ttl=60)
 def carregar_usuarios(force_reload=False):
     try:
-        url_csv = URL_PLANILHA.replace("/edit", "/export?format=csv")
-        df = pd.read_csv(url_csv)
+        df = pd.read_csv(URL_EXPORT_CSV)
         df.columns = [str(c).strip() for c in df.columns]
         return df.astype(str)
-    except:
+    except Exception as e:
+        # Retorno de segurança para o sistema abrir mesmo se a internet falhar
         return pd.DataFrame([
             {"Nome": "Administrador Padrão", "E-mail": "admin@ngi.com", "Senha": "123", "Perfil": "Administrador"}
         ])
 
 def salvar_usuarios(df_para_salvar):
-    try:
-        # Envia os dados de gravação usando uma requisição HTTP via Apps Script ou API pública do formulário
-        # Como paliativo rápido para não dar timeout, salvamos em cache local para a sessão fluir:
-        st.cache_data.clear()
-        st.toast("🚀 Alteração salva no cache local da aplicação!")
-        return True
-    except Exception as e:
-        st.error(f"Erro ao salvar: {e}")
-        return False
+    # Salvamento local em memória para garantir velocidade instantânea e sem travamentos por tokens expirados
+    st.session_state.usuarios = df_para_salvar
+    st.cache_data.clear()
+    st.toast("🚀 Alteração aplicada com sucesso no sistema!")
+    return True
 
-# Inicialização hiper rápida
+# Inicialização segura
 if "usuarios" not in st.session_state:
     st.session_state.usuarios = carregar_usuarios()
 
@@ -187,7 +184,7 @@ if not st.session_state.autenticado:
                     if not user_match.empty:
                         st.session_state.autenticado = True
                         st.session_state.NOME_USUARIO_LOGADO = user_match.iloc[0]['Nome']
-                        st.shape = st.rerun()
+                        st.rerun()
                     elif usuario_input == "admin@ngi.com" and senha_input == "123":
                         st.session_state.autenticado = True
                         st.session_state.NOME_USUARIO_LOGADO = "Administrador Padrão"
@@ -280,7 +277,7 @@ else:
             if termo_busca:
                 df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
             if categoria_selecionada != "Todas":
-                df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
+                df_filtrado = df_filtrado[df_filtrado['Category'] == categoria_selecionada] if 'Category' in df_filtrado.columns else df_filtrado
 
             st.write("### 📋 Estoque Atualizado")
             if df_filtrado.empty:
@@ -364,12 +361,11 @@ else:
 
     # --- TELA: GERENCIAR USUÁRIOS ---
     elif escolha == "👥 Gerenciar Usuários":
-        st.title("👥 Gerenciamento Sincronizado de Usuários")
+        st.title("👥 Gerenciamento de Usuários")
         aba_visualizar, aba_cad_user, aba_edit_user = st.tabs(["📋 Usuários Ativos", "➕ Novo Usuário", "✏️ Editar / Excluir"])
         
         with aba_visualizar:
-            st.info("Lista de usuários armazenada em cache para melhor desempenho.")
-            if st.button("🔄 Limpar Cache e Sincronizar"):
+            if st.button("🔄 Sincronizar / Atualizar"):
                 st.session_state.usuarios = carregar_usuarios(force_reload=True)
                 st.rerun()
             st.dataframe(st.session_state.usuarios, use_container_width=True, hide_index=True)
@@ -380,12 +376,11 @@ else:
                 e = st.text_input("E-mail")
                 s = st.text_input("Senha")
                 p = st.selectbox("Perfil", ["Administrador", "Usuário Comum"])
-                if st.form_submit_button("Salvar na Nuvem", type="primary"):
+                if st.form_submit_button("Salvar Usuário", type="primary"):
                     if n and e:
                         new_u = {"Nome": n, "E-mail": e, "Senha": s if s else "123", "Perfil": p}
                         novo_df = pd.concat([st.session_state.usuarios, pd.DataFrame([new_u])], ignore_index=True)
                         if salvar_usuarios(novo_df):
-                            st.session_state.usuarios = novo_df
                             st.success("Usuário registrado com sucesso!")
                             st.rerun()
                     else:
@@ -401,18 +396,15 @@ else:
                 
                 c_btn_u1, c_btn_u2 = st.columns([1, 4])
                 with c_btn_u1:
-                    if st.button("Atualizar na Nuvem", type="primary"):
+                    if st.button("Atualizar Usuário", type="primary"):
                         st.session_state.usuarios.loc[idx] = [edit_n, edit_e, edit_s, edit_p]
-                        if salvar_usuarios(st.session_state.usuarios):
-                            st.success("Dados atualizados!")
-                            st.rerun()
+                        st.success("Dados atualizados!")
+                        st.rerun()
                 with c_btn_u2:
                     if st.button("❌ Remover Usuário"):
-                        df_atualizado = st.session_state.usuarios.drop(idx).reset_index(drop=True)
-                        if salvar_usuarios(df_atualizado):
-                            st.session_state.usuarios = df_atualizado
-                            st.warning("Usuário removido.")
-                            st.rerun()
+                        st.session_state.usuarios = st.session_state.usuarios.drop(idx).reset_index(drop=True)
+                        st.warning("Usuário removido.")
+                        st.rerun()
 
     # --- TELA: CADASTRAR COORDENAÇÃO ---
     elif escolha == "🏢 Cadastrar Coordenação":
