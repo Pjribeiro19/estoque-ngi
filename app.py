@@ -20,17 +20,45 @@ SMTP_HOST = "smtp.gmail.com"
 SMTP_PORTA = 587
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
-# Adicionado initial_sidebar_state="collapsed" para iniciar recolhido no celular
+# Usamos "auto" aqui para que o Streamlit decida com base no dispositivo
 st.set_page_config(
     page_title="SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS", 
     page_icon="🌿", 
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="auto"
 )
 
-# --- ESTILIZAÇÃO CUSTOMIZADA (CSS) CORRIGIDA ---
+# --- ESTILIZAÇÃO CUSTOMIZADA (CSS) PARA PC FIXO E CELULAR RETRÁTIL ---
 st.markdown("""
     <style>
+    /* ==========================================
+       CONFIGURAÇÃO APENAS PARA COMPUTADORES (Telas Grandes)
+       ========================================== */
+    @media (min-width: 992px) {
+        /* Garante que no PC ela fique sempre aberta e remove o botão de fechar */
+        [data-testid="stSidebar"] {
+            transform: none !important;
+            position: relative !important;
+        }
+        [data-testid="stSidebar"] button {
+            display: none !important;
+        }
+    }
+
+    /* ==========================================
+       CONFIGURAÇÃO APENAS PARA CELULARES (Telas Pequenas)
+       ========================================== */
+    @media (max-width: 991px) {
+        /* Permite que ela feche normalmente e flutue sobre a tela ao abrir */
+        [data-testid="stSidebar"] {
+            position: fixed !important;
+            z-index: 999999 !important;
+        }
+    }
+
+    /* ==========================================
+       ESTILOS GERAIS DO APP
+       ========================================== */
     /* Esconde elementos nativos do Streamlit */
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
@@ -117,7 +145,7 @@ if "page" in query_params and query_params["page"] == "reset_password":
             if nova_senha == "":
                 st.warning("A senha não pode estar em branco.")
             elif nova_senha == confirmar_senha:
-                st.success("Senha updated com sucesso!")
+                st.success("Senha atualizada com sucesso!")
                 st.query_params.clear() # Limpa a URL (?page=reset_password)
                 st.session_state.sub_tela_login = "login"
                 st.button("Ir para o Login")
@@ -363,7 +391,7 @@ else:
                         st.session_state.produtos.loc[idx_p, "Quantidade"] = edit_qtd
                         st.session_state.produtos.loc[idx_p, "Categoria"] = edit_cat
                         st.session_state.produtos.loc[idx_p, "Valor Unitário"] = float(edit_val)
-                        st.success("Produto atualizado!")
+                        st.success("Produto updated!")
                         st.rerun()
                 with col_b_prod2:
                     if st.button("❌ Excluir Produto do Sistema"):
