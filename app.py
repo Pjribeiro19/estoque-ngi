@@ -5,6 +5,20 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
+# =============================================================================
+# CONFIGURAÇÕES SEGURAS DE E-MAIL (Puxando dos Secrets do Streamlit)
+# =============================================================================
+try:
+    EMAIL_REMETENTE = st.secrets["gmail"]["email"]
+    SENHA_REMETENTE = st.secrets["gmail"]["senha_app"]
+except:
+    # Fallback caso esteja rodando localmente e ainda não tenha configurado o secrets local
+    EMAIL_REMETENTE = "configurar_no_secrets@email.com"
+    SENHA_REMETENTE = "configurar_no_secrets"
+
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORTA = 587
+
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
     page_title="SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS", 
@@ -152,46 +166,41 @@ if not st.session_state.autenticado:
 
             if st.button("Enviar Instruções", type="primary", use_container_width=True):
                 if email_recuperar.strip():
-                    try:
-                        # -------------------------------------------------------------
-                        # CONFIGURAÇÃO DO SERVIDOR DE E-MAIL (SMTP)
-                        # -------------------------------------------------------------
-                        remetente_email = "seu_email@gmail.com"  # Substitua pelo e-mail de envio
-                        remetente_senha = "sua_senha_app"      # Substitua pela senha de app do e-mail
-                        
-                        smtp_host = "smtp.gmail.com"
-                        smtp_porta = 587
-                        
-                        msg = MIMEMultipart()
-                        msg['From'] = remetente_email
-                        msg['To'] = email_recuperar.strip()
-                        msg['Subject'] = "Recuperação de Senha - Sistema de Almoxarifado NGI Carajás"
-                        
-                        corpo_email = f"""
-                        Olá,
-                        
-                        Recebemos uma solicitação de recuperação de acesso para o seu usuário.
-                        
-                        Para acessar o Sistema de Gestão de Almoxarifado NGI Carajás, utilize as credenciais padrão:
-                        Link de acesso: https://almoxarifado-carajas.streamlit.app/
-                        Sua senha provisória é: 123
-                        
-                        Por favor, altere sua senha no menu 'Perfil' assim que efetuar o login.
-                        
-                        Atenciosamente,
-                        Suporte NGI Carajás
-                        """
-                        msg.attach(MIMEText(corpo_email, 'plain'))
-                        
-                        server = smtplib.SMTP(smtp_host, smtp_porta)
-                        server.starttls()
-                        server.login(remetente_email, remetente_senha)
-                        server.sendmail(remetente_email, email_recuperar.strip(), msg.as_string())
-                        server.quit()
-                        
-                        st.success(f"Sucesso! Instruções de recuperação enviadas para {email_recuperar}")
-                    except Exception as e:
-                        st.error(f"Erro ao tentar enviar o e-mail: {e}")
+                    if EMAIL_REMETENTE == "configurar_no_secrets@email.com":
+                        st.error("Erro de configuração: As credenciais de e-mail não foram inseridas nos Secrets do Streamlit.")
+                    else:
+                        try:
+                            msg = MIMEMultipart()
+                            msg['From'] = EMAIL_REMETENTE
+                            msg['To'] = email_recuperar.strip()
+                            msg['Subject'] = "Recuperação de Senha - Sistema de Almoxarifado NGI Carajás"
+                            
+                            corpo_email = f"""
+                            Olá,
+                            
+                            Recebemos uma solicitação de recuperação de acesso para o seu usuário ({email_recuperar.strip()}).
+                            
+                            Para acessar o Sistema de Gestão de Almoxarifado NGI Carajás, utilize os dados de acesso padrão provisórios:
+                            Link de acesso: https://almoxarifado-carajas.streamlit.app/
+                            Sua senha provisória de contingência é: 123
+                            
+                            Por favor, altere sua senha no menu 'Perfil' assim que efetuar o login com sucesso.
+                            
+                            Atenciosamente,
+                            Suporte NGI Carajás / ICMBio
+                            """
+                            msg.attach(MIMEText(corpo_email, 'plain'))
+                            
+                            # Processo de envio via SMTP seguro
+                            server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
+                            server.starttls()
+                            server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
+                            server.sendmail(EMAIL_REMETENTE, email_recuperar.strip(), msg.as_string())
+                            server.quit()
+                            
+                            st.success(f"Sucesso! Instruções de recuperação enviadas para {email_recuperar}")
+                        except Exception as e:
+                            st.error(f"Erro ao tentar enviar o e-mail: {e}")
                 else:
                     st.warning("Por favor, digite um e-mail válido.")
 
@@ -356,7 +365,7 @@ else:
                         st.session_state.produtos.loc[idx_p, "Quantidade"] = edit_qtd
                         st.session_state.produtos.loc[idx_p, "Categoria"] = edit_cat
                         st.session_state.produtos.loc[idx_p, "Valor Unitário"] = float(edit_val)
-                        st.success("Produto updated!")
+                        st.success("Produto atualizado!")
                         st.rerun()
                 with col_b_prod2:
                     if st.button("❌ Excluir Produto do Sistema"):
@@ -435,7 +444,7 @@ else:
                         st.session_state.usuarios.loc[idx, "E-mail"] = edit_e
                         st.session_state.usuarios.loc[idx, "Senha"] = edit_s
                         st.session_state.usuarios.loc[idx, "Perfil"] = edit_p
-                        st.success("Usuário atualizado!")
+                        st.success("Usuário updated!")
                         st.rerun()
                 with c_btn_u2:
                     if st.button("❌ Excluir Usuário"):
@@ -456,87 +465,4 @@ else:
                     if s_coord and nc:
                         nova_coord = {"Sigla": s_coord.upper(), "Nome": nc}
                         st.session_state.coordenacoes = pd.concat([st.session_state.coordenacoes, pd.DataFrame([nova_coord])], ignore_index=True)
-                        st.success("Coordenação cadastrada!")
-                        st.rerun()
-
-        with aba_c2:
-            if not st.session_state.coordenacoes.empty:
-                st.dataframe(st.session_state.coordenacoes, use_container_width=True, hide_index=True)
-                idx_c = st.selectbox("Selecione para modificar/excluir:", st.session_state.coordenacoes.index, format_func=lambda x: st.session_state.coordenacoes.loc[x, "Sigla"])
-                edit_sigla = st.text_input("Sigla:", value=st.session_state.coordenacoes.loc[idx_c, "Sigla"])
-                edit_nc = st.text_input("Nome:", value=st.session_state.coordenacoes.loc[idx_c, "Nome"])
-                
-                c_btn_co1, c_btn_co2 = st.columns([1, 4])
-                with c_btn_co1:
-                    if st.button("Salvar Edição", type="primary"):
-                        st.session_state.coordenacoes.loc[idx_c, "Sigla"] = edit_sigla.upper()
-                        st.session_state.coordenacoes.loc[idx_c, "Nome"] = edit_nc
-                        st.success("Nome atualizado!")
-                        st.rerun()
-                with c_btn_co2:
-                    if st.button("❌ Excluir Coordenação"):
-                        st.session_state.coordenacoes = st.session_state.coordenacoes.drop(idx_c).reset_index(drop=True)
-                        st.warning("Coordenação removida do sistema.")
-                        st.rerun()
-
-    # --- TELA: MOVIMENTAÇÃO DE ENTRADA E SAÍDA ---
-    elif escolha == "🔄 Movimentação de Entrada e Saída":
-        st.title("🔄 Movimentação de Entrada e Saída")
-        aba_entrada, aba_saida, aba_historico = st.tabs(["📥 Registrar Entrada", "📤 Registrar Saída", "📋 Histórico de Entradas/Saídas"])
-        
-        with aba_entrada:
-            with st.form("form_registrar_entrada", clear_on_submit=True):
-                col_e1, col_e2 = st.columns(2)
-                data_entrada = col_e1.date_input("Data da Entrada:", value=datetime.today(), format="DD/MM/YYYY")
-                idx_prod_ent = col_e2.selectbox("Selecione o Material para Dar Entrada:", st.session_state.produtos.index, format_func=lambda x: f"{st.session_state.produtos.loc[x, 'Código']} - {st.session_state.produtos.loc[x, 'Item']} (Saldo Atual: {st.session_state.produtos.loc[x, 'Quantidade']})")
-                qtd_entrada = st.number_input("Quantidade que está Entrando:", min_value=1, step=1)
-                
-                if st.form_submit_button("Confirmar Entrada", type="primary"):
-                    st.session_state.produtos.loc[idx_prod_ent, "Quantidade"] += qtd_entrada
-                    nova_mov = {"Data": data_entrada.strftime("%d/%m/%Y"), "Tipo": "Entrada", "Código": st.session_state.produtos.loc[idx_prod_ent, "Código"], "Item": st.session_state.produtos.loc[idx_prod_ent, "Item"], "Quantidade": qtd_entrada, "Responsável pela Retirada": "Almoxarifado", "Coordenação": "-"}
-                    st.session_state.movimentacoes = pd.concat([st.session_state.movimentacoes, pd.DataFrame([nova_mov])], ignore_index=True)
-                    st.success(f"Entrada de {qtd_entrada} unidades registrada com sucesso!")
-                    st.rerun()
-
-        with aba_saida:
-            with st.form("form_registrar_saida", clear_on_submit=True):
-                col_s1, col_s2 = st.columns(2)
-                data_saida = col_s1.date_input("Data da Saída:", value=datetime.today(), format="DD/MM/YYYY")
-                idx_prod_sai = col_s2.selectbox("Selecione o Material:", st.session_state.produtos.index, format_func=lambda x: f"{st.session_state.produtos.loc[x, 'Código']} - {st.session_state.produtos.loc[x, 'Item']} (Saldo: {st.session_state.produtos.loc[x, 'Quantidade']})")
-                qtd_saida = col_s1.number_input("Quantidade de Saída:", min_value=1, step=1)
-                
-                lista_coord = st.session_state.coordenacoes["Sigla"].tolist() if not st.session_state.coordenacoes.empty else ["Sem Coordenações"]
-                coord_retirada = col_s2.selectbox("Coordenação de Destino:", lista_coord)
-                resp_retirada = st.text_input("Nome do Responsável pela Retirada:")
-                
-                if st.form_submit_button("Confirmar Saída", type="primary"):
-                    qtd_disponivel = st.session_state.produtos.loc[idx_prod_sai, "Quantidade"]
-                    if not resp_retirada.strip():
-                        st.error("Insira o nome do responsável pela retirada!")
-                    elif qtd_saida > qtd_disponivel:
-                        st.error(f"Erro! Estoque insuficiente. Saldo disponível: {qtd_disponivel} unidades.")
-                    else:
-                        st.session_state.produtos.loc[idx_prod_sai, "Quantidade"] -= qtd_saida
-                        nova_mov_saida = {"Data": data_saida.strftime("%d/%m/%Y"), "Tipo": "Saída", "Código": st.session_state.produtos.loc[idx_prod_sai, "Código"], "Item": st.session_state.produtos.loc[idx_prod_sai, "Item"], "Quantidade": qtd_saida, "Responsável pela Retirada": resp_retirada.strip(), "Coordenação": coord_retirada}
-                        st.session_state.movimentacoes = pd.concat([st.session_state.movimentacoes, pd.DataFrame([nova_mov_saida])], ignore_index=True)
-                        st.success(f"Saída de {qtd_saida} unidades registrada com sucesso!")
-                        st.rerun()
-
-        with aba_historico:
-            st.write("### 📜 Registros de Fluxo de Estoque")
-            if st.session_state.movimentacoes.empty:
-                st.info("Nenhuma movimentação realizada até o momento.")
-            else:
-                st.dataframe(st.session_state.movimentacoes, use_container_width=True, hide_index=True)
-
-    # --- TELA: PERFIL ---
-    elif escolha == "👤 Perfil":
-        st.title("👤 Meu Perfil")
-        st.write(f"**Usuário Atual:** {st.session_state.NOME_USUARIO_LOGADO}")
-        st.write("**Lotação:** NGI Carajás / ICMBio")
-
-    # --- TELA: SAIR ---
-    elif escolha == "🚪 Sair":
-        st.session_state.autenticado = False
-        st.session_state.sub_tela_login = "login"
-        st.rerun()
+                        st.
