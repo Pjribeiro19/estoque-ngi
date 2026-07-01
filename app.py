@@ -103,22 +103,21 @@ if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = ""
 
 # =============================================================================
-# LEITURA DIRETA E REAL DA SUA PLANILHA (NÃO TRAVA)
+# LEITURA DA PLANILHA GOOGLE E BANCO DE DADOS EM SESSÃO
 # =============================================================================
 if "usuarios" not in st.session_state or not isinstance(st.session_state.usuarios, pd.DataFrame):
     try:
-        # Link de exportação em CSV direto da sua planilha do Google
+        # Puxa os dados atualizados diretamente da planilha do Google Docs
         URL_DIRETA = "https://docs.google.com/spreadsheets/d/1zhKa6uCF-7C2_wIEBnbsj6bUMgJ82qrfV95I6MJ0PGM/export?format=csv"
         df_lido = pd.read_csv(URL_DIRETA)
         df_lido.columns = [str(c).strip() for c in df_lido.columns]
         st.session_state.usuarios = df_lido.astype(str)
     except:
-        # Conta de emergência caso a planilha esteja inacessível no momento
+        # Backup caso ocorra instabilidade na conexão de rede externa
         st.session_state.usuarios = pd.DataFrame([
             {"Nome": "Administrador Padrão", "E-mail": "admin@ngi.com", "Senha": "123", "Perfil": "Administrador"}
         ])
 
-# --- OUTROS BANCOS EM MEMÓRIA (PROVISÓRIOS) ---
 if "produtos" not in st.session_state or not isinstance(st.session_state.produtos, pd.DataFrame):
     st.session_state.produtos = pd.DataFrame([
         {"Código": "001", "Item": "Capacete de Segurança", "Quantidade": 15, "Categoria": "EPI", "Valor Unitário": 45.00},
@@ -162,8 +161,8 @@ if not st.session_state.autenticado:
             if st.button("Entrar no Sistema", type="primary", use_container_width=True):
                 if usuario_input and senha_input:
                     df_users = st.session_state.usuarios
-                    
                     user_match = pd.DataFrame()
+                    
                     if not df_users.empty and "E-mail" in df_users.columns and "Senha" in df_users.columns:
                         user_match = df_users[(df_users['E-mail'] == usuario_input) & (df_users['Senha'] == senha_input)]
                     
@@ -263,7 +262,7 @@ else:
         if termo_busca:
             df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
         if categoria_selecionada != "Todas":
-            df_filtrado = df_filtrado[df_filtrado['Category'] == categoria_selecionada]
+            df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
         st.write("### 📋 Estoque Atualizado")
         if df_filtrado.empty:
@@ -363,9 +362,50 @@ else:
 
     # --- TELA: GERENCIAR USUÁRIOS ---
     elif escolha == "👥 Gerenciar Usuários":
-        st.title("👥 Gerenciamento de Usuários")
-        st.info("Lista de usuários carregada em tempo real a partir do Google Sheets.")
-        st.dataframe(st.session_state.usuarios, use_container_width=True, hide_index=True)
+        st.title("👥 Gerenciamento Completo de Usuários")
+        aba_visualizar, aba_cad_user, aba_edit_user = st.tabs(["📋 Usuários Ativos", "➕ Novo Usuário", "✏️ Editar / Excluir"])
+        
+        with aba_visualizar:
+            st.info("Lista de usuários carregada do Google Sheets e atualizada em tempo real nesta sessão.")
+            st.dataframe(st.session_state.usuarios, use_container_width=True, hide_index=True)
+            
+        with aba_cad_user:
+            with st.form("cad_user", clear_on_submit=True):
+                n = st.text_input("Nome")
+                e = st.text_input("E-mail")
+                s = st.text_input("Senha", type="password")
+                p = st.selectbox("Perfil", ["Administrador", "Usuário Comum"])
+                if st.form_submit_button("Salvar", type="primary"):
+                    if n and e:
+                        new_u = {"Nome": n, "E-mail": e, "Senha": s if s else "123", "Perfil": p}
+                        st.session_state.usuarios = pd.concat([st.session_state.usuarios, pd.DataFrame([new_u])], ignore_index=True)
+                        st.success("Usuário criado com sucesso!")
+                        st.rerun()
+                    else:
+                        st.error("Preencha ao menos Nome e E-mail.")
+                        
+        with aba_edit_user:
+            if not st.session_state.usuarios.empty:
+                idx = st.selectbox("Selecione o usuário para modificar:", st.session_state.usuarios.index, format_func=lambda x: f"{st.session_state.usuarios.loc[x, 'Nome']} ({st.session_state.usuarios.loc[x, 'E-mail']})", key="sb_user_edit")
+                edit_n = st.text_input("Nome:", value=st.session_state.usuarios.loc[idx, "Nome"], key="edit_n")
+                edit_e = st.text_input("E-mail:", value=st.session_state.usuarios.loc[idx, "E-mail"], key="edit_e")
+                edit_s = st.text_input("Senha:", value=st.session_state.usuarios.loc[idx, "Senha"], type="password", key="edit_s")
+                
+                perfil_atual = st.session_state.usuarios.loc[idx, "Perfil"]
+                idx_perfil = 0 if perfil_atual == "Administrador" else 1
+                edit_p = st.selectbox("Perfil:", ["Administrador", "Usuário Comum"], index=idx_perfil, key="edit_p")
+                
+                c_btn_u1, c_btn_u2 = st.columns([1, 4])
+                with c_btn_u1:
+                    if st.button("Atualizar Dados", type="primary", key="btn_save_user"):
+                        st.session_state.usuarios.loc[idx] = [edit_n, edit_e, edit_s, edit_p]
+                        st.success("Dados do usuário atualizados!")
+                        st.rerun()
+                with c_btn_u2:
+                    if st.button("❌ Excluir Usuário", key="btn_del_user"):
+                        st.session_state.usuarios = st.session_state.usuarios.drop(idx).reset_index(drop=True)
+                        st.warning("Usuário removido da sessão.")
+                        st.rerun()
 
     # --- TELA: CADASTRAR COORDENAÇÃO ---
     elif escolha == "🏢 Cadastrar Coordenação":
