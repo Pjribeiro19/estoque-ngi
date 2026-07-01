@@ -131,7 +131,6 @@ if not st.session_state.autenticado:
             if st.button("Entrar no Sistema", type="primary", use_container_width=True):
                 if usuario_input and senha_input:
                     try:
-                        # Busca o usuário direto na tabela 'usuarios' do Supabase
                         query = conn.table("usuarios").select("*").eq("email", usuario_input).eq("senha", senha_input).execute()
                         if query.data:
                             st.session_state.autenticado = True
@@ -159,7 +158,6 @@ if not st.session_state.autenticado:
             if st.button("Enviar Instruções", type="primary", use_container_width=True):
                 if email_recuperar:
                     try:
-                        # Verifica se o e-mail existe no Supabase
                         check_user = conn.table("usuarios").select("*").eq("email", email_recuperar).execute()
                         if check_user.data:
                             msg = MIMEMultipart()
@@ -201,7 +199,6 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (APÓS ESTAR AUTENTICADO)
 # =============================================================================
 else:
-    # --- CARREGAMENTO CENTRALIZADO DE DADOS DO SUPABASE ---
     try:
         df_produtos = pd.DataFrame(conn.table("produtos").select("*").order("item").execute().data)
         df_categorias = pd.DataFrame(conn.table("categorias").select("*").order("nome").execute().data)
@@ -441,7 +438,6 @@ else:
                     if st.form_submit_button("Confirmar Entrada", type="primary"):
                         nova_qtd = int(df_produtos.loc[idx_prod_ent, "quantidade"]) + qtd_entrada
                         
-                        # Atualiza estoque e insere registro de fluxo
                         conn.table("produtos").update({"quantidade": nova_qtd}).eq("id", int(df_produtos.loc[idx_prod_ent, "id"])).execute()
                         conn.table("movimentacoes").insert({
                             "data": data_entrada.strftime("%d/%m/%Y"), 
@@ -478,7 +474,6 @@ else:
                         else:
                             nova_qtd_saida = qtd_disp - qtd_saida
                             
-                            # Atualiza estoque e insere registro de fluxo
                             conn.table("produtos").update({"quantidade": nova_qtd_saida}).eq("id", int(df_produtos.loc[idx_prod_sai, "id"])).execute()
                             conn.table("movimentacoes").insert({
                                 "data": data_saida.strftime("%d/%m/%Y"), 
@@ -499,4 +494,11 @@ else:
             if df_movimentacoes.empty:
                 st.info("Nenhuma movimentação registrada.")
             else:
-                st.dataframe(df_movimentacoes
+                st.dataframe(df_movimentacoes[['data', 'tipo', 'codigo', 'item', 'quantidade', 'responsavel', 'coordenacao']], use_container_width=True, hide_index=True)
+
+    # --- TELA: SAIR ---
+    elif escolha == "🚪 Sair":
+        st.session_state.autenticado = False
+        st.session_state.sub_tela_login = "login"
+        st.session_state.NOME_USUARIO_LOGADO = ""
+        st.rerun()
