@@ -20,43 +20,17 @@ SMTP_HOST = "smtp.gmail.com"
 SMTP_PORTA = 587
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
+# Adicionado initial_sidebar_state="collapsed" para iniciar recolhido no celular
 st.set_page_config(
     page_title="SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS", 
     page_icon="🌿", 
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
-# --- FORÇA A BARRA LATERAL A FICAR SEMPRE ABERTA NO CELULAR ---
+# --- ESTILIZAÇÃO CUSTOMIZADA (CSS) CORRIGIDA ---
 st.markdown("""
     <style>
-    /* Desativa o fechamento automático da Sidebar em telas menores */
-    @media (max-width: 991px) {
-        [data-testid="stSidebar"] {
-            transform: none !important;
-            position: relative !important;
-            min-width: 250px !important;
-            max-width: 250px !important;
-            display: block !important;
-        }
-        
-        /* Esconde o botão de fechar/setinha */
-        [data-testid="stSidebar"] button {
-            display: none !important;
-        }
-        
-        /* Ajusta o contêiner principal para dividir espaço horizontalmente */
-        .main {
-            flex-direction: row !important;
-        }
-        
-        /* Força o contêiner de conteúdo a ocupar o restante da tela */
-        [data-testid="stAppViewBlockContainer"] {
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-            min-width: calc(100vw - 250px) !important;
-        }
-    }
-
     /* Esconde elementos nativos do Streamlit */
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
@@ -143,8 +117,7 @@ if "page" in query_params and query_params["page"] == "reset_password":
             if nova_senha == "":
                 st.warning("A senha não pode estar em branco.")
             elif nova_senha == confirmar_senha:
-                # 💡 AQUI ENTRA SUA ATUALIZAÇÃO NO BANCO DE DADOS SE HOUVER
-                st.success("Senha atualizada com sucesso!")
+                st.success("Senha updated com sucesso!")
                 st.query_params.clear() # Limpa a URL (?page=reset_password)
                 st.session_state.sub_tela_login = "login"
                 st.button("Ir para o Login")
@@ -208,7 +181,6 @@ elif not st.session_state.autenticado:
                             msg['To'] = email_recuperar.strip()
                             msg['Subject'] = "Recuperação de Senha - Sistema de Almoxarifado NGI Carajás"
                             
-                            # O link agora envia o parâmetro ?page=reset_password para ativar a tela correta
                             link_redefinicao = "https://almoxarifado-carajas.streamlit.app/?page=reset_password"
                             
                             corpo_email = f"""
@@ -226,7 +198,6 @@ elif not st.session_state.autenticado:
                             """
                             msg.attach(MIMEText(corpo_email, 'plain'))
                             
-                            # Processo de envio via SMTP seguro
                             server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
                             server.starttls()
                             server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
@@ -248,9 +219,7 @@ elif not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (APÓS ESTAR AUTENTICADO)
 # =============================================================================
 else:
-    # -----------------------------------------------------------------------------
-    # BANCO DE DADOS EM MEMÓRIA
-    # -----------------------------------------------------------------------------
+    # --- BANCO DE DADOS EM MEMÓRIA ---
     if "produtos" not in st.session_state or not isinstance(st.session_state.produtos, pd.DataFrame):
         st.session_state.produtos = pd.DataFrame([
             {"Código": "001", "Item": "Capacete de Segurança", "Quantidade": 15, "Categoria": "EPI", "Valor Unitário": 45.00},
@@ -277,9 +246,7 @@ else:
             "Data", "Tipo", "Código", "Item", "Quantidade", "Responsável pela Retirada", "Coordenação"
         ])
 
-    # -----------------------------------------------------------------------------
-    # BARRA LATERAL (MENU DE NAVEGAÇÃO COMPLETO)
-    # -----------------------------------------------------------------------------
+    # --- BARRA LATERAL (MENU DE NAVEGAÇÃO COMPLETO) ---
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("---")
@@ -294,10 +261,6 @@ else:
             "🚪 Sair"
         ]
         escolha = st.radio("", menu_opcoes, label_visibility="collapsed")
-
-    # -----------------------------------------------------------------------------
-    # LÓGICA DAS TELAS DO PAINEL LOGADO
-    # -----------------------------------------------------------------------------
 
     # --- TELA: PAINEL GERAL ---
     if escolha == "🎛️ Painel Geral":
@@ -539,13 +502,11 @@ else:
                 if "Saída" in tipo_mov and qtd_mov > qtd_atual:
                     st.error(f"Erro! Saldo insuficiente. Você tentou retirar {qtd_mov} unidades, mas existem apenas {qtd_atual} em estoque.")
                 else:
-                    # Atualiza o saldo no DataFrame
                     if "Entrada" in tipo_mov:
                         st.session_state.produtos.loc[prod_selecionado_idx, "Quantidade"] += qtd_mov
                     else:
                         st.session_state.produtos.loc[prod_selecionado_idx, "Quantidade"] -= qtd_mov
                         
-                    # Registra histórico
                     nova_mov = {
                         "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
                         "Tipo": "ENTRADA" if "Entrada" in tipo_mov else "SAÍDA",
