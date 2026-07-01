@@ -93,21 +93,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- INICIALIZAÇÃO DA CONEXÃO GOOGLE SHEETS (MÉTODO SEGURO COMPLETO) ---
-credenciais_dict = {
-    "type": "service_account",
-    "project_id": "almoxarifado-ngi",
-    "private_key_id": "81051e8545f93d76fc398d1ddf033565454b05f",
-    "private_key": "-----BEGIN PRIVATE KEY-----\n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\nV9Lh090F+x6zWd8Z2l\n-----END PRIVATE KEY-----\n",
-    "client_email": "streamlit-sheets@almoxarifado-ngi.iam.gserviceaccount.com",
-    "client_id": "116138880462839862959",
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://oauth2.googleapis.com/token",
-    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/streamlit-sheets%40almoxarifado-ngi.iam.gserviceaccount.com",
-    "universe_domain": "googleapis.com"
-}
-conn = st.connection("gsheets", type=GSheetsConnection, **credenciais_dict)
+# --- INICIALIZAÇÃO DA CONEXÃO GOOGLE SHEETS AUTOMÁTICA VIA SECRETS ---
+# Carrega automaticamente as credenciais em formato estruturado limpo definidas no Passo 1
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 # --- INICIALIZAÇÃO DO GERENCIAMENTO DE SESSÃO ---
 if "autenticado" not in st.session_state:
@@ -301,7 +289,7 @@ else:
                 name_it = col_b.text_input("Nome do Material")
                 cat_it = col_a.selectbox("Categoria", lista_categorias)
                 val_unit = col_b.number_input("Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
-                st.caption("ℹ️ Novos materiais são registrados com saldo inicial 0. Adicione quantidades em 'Movimentação'.")
+                st.caption("ℹ️ Novos materiais são registrados com saldo inicial 0. Adicione quantidades in 'Movimentação'.")
                 if st.form_submit_button("Finalizar Cadastro", type="primary"):
                     if cod and name_it:
                         if not df_produtos.empty and str(cod) in df_produtos["Código"].astype(str).values:
