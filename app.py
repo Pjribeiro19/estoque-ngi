@@ -2,11 +2,35 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
+# --- CONFIGURAÇÃO DA PÁGINA (Padrão limpo) ---
 st.set_page_config(
     page_title="SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS", 
     page_icon="🌿", 
     layout="wide"
+)
+
+# --- FORÇA MODO DESKTOP NO CELULAR (BLOQUEIO DE RESPONSIVIDADE) ---
+# Este script roda a cada 300ms garantindo que o celular trate a página como um PC de 1200px de largura
+st.components.v1.html(
+    """
+    <script>
+        function forcarDesktop() {
+            var meta = parent.document.querySelector('meta[name="viewport"]');
+            if (!meta) {
+                meta = parent.document.createElement('meta');
+                meta.name = 'viewport';
+                parent.document.getElementsByTagName('head')[0].appendChild(meta);
+            }
+            if (meta.content !== 'width=1200, initial-scale=0.35, minimum-scale=0.25, user-scalable=yes') {
+                meta.content = 'width=1200, initial-scale=0.35, minimum-scale=0.25, user-scalable=yes';
+            }
+        }
+        forcarDesktop();
+        setInterval(forcarDesktop, 300);
+    </script>
+    """,
+    height=0,
+    width=0
 )
 
 # --- INICIALIZAÇÃO DO GERENCIAMENTO DE SESSÃO (LOGIN) ---
@@ -19,81 +43,17 @@ if "sub_tela_login" not in st.session_state:
 if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = "João Paulo"
 
-# --- REMOVE A RESPONSIVIDADE FORÇANDO MODO DESKTOP NO CELULAR ---
-st.components.v1.html(
-    """
-    <script>
-        var meta = document.createElement('meta');
-        meta.name = 'viewport';
-        meta.content = 'width=1024, initial-scale=0.3, maximum-scale=1.0, user-scalable=yes';
-        parent.document.getElementsByTagName('head')[0].appendChild(meta);
-    </script>
-    """,
-    height=0,
-    width=0
-)
-
-# --- INJECT DE CSS AJUSTADO ---
+# --- INJECT DE CSS INTEGRADO E LIMPO ---
 st.markdown("""
     <style>
-    /* Oculta a navegação padrão de arquivos do Streamlit */
+    /* Esconde elementos desnecessários do Streamlit para o usuário final */
     [data-testid="stSidebarNav"] {display: none;}
+    [data-testid="stMainMenu"] {display: none;}
     
-    /* Ajusta o Header padrão para não sumir com o botão do menu do celular */
-    [data-testid="stHeader"] {
-        background: transparent !important; 
-        z-index: 9999991 !important;
-    }
-    
-    /* Garante que o botão de abrir a barra lateral (setinha) fique por cima de tudo e visível */
-    [data-testid="stHeader"] button {
-        background-color: #1e5934 !important;
-        color: white !important;
-        border-radius: 50% !important;
-        margin-left: 10px !important;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.3) !important;
-    }
-    
-    /* Cabeçalho personalizado */
-    .custom-header {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 60px;
-        background-color: #4CAF50 !important;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 0 30px 0 80px; /* Espaço na esquerda para o botão do menu não cobrir o texto */
-        z-index: 999990;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    .header-title {
-        color: white !important;
-        font-size: 1.25rem !important;
-        font-weight: bold !important;
-        font-family: sans-serif;
-    }
-    .header-user {
-        color: white !important;
-        font-size: 1.05rem !important;
-        font-weight: 500 !important;
-        font-family: sans-serif;
-    }
-    
-    .block-container {
-        padding-top: 6rem !important;
-    }
-    [data-testid="stSidebarUserContent"] {
-        padding-top: 1.5rem !important;
-    }
-    
-    /* Estilização da Barra Lateral */
+    /* Customização dos botões do menu lateral */
     [data-testid="stSidebar"] {
         background-color: #fcfaff !important;
         border-right: 1px solid #efe9f5;
-        z-index: 999995 !important;
     }
     
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
@@ -118,6 +78,7 @@ st.markdown("""
         font-weight: bold !important;
     }
     
+    /* Botões Padrão Verde */
     div.stButton > button:first-child[kind="primary"] {
         background-color: #4CAF50 !important;
         border-color: #4CAF50 !important;
@@ -128,12 +89,13 @@ st.markdown("""
         border-color: #43a047 !important;
     }
     
+    /* Container para centralizar logotipos */
     .img-container {
         display: flex;
         justify-content: center;
         align-items: center;
         width: 100%;
-        margin-bottom: 10px;
+        margin-bottom: 20px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -147,15 +109,15 @@ if not st.session_state.autenticado:
     if st.session_state.sub_tela_login == "login":
         st.markdown("<br><br>", unsafe_allow_html=True)
         
-        col_l1, col_l2, col_l3 = st.columns([1, 1.3, 1])
+        col_l1, col_l2, col_l3 = st.columns([1, 1.2, 1])
         with col_l2:
             st.markdown("""
                 <div class="img-container">
-                    <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="280">
+                    <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="320">
                 </div>
             """, unsafe_allow_html=True)
             
-            st.markdown("<h3 style='text-align: center; color: #1e5934; margin-top: 10px; margin-bottom: 25px;'>SISTEMA DE GESTÃO DE<br>ALMOXARIFADO NGI CARAJÁS</h3>", unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center; color: #1e5934; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
             
             usuario_input = st.text_input("Usuário / E-mail", placeholder="Digite seu usuário...")
             senha_input = st.text_input("Senha", type="password", placeholder="Digite sua senha...")
@@ -192,13 +154,6 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (APÓS ESTAR AUTENTICADO)
 # =============================================================================
 else:
-    st.markdown(f"""
-        <div class="custom-header">
-            <div class="header-title">SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS</div>
-            <div class="header-user">👤 {st.session_state.NOME_USUARIO_LOGADO}</div>
-        </div>
-    """, unsafe_allow_html=True)
-
     # -----------------------------------------------------------------------------
     # BANCO DE DADOS EM MEMÓRIA
     # -----------------------------------------------------------------------------
@@ -232,6 +187,8 @@ else:
     # BARRA LATERAL (MENU DE NAVEGAÇÃO)
     # -----------------------------------------------------------------------------
     with st.sidebar:
+        st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
+        st.write("---")
         menu_opcoes = [
             "🎛️ Painel Geral",
             "➕ Cadastrar Produto",
@@ -464,7 +421,7 @@ else:
                     if st.button("Salvar Edição", type="primary"):
                         st.session_state.coordenacoes.loc[idx_c, "Sigla"] = edit_sigla.upper()
                         st.session_state.coordenacoes.loc[idx_c, "Nome"] = edit_nc
-                        st.success("Nome updated!")
+                        st.success("Nome atualizado!")
                         st.rerun()
                 with c_btn_co2:
                     if st.button("❌ Excluir Coordenação"):
