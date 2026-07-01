@@ -12,6 +12,7 @@ try:
     EMAIL_REMETENTE = st.secrets["gmail"]["email"]
     SENHA_REMETENTE = st.secrets["gmail"]["senha_app"]
 except:
+    # Fallback caso esteja rodando localmente e ainda não tenha configurado o secrets local
     EMAIL_REMETENTE = "configurar_no_secrets@email.com"
     SENHA_REMETENTE = "configurar_no_secrets"
 
@@ -28,6 +29,7 @@ st.set_page_config(
 # --- FORÇA A BARRA LATERAL A FICAR SEMPRE ABERTA NO CELULAR ---
 st.markdown("""
     <style>
+    /* Desativa o fechamento automático da Sidebar em telas menores */
     @media (max-width: 991px) {
         [data-testid="stSidebar"] {
             transform: none !important;
@@ -36,24 +38,35 @@ st.markdown("""
             max-width: 250px !important;
             display: block !important;
         }
+        
+        /* Esconde o botão de fechar/setinha */
         [data-testid="stSidebar"] button {
             display: none !important;
         }
+        
+        /* Ajusta o contêiner principal para dividir espaço horizontalmente */
         .main {
             flex-direction: row !important;
         }
+        
+        /* Força o contêiner de conteúdo a ocupar o restante da tela */
         [data-testid="stAppViewBlockContainer"] {
             padding-left: 1rem !important;
             padding-right: 1rem !important;
             min-width: calc(100vw - 250px) !important;
         }
     }
+
+    /* Esconde elementos nativos do Streamlit */
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
+    
+    /* Customização estética dos botões do menu lateral */
     [data-testid="stSidebar"] {
         background-color: #fcfaff !important;
         border-right: 1px solid #efe9f5;
     }
+    
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
         color: #333333 !important;
         font-weight: 500;
@@ -62,17 +75,21 @@ st.markdown("""
         margin-bottom: 2px;
         transition: all 0.2s ease;
     }
+    
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {
         background-color: #e2eed7 !important;
         color: #1e5934 !important;
         cursor: pointer;
     }
+    
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] input:checked + div {
         background-color: #cce2b4 !important;
         border-radius: 4px;
         color: #1e5934 !important;
         font-weight: bold !important;
     }
+    
+    /* Botões Padrão Verde */
     div.stButton > button:first-child[kind="primary"] {
         background-color: #4CAF50 !important;
         border-color: #4CAF50 !important;
@@ -82,6 +99,8 @@ st.markdown("""
         background-color: #43a047 !important;
         border-color: #43a047 !important;
     }
+    
+    /* Centralizador dos logotipos */
     .img-container {
         display: flex;
         justify-content: center;
@@ -92,7 +111,8 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- INICIALIZAÇÃO DO GERENCIAMENTO DE SESSÃO ---
+
+# --- INICIALIZAÇÃO DO GERENCIAMENTO DE SESSÃO (LOGIN) ---
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 
@@ -102,12 +122,48 @@ if "sub_tela_login" not in st.session_state:
 if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = "João Paulo"
 
+
 # =============================================================================
-# FLUXO 1: FLUXO DE LOGIN (SE NÃO ESTIVER AUTENTICADO)
+# ROTEADOR DE PARÂMETROS DE URL (CAPTURAR LINK DO E-MAIL)
 # =============================================================================
-if not st.session_state.autenticado:
+query_params = st.query_params
+
+# Se o link contiver '?page=reset_password', força a tela de nova senha independente de login
+if "page" in query_params and query_params["page"] == "reset_password":
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    col_r1, col_r2, col_r3 = st.columns([1, 1.2, 1])
+    with col_r2:
+        st.markdown("<h2 style='text-align: center; color: #1e5934;'>🔑 Definir Nova Senha</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size: 0.9rem; color: gray; text-align: center;'>Insira e confirme sua nova senha de acesso abaixo.</p>", unsafe_allow_html=True)
+        
+        nova_senha = st.text_input("Nova Senha", type="password", placeholder="Digite a nova senha...")
+        confirmar_senha = st.text_input("Confirme a Nova Senha", type="password", placeholder="Digite a senha novamente...")
+        
+        if st.button("Atualizar Senha", type="primary", use_container_width=True):
+            if nova_senha == "":
+                st.warning("A senha não pode estar em branco.")
+            elif nova_senha == confirmar_senha:
+                # 💡 AQUI ENTRA SUA ATUALIZAÇÃO NO BANCO DE DADOS SE HOUVER
+                st.success("Senha atualizada com sucesso!")
+                st.query_params.clear() # Limpa a URL (?page=reset_password)
+                st.session_state.sub_tela_login = "login"
+                st.button("Ir para o Login")
+            else:
+                st.error("As senhas não coincidem. Tente novamente.")
+                
+        if st.button("Cancelar e Voltar", use_container_width=True):
+            st.query_params.clear()
+            st.session_state.sub_tela_login = "login"
+            st.rerun()
+
+# =============================================================================
+# FLUXO 1: FLUXO DE LOGIN (SE NÃO ESTIVER AUTENTICADO E NÃO ESTIVER REDEFININDO)
+# =============================================================================
+elif not st.session_state.autenticado:
+    
     if st.session_state.sub_tela_login == "login":
         st.markdown("<br><br>", unsafe_allow_html=True)
+        
         col_l1, col_l2, col_l3 = st.columns([1, 1.2, 1])
         with col_l2:
             st.markdown("""
@@ -115,9 +171,12 @@ if not st.session_state.autenticado:
                     <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="320">
                 </div>
             """, unsafe_allow_html=True)
+            
             st.markdown("<h2 style='text-align: center; color: #1e5934; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
+            
             usuario_input = st.text_input("Usuário / E-mail", placeholder="Digite seu usuário...")
             senha_input = st.text_input("Senha", type="password", placeholder="Digite sua senha...")
+            
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("Entrar no Sistema", type="primary", use_container_width=True):
                 if usuario_input and senha_input:
@@ -125,6 +184,7 @@ if not st.session_state.autenticado:
                     st.rerun()
                 else:
                     st.error("Por favor, preencha todos os campos!")
+                    
             if st.button("Esqueci a senha", use_container_width=True):
                 st.session_state.sub_tela_login = "esqueci"
                 st.rerun()
@@ -147,35 +207,50 @@ if not st.session_state.autenticado:
                             msg['From'] = EMAIL_REMETENTE
                             msg['To'] = email_recuperar.strip()
                             msg['Subject'] = "Recuperação de Senha - Sistema de Almoxarifado NGI Carajás"
+                            
+                            # O link agora envia o parâmetro ?page=reset_password para ativar a tela correta
+                            link_redefinicao = "https://almoxarifado-carajas.streamlit.app/?page=reset_password"
+                            
                             corpo_email = f"""
                             Olá,
+                            
                             Recebemos uma solicitação de recuperação de acesso para o seu usuário ({email_recuperar.strip()}).
-                            Para acessar o Sistema de Gestão de Almoxarifado NGI Carajás, utilize os dados de acesso padrão provisórios:
-                            Link de acesso: https://almoxarifado-carajas.streamlit.app/
-                            Sua senha provisória de contingência é: 123
-                            Por favor, altere sua senha no menu 'Perfil' assim que efetuar o login com sucesso.
+                            
+                            Para cadastrar sua nova senha de acesso, clique no link seguro abaixo:
+                            {link_redefinicao}
+                            
+                            Se você não solicitou esta alteração, por favor ignore este e-mail.
+                            
                             Atenciosamente,
                             Suporte NGI Carajás / ICMBio
                             """
                             msg.attach(MIMEText(corpo_email, 'plain'))
+                            
+                            # Processo de envio via SMTP seguro
                             server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
                             server.starttls()
                             server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
                             server.sendmail(EMAIL_REMETENTE, email_recuperar.strip(), msg.as_string())
                             server.quit()
-                            st.success(f"Sucesso! Instruções de recuperação enviadas para {email_recuperar}")
+                            
+                            st.success(f"Sucesso! O link de redefinição foi enviado para {email_recuperar}")
                         except Exception as e:
                             st.error(f"Erro ao tentar enviar o e-mail: {e}")
                 else:
                     st.warning("Por favor, digite um e-mail válido.")
+
             if st.button("Voltar para o Login", use_container_width=True):
                 st.session_state.sub_tela_login = "login"
                 st.rerun()
+
 
 # =============================================================================
 # FLUXO 2: SISTEMA PRINCIPAL (APÓS ESTAR AUTENTICADO)
 # =============================================================================
 else:
+    # -----------------------------------------------------------------------------
+    # BANCO DE DADOS EM MEMÓRIA
+    # -----------------------------------------------------------------------------
     if "produtos" not in st.session_state or not isinstance(st.session_state.produtos, pd.DataFrame):
         st.session_state.produtos = pd.DataFrame([
             {"Código": "001", "Item": "Capacete de Segurança", "Quantidade": 15, "Categoria": "EPI", "Valor Unitário": 45.00},
@@ -202,6 +277,9 @@ else:
             "Data", "Tipo", "Código", "Item", "Quantidade", "Responsável pela Retirada", "Coordenação"
         ])
 
+    # -----------------------------------------------------------------------------
+    # BARRA LATERAL (MENU DE NAVEGAÇÃO COMPLETO)
+    # -----------------------------------------------------------------------------
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("---")
@@ -217,32 +295,46 @@ else:
         ]
         escolha = st.radio("", menu_opcoes, label_visibility="collapsed")
 
+    # -----------------------------------------------------------------------------
+    # LÓGICA DAS TELAS DO PAINEL LOGADO
+    # -----------------------------------------------------------------------------
+
     # --- TELA: PAINEL GERAL ---
     if escolha == "🎛️ Painel Geral":
         st.title("🎛️ Painel Geral de Estoque")
+        
         c1, c2, c3 = st.columns(3)
         c1.metric("Total de Itens Cadastrados", len(st.session_state.produtos))
         c2.metric("Produtos Esgotados", len(st.session_state.produtos[st.session_state.produtos['Quantidade'] == 0]))
         c3.metric("Movimentações Realizadas", len(st.session_state.movimentacoes))
+
         st.write("---")
         st.write("### 🔍 Ferramentas de Busca e Filtro")
+        
         col_filtro1, col_filtro2 = st.columns([2, 1])
         termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite para pesquisar...")
         categoria_selecionada = col_filtro2.selectbox("Filtrar por Categoria:", ["Todas"] + list(st.session_state.categorias))
         
         df_filtrado = st.session_state.produtos.copy()
+            
         if termo_busca:
-            df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
+            df_filtrado = df_filtrado[
+                df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | 
+                df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)
+            ]
+            
         if categoria_selecionada != "Todas":
             df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
         st.write("### 📋 Estoque Atualizado")
+        
         if df_filtrado.empty:
             st.info("Nenhum material encontrado com os filtros aplicados.")
         else:
             df_display = df_filtrado.copy()
             df_display["Valor Unitário"] = df_display["Valor Unitário"].astype(float)
             df_display["Valor Total"] = df_display["Quantidade"] * df_display["Valor Unitário"]
+            
             df_display["Valor Unitário"] = df_display["Valor Unitário"].map("R$ {:.2f}".format)
             df_display["Valor Total"] = df_display["Valor Total"].map("R$ {:.2f}".format)
 
@@ -250,12 +342,15 @@ else:
                 if row['Quantidade'] == 0:
                     return ['background-color: #ffebee; color: #c62828; font-weight: bold'] * len(row)
                 return [''] * len(row)
-            st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
+            
+            df_estilizado = df_display.style.apply(destacar_zerados, axis=1)
+            st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
 
     # --- TELA: CADASTRAR PRODUTO ---
     elif escolha == "➕ Cadastrar Produto":
         st.title("➕ Gerenciamento de Produtos")
         aba_cad_prod, aba_gerenciar_prod = st.tabs(["➕ Novo Material", "✏️ Editar / Excluir Produtos"])
+        
         with aba_cad_prod:
             with st.form("form_novo_produto", clear_on_submit=True):
                 col_a, col_b = st.columns(2)
@@ -263,44 +358,61 @@ else:
                 nome_it = col_b.text_input("Nome do Material")
                 cat_it = col_a.selectbox("Categoria", st.session_state.categorias)
                 val_unit = col_b.number_input("Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
-                st.caption("ℹ️ Novos materiais são registrados com saldo inicial 0. Adicione quantidades em 'Movimentação'.")
+                
+                st.caption("ℹ️ Novos materiais são registrados com saldo inicial 0. Para adicionar quantidades, utilize o menu 'Movimentação de Entrada e Saída'.")
+                
                 if st.form_submit_button("Finalizar Cadastro", type="primary"):
                     if cod and nome_it:
                         if cod in st.session_state.produtos["Código"].values:
-                            st.error(f"Erro! Código {cod} já existe.")
+                            st.error(f"Erro! Já existe um produto cadastrado com o código {cod}.")
                         else:
                             novo_p = {"Código": cod, "Item": nome_it, "Quantidade": 0, "Categoria": cat_it, "Valor Unitário": float(val_unit)}
                             st.session_state.produtos = pd.concat([st.session_state.produtos, pd.DataFrame([novo_p])], ignore_index=True)
-                            st.success(f"Sucesso! {nome_it} adicionado.")
+                            st.success(f"Sucesso! {nome_it} adicionado ao catálogo com saldo zerado.")
                             st.rerun()
                     else:
-                        st.error("Preencha todos os campos!")
+                        st.error("Preencha o Código e o Nome do Material!")
+                        
         with aba_gerenciar_prod:
             if not st.session_state.produtos.empty:
                 st.dataframe(st.session_state.produtos, use_container_width=True, hide_index=True)
-                idx_p = st.selectbox("Selecione para modificar:", st.session_state.produtos.index, format_func=lambda x: f"{st.session_state.produtos.loc[x, 'Código']} - {st.session_state.produtos.loc[x, 'Item']}")
+                st.write("---")
+                idx_p = st.selectbox(
+                    "Selecione o produto que deseja modificar:", 
+                    st.session_state.produtos.index, 
+                    format_func=lambda x: f"{st.session_state.produtos.loc[x, 'Código']} - {st.session_state.produtos.loc[x, 'Item']}"
+                )
                 col_ed1, col_ed2 = st.columns(2)
-                edit_cod = col_ed1.text_input("Código:", value=st.session_state.produtos.loc[idx_p, "Código"])
-                edit_item = col_ed2.text_input("Nome:", value=st.session_state.produtos.loc[idx_p, "Item"])
-                edit_qtd = col_ed1.number_input("Quantidade (Ajuste):", min_value=0, value=int(st.session_state.produtos.loc[idx_p, "Quantidade"]))
-                edit_cat = col_ed2.selectbox("Categoria:", st.session_state.categorias, index=st.session_state.categorias.index(st.session_state.produtos.loc[idx_p, "Categoria"]) if st.session_state.produtos.loc[idx_p, "Categoria"] in st.session_state.categorias else 0)
-                edit_val = st.number_input("Valor Unitário:", min_value=0.0, step=0.01, format="%.2f", value=float(st.session_state.produtos.loc[idx_p, "Valor Unitário"]))
+                edit_cod = col_ed1.text_input("Código do Produto:", value=st.session_state.produtos.loc[idx_p, "Código"])
+                edit_item = col_ed2.text_input("Nome do Material:", value=st.session_state.produtos.loc[idx_p, "Item"])
+                edit_qtd = col_ed1.number_input("Quantidade em Estoque (Ajuste Manual):", min_value=0, step=1, value=int(st.session_state.produtos.loc[idx_p, "Quantidade"]))
+                
+                cat_atual = st.session_state.produtos.loc[idx_p, "Categoria"]
+                default_cat_idx = st.session_state.categorias.index(cat_atual) if cat_atual in st.session_state.categorias else 0
+                edit_cat = col_ed2.selectbox("Categoria do Produto:", st.session_state.categorias, index=default_cat_idx)
+                edit_val = st.number_input("Alterar Valor Unitário (R$):", min_value=0.0, step=0.01, format="%.2f", value=float(st.session_state.produtos.loc[idx_p, "Valor Unitário"]))
+                
                 col_b_prod1, col_b_prod2 = st.columns([1, 4])
                 with col_b_prod1:
                     if st.button("Salvar Alterações", type="primary"):
-                        st.session_state.produtos.loc[idx_p] = [edit_cod, edit_item, edit_qtd, edit_cat, float(edit_val)]
-                        st.success("Modificado!")
+                        st.session_state.produtos.loc[idx_p, "Código"] = edit_cod
+                        st.session_state.produtos.loc[idx_p, "Item"] = edit_item
+                        st.session_state.produtos.loc[idx_p, "Quantidade"] = edit_qtd
+                        st.session_state.produtos.loc[idx_p, "Categoria"] = edit_cat
+                        st.session_state.produtos.loc[idx_p, "Valor Unitário"] = float(edit_val)
+                        st.success("Produto atualizado!")
                         st.rerun()
                 with col_b_prod2:
-                    if st.button("❌ Excluir Produto"):
+                    if st.button("❌ Excluir Produto do Sistema"):
                         st.session_state.produtos = st.session_state.produtos.drop(idx_p).reset_index(drop=True)
-                        st.warning("Removido.")
+                        st.warning("Produto removido definitivamente.")
                         st.rerun()
 
     # --- TELA: CADASTRAR CATEGORIA ---
     elif escolha == "🗂️ Cadastrar Categoria":
         st.title("🗂️ Gerenciamento de Categorias")
         aba_nova_cat, aba_gerenciar_cat = st.tabs(["➕ Nova Categoria", "✏️ Editar / Excluir Categorias"])
+        
         with aba_nova_cat:
             col_cat1, col_cat2 = st.columns([1, 2])
             with col_cat1:
@@ -308,14 +420,17 @@ else:
                 if st.button("Adicionar Categoria", type="primary"):
                     if nova_cat and nova_cat.strip() not in st.session_state.categorias:
                         st.session_state.categorias.append(nova_cat.strip())
-                        st.success("Adicionada!")
+                        st.success("Categoria adicionada!")
                         st.rerun()
             with col_cat2:
                 st.dataframe(pd.DataFrame(st.session_state.categorias, columns=["Categorias Ativas"]), use_container_width=True, hide_index=True)
+
         with aba_gerenciar_cat:
             if st.session_state.categorias:
-                cat_selecionada_idx = st.selectbox("Selecione:", range(len(st.session_state.categorias)), format_func=lambda x: st.session_state.categorias[x])
-                edit_nome_cat = st.text_input("Editar Nome:", value=st.session_state.categorias[cat_selecionada_idx])
+                cat_selecionada_idx = st.selectbox("Selecione qual deseja modificar/excluir:", range(len(st.session_state.categorias)), format_func=lambda x: st.session_state.categorias[x])
+                nome_antigo_cat = st.session_state.categorias[cat_selecionada_idx]
+                edit_nome_cat = st.text_input("Editar Nome:", value=nome_antigo_cat)
+                
                 c_btn_cat1, c_btn_cat2 = st.columns([1, 4])
                 with c_btn_cat1:
                     if st.button("Salvar Edição", type="primary"):
@@ -325,126 +440,138 @@ else:
                 with c_btn_cat2:
                     if st.button("❌ Excluir Categoria"):
                         st.session_state.categorias.pop(cat_selecionada_idx)
-                        st.warning("Removida.")
+                        st.warning("Categoria removida do sistema.")
                         st.rerun()
 
     # --- TELA: CADASTRAR USUÁRIO ---
     elif escolha == "👥 Cadastrar Usuário":
         st.title("👥 Cadastrar Usuário")
         aba_cad, aba_edit = st.tabs(["➕ Novo Usuário", "✏️ Editar / Excluir Usuários"])
+        
         with aba_cad:
             with st.form("cad_user", clear_on_submit=True):
                 n = st.text_input("Nome")
                 e = st.text_input("E-mail")
-                s = st.text_input("Senha", type="password")
+                s = st.text_input("Senha de Acesso", type="password")
                 p = st.selectbox("Perfil", ["Administrador", "Usuário Comum"])
                 if st.form_submit_button("Salvar", type="primary"):
                     if n and e:
                         new_u = {"Nome": n, "E-mail": e, "Senha": s if s else "123", "Perfil": p}
                         st.session_state.usuarios = pd.concat([st.session_state.usuarios, pd.DataFrame([new_u])], ignore_index=True)
-                        st.success("Criado!")
+                        st.success("Usuário Criado!")
                         st.rerun()
+                    else:
+                        st.error("Nome e E-mail são obrigatórios.")
+
         with aba_edit:
             if not st.session_state.usuarios.empty:
                 st.dataframe(st.session_state.usuarios[["Nome", "E-mail", "Perfil"]], use_container_width=True, hide_index=True)
-                idx = st.selectbox("Selecione:", st.session_state.usuarios.index, format_func=lambda x: st.session_state.usuarios.loc[x, "Nome"])
+                idx = st.selectbox("Selecione para modificar/excluir:", st.session_state.usuarios.index, format_func=lambda x: st.session_state.usuarios.loc[x, "Nome"])
                 edit_n = st.text_input("Nome:", value=st.session_state.usuarios.loc[idx, "Nome"])
                 edit_e = st.text_input("E-mail:", value=st.session_state.usuarios.loc[idx, "E-mail"])
-                edit_s = st.text_input("Senha:", value=st.session_state.usuarios.loc[idx, "Senha"], type="password")
-                edit_p = st.selectbox("Perfil:", ["Administrador", "Usuário Comum"], index=0 if st.session_state.usuarios.loc[idx, "Perfil"] == "Administrador" else 1)
+                edit_s = st.text_input("Alterar Senha:", value=st.session_state.usuarios.loc[idx, "Senha"] if "Senha" in st.session_state.usuarios.columns else "", type="password")
+                edit_p = st.selectbox("Alterar Perfil:", ["Administrador", "Usuário Comum"], index=0 if st.session_state.usuarios.loc[idx, "Perfil"] == "Administrador" else 1)
+                
                 c_btn_u1, c_btn_u2 = st.columns([1, 4])
                 with c_btn_u1:
                     if st.button("Atualizar Dados", type="primary"):
-                        st.session_state.usuarios.loc[idx] = [edit_n, edit_e, edit_s, edit_p]
-                        st.success("Atualizado!")
+                        st.session_state.usuarios.loc[idx, "Nome"] = edit_n
+                        st.session_state.usuarios.loc[idx, "E-mail"] = edit_e
+                        st.session_state.usuarios.loc[idx, "Senha"] = edit_s
+                        st.session_state.usuarios.loc[idx, "Perfil"] = edit_p
+                        st.success("Usuário Atualizado!")
                         st.rerun()
                 with c_btn_u2:
                     if st.button("❌ Excluir Usuário"):
                         st.session_state.usuarios = st.session_state.usuarios.drop(idx).reset_index(drop=True)
-                        st.warning("Removido.")
+                        st.warning("Usuário removido com sucesso.")
                         st.rerun()
 
     # --- TELA: CADASTRAR COORDENAÇÃO ---
     elif escolha == "🏢 Cadastrar Coordenação":
         st.title("🏢 Cadastrar Coordenação")
         aba_c1, aba_c2 = st.tabs(["➕ Nova Coordenação", "✏️ Editar / Excluir Coordenação"])
+        
         with aba_c1:
             with st.form("cad_coord", clear_on_submit=True):
-                s_coord = st.text_input("Sigla")
+                s_coord = st.text_input("Sigla (Ex: COTEC)")
                 nc = st.text_input("Nome da Coordenação")
                 if st.form_submit_button("Cadastrar", type="primary"):
                     if s_coord and nc:
                         nova_coord = {"Sigla": s_coord.upper(), "Nome": nc}
                         st.session_state.coordenacoes = pd.concat([st.session_state.coordenacoes, pd.DataFrame([nova_coord])], ignore_index=True)
-                        st.success("Cadastrada!")
+                        st.success("Coordenação Cadastrada com sucesso!")
                         st.rerun()
+                    else:
+                        st.error("Preencha todos os campos da coordenação.")
+                        
         with aba_c2:
             if not st.session_state.coordenacoes.empty:
                 st.dataframe(st.session_state.coordenacoes, use_container_width=True, hide_index=True)
-                idx_c = st.selectbox("Selecione:", st.session_state.coordenacoes.index, format_func=lambda x: st.session_state.coordenacoes.loc[x, "Sigla"])
-                edit_sigla = st.text_input("Sigla:", value=st.session_state.coordenacoes.loc[idx_c, "Sigla"])
-                edit_nc = st.text_input("Nome:", value=st.session_state.coordenacoes.loc[idx_c, "Nome"])
-                c_btn_co1, c_btn_co2 = st.columns([1, 4])
-                with c_btn_co1:
-                    if st.button("Salvar Edição", type="primary"):
-                        st.session_state.coordenacoes.loc[idx_c] = [edit_sigla.upper(), edit_nc]
-                        st.success("Salvo!")
-                        st.rerun()
-                with c_btn_co2:
-                    if st.button("❌ Excluir Coordenação"):
-                        st.session_state.coordenacoes = st.session_state.coordenacoes.drop(idx_c).reset_index(drop=True)
-                        st.warning("Removida.")
-                        st.rerun()
+                idx_c = st.selectbox("Selecione para excluir:", st.session_state.coordenacoes.index, format_func=lambda x: st.session_state.coordenacoes.loc[x, "Sigla"])
+                if st.button("❌ Remover Coordenação Selected"):
+                    st.session_state.coordenacoes = st.session_state.coordenacoes.drop(idx_c).reset_index(drop=True)
+                    st.warning("Coordenação removida.")
+                    st.rerun()
 
     # --- TELA: MOVIMENTAÇÃO DE ENTRADA E SAÍDA ---
     elif escolha == "🔄 Movimentação de Entrada e Saída":
-        st.title("🔄 Movimentação de Entrada e Saída")
-        aba_entrada, aba_saida, aba_historico = st.tabs(["📥 Registrar Entrada", "📤 Registrar Saída", "📋 Histórico de Entradas/Saídas"])
-        with aba_entrada:
-            with st.form("form_registrar_entrada", clear_on_submit=True):
-                col_e1, col_e2 = st.columns(2)
-                data_entrada = col_e1.date_input("Data:", value=datetime.today(), format="DD/MM/YYYY")
-                idx_prod_ent = col_e2.selectbox("Material:", st.session_state.produtos.index, format_func=lambda x: f"{st.session_state.produtos.loc[x, 'Código']} - {st.session_state.produtos.loc[x, 'Item']} (Saldo: {st.session_state.produtos.loc[x, 'Quantidade']})")
-                qtd_entrada = st.number_input("Quantidade Entrada:", min_value=1, step=1)
-                if st.form_submit_button("Confirmar Entrada", type="primary"):
-                    st.session_state.produtos.loc[idx_prod_ent, "Quantidade"] += qtd_entrada
-                    nova_mov = {"Data": data_entrada.strftime("%d/%m/%Y"), "Tipo": "Entrada", "Código": st.session_state.produtos.loc[idx_prod_ent, "Código"], "Item": st.session_state.produtos.loc[idx_prod_ent, "Item"], "Quantidade": qtd_entrada, "Responsável pela Retirada": "Almoxarifado", "Coordenação": "-"}
-                    st.session_state.movimentacoes = pd.concat([st.session_state.movimentacoes, pd.DataFrame([nova_mov])], ignore_index=True)
-                    st.success("Entrada registrada!")
-                    st.rerun()
-        with aba_saida:
-            with st.form("form_registrar_saida", clear_on_submit=True):
-                col_s1, col_s2 = st.columns(2)
-                data_saida = col_s1.date_input("Data:", value=datetime.today(), format="DD/MM/YYYY")
-                idx_prod_sai = col_s2.selectbox("Material:", st.session_state.produtos.index, format_func=lambda x: f"{st.session_state.produtos.loc[x, 'Código']} - {st.session_state.produtos.loc[x, 'Item']} (Saldo: {st.session_state.produtos.loc[x, 'Quantidade']})")
-                qtd_saida = col_s1.number_input("Quantidade Saída:", min_value=1, step=1)
-                lista_coord = st.session_state.coordenacoes["Sigla"].tolist() if not st.session_state.coordenacoes.empty else ["Sem Coordenações"]
-                coord_retirada = col_s2.selectbox("Destino:", lista_coord)
-                resp_retirada = st.text_input("Responsável pela Retirada:")
-                if st.form_submit_button("Confirmar Saída", type="primary"):
-                    qtd_disp = st.session_state.produtos.loc[idx_prod_sai, "Quantidade"]
-                    if not resp_retirada.strip():
-                        st.error("Insira o nome do responsável!")
-                    elif qtd_saida > qtd_disp:
-                        st.error(f"Estoque insuficiente! Disponível: {qtd_disp}")
+        st.title("🔄 Movimentações de Estoque")
+        
+        with st.form("form_movimentacao", clear_on_submit=True):
+            tipo_mov = st.selectbox("Tipo de Operação", ["Entrada (+) Saldo", "Saída (-) Retirada"])
+            
+            prod_selecionado_idx = st.selectbox(
+                "Selecione o Produto", 
+                st.session_state.produtos.index,
+                format_func=lambda x: f"{st.session_state.produtos.loc[x, 'Código']} - {st.session_state.produtos.loc[x, 'Item']} (Saldo atual: {st.session_state.produtos.loc[x, 'Quantidade']})"
+            )
+            
+            qtd_mov = st.number_input("Quantidade da Operação", min_value=1, step=1)
+            responsavel = st.text_input("Responsável / Recebedor")
+            coord_solic = st.selectbox("Coordenação Destino", st.session_state.coordenacoes["Sigla"].values if not st.session_state.coordenacoes.empty else ["Geral"])
+            
+            if st.form_submit_button("Confirmar Lançamento", type="primary"):
+                qtd_atual = st.session_state.produtos.loc[prod_selecionado_idx, "Quantidade"]
+                item_nome = st.session_state.produtos.loc[prod_selecionado_idx, "Item"]
+                item_cod = st.session_state.produtos.loc[prod_selecionado_idx, "Código"]
+                
+                if "Saída" in tipo_mov and qtd_mov > qtd_atual:
+                    st.error(f"Erro! Saldo insuficiente. Você tentou retirar {qtd_mov} unidades, mas existem apenas {qtd_atual} em estoque.")
+                else:
+                    # Atualiza o saldo no DataFrame
+                    if "Entrada" in tipo_mov:
+                        st.session_state.produtos.loc[prod_selecionado_idx, "Quantidade"] += qtd_mov
                     else:
-                        st.session_state.produtos.loc[idx_prod_sai, "Quantidade"] -= qtd_saida
-                        nova_mov_saida = {"Data": data_saida.strftime("%d/%m/%Y"), "Tipo": "Saída", "Código": st.session_state.produtos.loc[idx_prod_sai, "Código"], "Item": st.session_state.produtos.loc[idx_prod_sai, "Item"], "Quantidade": qtd_saida, "Responsável pela Retirada": resp_retirada.strip(), "Coordenação": coord_retirada}
-                        st.session_state.movimentacoes = pd.concat([st.session_state.movimentacoes, pd.DataFrame([nova_mov_saida])], ignore_index=True)
-                        st.success("Saída registrada!")
-                        st.rerun()
-        with aba_historico:
-            st.write("### 📜 Registros de Fluxo")
-            if st.session_state.movimentacoes.empty:
-                st.info("Nenhuma movimentação.")
-            else:
-                st.dataframe(st.session_state.movimentacoes, use_container_width=True, hide_index=True)
+                        st.session_state.produtos.loc[prod_selecionado_idx, "Quantidade"] -= qtd_mov
+                        
+                    # Registra histórico
+                    nova_mov = {
+                        "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                        "Tipo": "ENTRADA" if "Entrada" in tipo_mov else "SAÍDA",
+                        "Código": item_cod,
+                        "Item": item_nome,
+                        "Quantidade": qtd_mov,
+                        "Responsável pela Retirada": responsavel if responsavel else "Almoxarifado",
+                        "Coordenação": coord_solic
+                    }
+                    st.session_state.movimentacoes = pd.concat([st.session_state.movimentacoes, pd.DataFrame([nova_mov])], ignore_index=True)
+                    st.success("Movimentação registrada com sucesso!")
+                    st.rerun()
+                    
+        st.write("### 📜 Histórico de Movimentações Recentes")
+        if not st.session_state.movimentacoes.empty:
+            st.dataframe(st.session_state.movimentacoes.iloc[::-1], use_container_width=True, hide_index=True)
 
     # --- TELA: PERFIL ---
     elif escolha == "👤 Perfil":
-        st.title("👤 Meu Perfil")
-        st.write(f"**Usuário Atual:** {st.session_state.NOME_USUARIO_LOGADO}")
-        st.write("**Lotação:** NGI Carajás / ICMBio")
+        st.title("👤 Configurações de Perfil")
+        st.subheader(f"Usuário ativo: {st.session_state.NOME_USUARIO_LOGADO}")
+        novo_nome_perfil = st.text_input("Alterar Nome de Exibição:", value=st.session_state.NOME_USUARIO_LOGADO)
+        if st.button("Salvar Nome", type="primary"):
+            st.session_state.NOME_USUARIO_LOGADO = novo_nome_perfil
+            st.success("Nome atualizado!")
+            st.rerun()
 
     # --- TELA: SAIR ---
     elif escolha == "🚪 Sair":
