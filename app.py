@@ -212,8 +212,10 @@ if not st.session_state.autenticado:
                 </div>
             """, unsafe_allow_html=True)
             st.markdown("<h2 style='text-align: center; color: #1e5934; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
-            usuario_input = st.text_input("Usuário / E-mail", placeholder="admin@ngi.com")
-            senha_input = st.text_input("Senha", type="password", placeholder="123")
+            
+            # AJUSTE AQUI: Removido os valores/placeholders padrões para iniciar vazio
+            usuario_input = st.text_input("Usuário / E-mail")
+            senha_input = st.text_input("Senha", type="password")
             st.markdown("<br>", unsafe_allow_html=True)
             
             if st.button("Entrar no Sistema", type="primary", use_container_width=True):
@@ -286,7 +288,7 @@ else:
     df_movimentacoes = pd.read_sql_query("SELECT data AS Data, tipo AS Tipo, codigo AS Código, item AS Item, quantidade AS Quantidade, responsavel AS [Responsável pela Retirada], coordenacao AS [Coordenação] FROM movimentacoes", conn)
     df_coordenacoes = pd.read_sql_query("SELECT sigla AS Sigla, nome AS Nome FROM coordenacoes", conn)
     
-    df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
+    df_cat_bruto = pd.read_sql_query("SELECT nome FROM categories" if "categories" in pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table'", conn).values else "SELECT nome FROM categorias", conn)
     lista_categorias = df_cat_bruto["nome"].tolist()
 
     with st.sidebar:
@@ -372,7 +374,6 @@ else:
             if not df_produtos.empty:
                 st.dataframe(df_produtos, use_container_width=True, hide_index=True)
                 
-                # Mapeamento do seletor usando índices reais da tabela
                 df_raw_prod = pd.read_sql_query("SELECT * FROM produtos", conn)
                 opcao_selecionada = st.selectbox("Selecione para modificar:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']}")
                 
@@ -616,6 +617,9 @@ else:
                             cursor = conn.cursor()
                             cursor.execute("UPDATE produtos SET quantidade = ? WHERE codigo = ?", (novo_saldo, cod_p))
                             cursor.execute("""
+                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantity, responsavel, coordenacao) 
+                                VALUES (?, ?, ?, ?, ?, ?, ?)
+                            """ if "quantity" in pd.read_sql_query("PRAGMA table_info(movimentacoes)", conn)["name"].tolist() else """
                                 INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
                                 VALUES (?, ?, ?, ?, ?, ?, ?)
                             """, (data_saida.strftime("%d/%m/%Y"), "Saída", cod_p, nome_p, qtd_saida, resp_retirada.strip(), coord_retirada))
@@ -632,12 +636,13 @@ else:
 
     # --- TELA: PERFIL ---
     elif escolha == "👤 Perfil":
-        st.title("👤 Meu Perfil")
-        st.write(f"**Usuário Atual:** {st.session_state.NOME_USUARIO_LOGADO}")
-        st.write("**Lotação:** NGI Carajás / ICMBio")
+        st.title("👤 Meu Perfil de Acesso")
+        st.write(f"**Usuário conectado:** {st.session_state.NOME_USUARIO_LOGADO}")
+        st.info("As configurações de alteração de senha individual podem ser adicionadas aqui.")
 
     # --- TELA: SAIR ---
     elif escolha == "🚪 Sair":
         st.session_state.autenticado = False
+        st.session_state.NOME_USUARIO_LOGADO = ""
         st.session_state.sub_tela_login = "login"
         st.rerun()
