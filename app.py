@@ -85,7 +85,7 @@ def inicializar_banco_automatico():
         cursor.executemany("INSERT INTO categorias VALUES (?)", cat_iniciais)
         conn.commit()
 
-    # 5. Cria tabela de movimentações automaticamente
+    # 5. Cria tabela de movimentações automaticamente (Estritamente 'quantidade')
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS movimentacoes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,7 +102,7 @@ def inicializar_banco_automatico():
     conn.commit()
     return conn
 
-# Ativa o banco de dados local
+# Ativa o banco de dados
 conn = inicializar_banco_automatico()
 
 # =============================================================================
@@ -213,7 +213,6 @@ if not st.session_state.autenticado:
             """, unsafe_allow_html=True)
             st.markdown("<h2 style='text-align: center; color: #1e5934; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
             
-            # AJUSTE AQUI: Removido os valores/placeholders padrões para iniciar vazio
             usuario_input = st.text_input("Usuário / E-mail")
             senha_input = st.text_input("Senha", type="password")
             st.markdown("<br>", unsafe_allow_html=True)
@@ -283,12 +282,12 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (PÓS-AUTENTICAÇÃO)
 # =============================================================================
 else:
-    # Sincroniza dinamicamente as tabelas do SQLite com os DataFrames da tela
+    # Sincroniza as tabelas do SQLite com os DataFrames da tela
     df_produtos = pd.read_sql_query("SELECT codigo AS Código, item AS Item, quantidade AS Quantidade, categoria AS Categoria, valor_unitario AS [Valor Unitário] FROM produtos", conn)
     df_movimentacoes = pd.read_sql_query("SELECT data AS Data, tipo AS Tipo, codigo AS Código, item AS Item, quantidade AS Quantidade, responsavel AS [Responsável pela Retirada], coordenacao AS [Coordenação] FROM movimentacoes", conn)
     df_coordenacoes = pd.read_sql_query("SELECT sigla AS Sigla, nome AS Nome FROM coordenacoes", conn)
     
-    df_cat_bruto = pd.read_sql_query("SELECT nome FROM categories" if "categories" in pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table'", conn).values else "SELECT nome FROM categorias", conn)
+    df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
     lista_categorias = df_cat_bruto["nome"].tolist()
 
     with st.sidebar:
@@ -301,13 +300,17 @@ else:
             "👥 Cadastrar Usuário",
             "🏢 Cadastrar Coordenação",
             "🔄 Movimentação de Entrada e Saída",
-            "👤 Perfil",
             "🚪 Sair"
         ]
         escolha = st.radio("", menu_opcoes, label_visibility="collapsed")
 
+    if escolha == "🚪 Sair":
+        st.session_state.autenticado = False
+        st.session_state.NOME_USUARIO_LOGADO = ""
+        st.rerun()
+
     # --- TELA: PAINEL GERAL ---
-    if escolha == "🎛️ Painel Geral":
+    elif escolha == "🎛️ Painel Geral":
         st.title("🎛️ Painel Geral de Estoque")
         c1, c2, c3 = st.columns(3)
         c1.metric("Total de Itens Cadastrados", len(df_produtos))
@@ -617,32 +620,16 @@ else:
                             cursor = conn.cursor()
                             cursor.execute("UPDATE produtos SET quantidade = ? WHERE codigo = ?", (novo_saldo, cod_p))
                             cursor.execute("""
-                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantity, responsavel, coordenacao) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?)
-                            """ if "quantity" in pd.read_sql_query("PRAGMA table_info(movimentacoes)", conn)["name"].tolist() else """
                                 INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
                                 VALUES (?, ?, ?, ?, ?, ?, ?)
                             """, (data_saida.strftime("%d/%m/%Y"), "Saída", cod_p, nome_p, qtd_saida, resp_retirada.strip(), coord_retirada))
                             conn.commit()
                             st.success("Saída registrada com sucesso!")
                             st.rerun()
-                            
+
         with aba_historico:
-            st.write("### 📜 Registros de Fluxo")
+            st.write("### 📜 Registros de Movimentação")
             if df_movimentacoes.empty:
                 st.info("Nenhuma movimentação realizada até o momento.")
             else:
                 st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
-
-    # --- TELA: PERFIL ---
-    elif escolha == "👤 Perfil":
-        st.title("👤 Meu Perfil de Acesso")
-        st.write(f"**Usuário conectado:** {st.session_state.NOME_USUARIO_LOGADO}")
-        st.info("As configurações de alteração de senha individual podem ser adicionadas aqui.")
-
-    # --- TELA: SAIR ---
-    elif escolha == "🚪 Sair":
-        st.session_state.autenticado = False
-        st.session_state.NOME_USUARIO_LOGADO = ""
-        st.session_state.sub_tela_login = "login"
-        st.rerun()
