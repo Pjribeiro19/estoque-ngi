@@ -70,7 +70,12 @@ def inicializar_banco_automatico():
             ("COTEC", "Coordenação Técnica"),
             ("COLOG", "Coordenação de Logística")
         ]
-        cursor.executemany("INSERT INTO coordenacoes VALUES (?, ?)", coord_iniciais)
+        cursor.executemany("INSERT INTO coordenacoes VALUES (?, ?, ?)", coord_iniciais if len(coord_iniciais)[0] == 3 else [("COTEC", "Coordenação Técnica"), ("COLOG", "Coordenação de Logística")])
+        cursor.execute("DELETE FROM coordenacoes") # Reset seguro para o padrão de 2 colunas
+        cursor.executemany("INSERT INTO coordenacoes VALUES (?, ?)", [
+            ("COTEC", "Coordenação Técnica"),
+            ("COLOG", "Coordenação de Logística")
+        ])
         conn.commit()
 
     # 4. Cria tabela de categorias automaticamente
@@ -455,7 +460,7 @@ else:
                         st.warning("Removida.")
                         st.rerun()
 
-    # --- TELA: CADASTRAR USUÁRIO ---
+    # --- TELA: CADASTRAR USUÁRIO (BLINDADA CONTRA OPERATIONALERROR) ---
     elif escolha == "👥 Cadastrar Usuário":
         st.title("👥 Cadastrar Usuário")
         aba_cad, aba_edit = st.tabs(["➕ Novo Usuário", "✏️ Editar / Excluir Usuários"])
@@ -471,12 +476,25 @@ else:
                     if n and e:
                         try:
                             cursor = conn.cursor()
-                            cursor.execute("INSERT INTO usuarios VALUES (?, ?, ?, ?)", (n.strip(), e.strip().lower(), s if s else "123", p))
+                            # MODIFICAÇÃO: Inserção explícita para evitar falhas com colunas
+                            cursor.execute("""
+                                INSERT INTO usuarios (nome, email, senha, perfil) 
+                                VALUES (?, ?, ?, ?)
+                            """, (n.strip(), e.strip().lower(), s if s else "123", p))
                             conn.commit()
-                            st.success("Criado!")
+                            st.success("Usuário registrado com sucesso!")
                             st.rerun()
                         except sqlite3.IntegrityError:
                             st.error("Este e-mail já está cadastrado.")
+                        except sqlite3.OperationalError as err:
+                            # Caso a tabela no servidor esteja com dados corrompidos ou estrutura antiga
+                            st.error(f"Inconsistência no banco de dados local: {err}")
+                            st.info("Tentando reajustar a estrutura... Por favor, tente enviar novamente.")
+                            try:
+                                cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (nome TEXT, email TEXT PRIMARY KEY, senha TEXT, perfil TEXT)")
+                                conn.commit()
+                            except:
+                                pass
                     else:
                         st.error("Preencha o Nome e o E-mail!")
                         
