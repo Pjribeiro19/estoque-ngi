@@ -10,7 +10,6 @@ import sqlite3
 # INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (SQLite)
 # =============================================================================
 def inicializar_banco_automatico():
-    # Cria ou conecta ao arquivo de banco de dados na mesma pasta do app
     conn = sqlite3.connect("almoxarifado.db", check_same_thread=False)
     cursor = conn.cursor()
     
@@ -66,12 +65,7 @@ def inicializar_banco_automatico():
     # Adiciona coordenações iniciais se estiver vazia
     cursor.execute("SELECT COUNT(*) FROM coordenacoes")
     if cursor.fetchone()[0] == 0:
-        coord_iniciais = [
-            ("COTEC", "Coordenação Técnica"),
-            ("COLOG", "Coordenação de Logística")
-        ]
-        cursor.executemany("INSERT INTO coordenacoes VALUES (?, ?, ?)", coord_iniciais if len(coord_iniciais)[0] == 3 else [("COTEC", "Coordenação Técnica"), ("COLOG", "Coordenação de Logística")])
-        cursor.execute("DELETE FROM coordenacoes") # Reset seguro para o padrão de 2 colunas
+        cursor.execute("DELETE FROM coordenacoes") 
         cursor.executemany("INSERT INTO coordenacoes VALUES (?, ?)", [
             ("COTEC", "Coordenação Técnica"),
             ("COLOG", "Coordenação de Logística")
@@ -90,7 +84,7 @@ def inicializar_banco_automatico():
         cursor.executemany("INSERT INTO categorias VALUES (?)", cat_iniciais)
         conn.commit()
 
-    # 5. Cria tabela de movimentações automaticamente (Estritamente 'quantidade')
+    # 5. Cria tabela de movimentações automaticamente
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS movimentacoes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -130,50 +124,45 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- ESTILIZAÇÃO CSS (Manutenção total do seu layout original) ---
+# --- ESTILIZAÇÃO CSS ATUALIZADA (Suporte a Dark Mode e Mobile Nativo) ---
 st.markdown("""
     <style>
-    @media (max-width: 991px) {
-        [data-testid="stSidebar"] {
-            transform: none !important;
-            position: relative !important;
-            min-width: 250px !important;
-            max-width: 250px !important;
-            display: block !important;
-        }
-        [data-testid="stSidebar"] button { display: none !important; }
-        .main { flex-direction: row !important; }
-        [data-testid="stAppViewBlockContainer"] {
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-            min-width: calc(100vw - 250px) !important;
-        }
-    }
+    /* Oculta menus padrão do Streamlit mantendo a acessibilidade */
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
+    
+    /* Configuração adaptável da Sidebar (Garante legibilidade no claro e escuro) */
     [data-testid="stSidebar"] {
-        background-color: #fcfaff !important;
-        border-right: 1px solid #efe9f5;
+        background-color: var(--background-color) !important;
+        border-right: 1px solid var(--secondary-background-color);
     }
+    
+    /* Customização dos itens do menu lateral usando variáveis dinâmicas de tema */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
-        color: #333333 !important;
+        color: var(--text-color) !important;
         font-weight: 500;
         padding: 12px 16px;
         border-radius: 4px;
         margin-bottom: 2px;
         transition: all 0.2s ease;
     }
+    
+    /* Efeito de Hover adaptável */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {
-        background-color: #e2eed7 !important;
-        color: #1e5934 !important;
+        background-color: rgba(76, 175, 80, 0.15) !important;
+        color: #4CAF50 !important;
         cursor: pointer;
     }
+    
+    /* Item Selecionado */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] input:checked + div {
-        background-color: #cce2b4 !important;
+        background-color: rgba(76, 175, 80, 0.25) !important;
         border-radius: 4px;
-        color: #1e5934 !important;
+        color: #4CAF50 !important;
         font-weight: bold !important;
     }
+    
+    /* Botões principais */
     div.stButton > button:first-child[kind="primary"] {
         background-color: #4CAF50 !important;
         border-color: #4CAF50 !important;
@@ -183,12 +172,16 @@ st.markdown("""
         background-color: #43a047 !important;
         border-color: #43a047 !important;
     }
+    
     .img-container {
         display: flex;
         justify-content: center;
         align-items: center;
         width: 100%;
         margin-bottom: 20px;
+        background-color: white; /* Mantém fundo branco para a logo do ICMBio não sumir no escuro */
+        padding: 15px;
+        border-radius: 8px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -216,7 +209,7 @@ if not st.session_state.autenticado:
                     <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="320">
                 </div>
             """, unsafe_allow_html=True)
-            st.markdown("<h2 style='text-align: center; color: #1e5934; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center; color: #4CAF50; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
             
             usuario_input = st.text_input("Usuário / E-mail")
             senha_input = st.text_input("Senha", type="password")
@@ -346,7 +339,7 @@ else:
 
             def destacar_zerados(row):
                 if row['Quantidade'] == 0:
-                    return ['background-color: #ffebee; color: #c62828; font-weight: bold'] * len(row)
+                    return ['background-color: rgba(198, 40, 40, 0.2); color: #c62828; font-weight: bold'] * len(row)
                 return [''] * len(row)
                 
             st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
@@ -460,7 +453,7 @@ else:
                         st.warning("Removida.")
                         st.rerun()
 
-    # --- TELA: CADASTRAR USUÁRIO (BLINDADA CONTRA OPERATIONALERROR) ---
+    # --- TELA: CADASTRAR USUÁRIO ---
     elif escolha == "👥 Cadastrar Usuário":
         st.title("👥 Cadastrar Usuário")
         aba_cad, aba_edit = st.tabs(["➕ Novo Usuário", "✏️ Editar / Excluir Usuários"])
@@ -476,7 +469,6 @@ else:
                     if n and e:
                         try:
                             cursor = conn.cursor()
-                            # MODIFICAÇÃO: Inserção explícita para evitar falhas com colunas
                             cursor.execute("""
                                 INSERT INTO usuarios (nome, email, senha, perfil) 
                                 VALUES (?, ?, ?, ?)
@@ -487,7 +479,6 @@ else:
                         except sqlite3.IntegrityError:
                             st.error("Este e-mail já está cadastrado.")
                         except sqlite3.OperationalError as err:
-                            # Caso a tabela no servidor esteja com dados corrompidos ou estrutura antiga
                             st.error(f"Inconsistência no banco de dados local: {err}")
                             st.info("Tentando reajustar a estrutura... Por favor, tente enviar novamente.")
                             try:
