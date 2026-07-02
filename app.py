@@ -230,6 +230,7 @@ if not st.session_state.autenticado:
                             
                             server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
                             server.starttls()
+                            server.open()
                             server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
                             server.sendmail(EMAIL_REMETENTE, email_rec.strip(), msg.as_string())
                             server.quit()
@@ -287,8 +288,15 @@ else:
         st.write("---")
         st.caption("Sistema Gestão Interna v3.2.0")
 
-    # --- MÓDULO 1: PAINEL GERAL DE MÊSTRICAS ---
-    if escolha == "🎛️ Painel Geral":
+    # --- ENCERRAMENTO DE SESSÃO DIRETO ---
+    if escolha == "🚪 Encerrar Sessão":
+        st.session_state.autenticado = False
+        st.session_state.NOME_USUARIO_LOGADO = ""
+        st.session_state.PERFIL_USUARIO = ""
+        st.rerun()
+
+    # --- MÓDULO 1: PAINEL GERAL DE METRICAS ---
+    elif escolha == "🎛️ Painel Geral":
         st.title("🎛️ Painel Geral de Controle de Estoque")
         st.write("Acompanhamento consolidado das métricas de materiais em tempo real.")
         st.markdown("<br>", unsafe_allow_html=True)
@@ -366,7 +374,7 @@ else:
                                 "valor_unitario": ins_preco
                             }
                             if inserir_dados("produtos", payload):
-                                st.success(f"Material '{ins_nome.strip()}' inserido com sucesso na base de dados com saldo inicial zerado!")
+                                st.success(f"Material '{ins_nome.strip()}' inserido com sucesso!")
                                 st.rerun()
                         else:
                             st.error("Campos obrigatórios em branco (Código e Descrição).")
@@ -461,7 +469,7 @@ else:
                                 st.success("Novo operador cadastrado com sucesso!")
                                 st.rerun()
                         else:
-                            st.error("Todos os campos do formulário técnico de usuário são obrigatórios.")
+                            st.error("Todos os campos do formulário são obrigatórios.")
 
             with tu2:
                 st.write("### Operadores Cadastrados no Ecossistema")
@@ -526,9 +534,7 @@ else:
                         row_p = df_produtos[df_produtos["item"] == ent_prod].iloc[0]
                         novo_calculo_qtd = int(row_p["quantidade"]) + ent_qtd
                         
-                        # Atualiza o saldo do material
                         if atualizar_dados("produtos", {"quantidade": novo_calculo_qtd}, "id", int(row_p["id"])):
-                            # Registra no histórico
                             mov_payload = {
                                 "data": datetime.today().strftime("%d/%m/%Y"),
                                 "tipo": "Entrada",
@@ -539,7 +545,7 @@ else:
                                 "coordenacao": "Almoxarifado"
                             }
                             inserir_dados("movimentacoes", mov_payload)
-                            st.success("Fluxo de entrada processado e armazenado com sucesso!")
+                            st.success("Fluxo de entrada processado com sucesso!")
                             st.rerun()
 
         with tab_saida:
@@ -559,9 +565,9 @@ else:
                         row_p_sai = df_produtos[df_produtos["item"] == sai_prod].iloc[0]
                         
                         if int(row_p_sai["quantidade"]) < sai_qtd:
-                            st.error(f"Erro: Saldo Indisponível! O estoque atual deste item é de apenas {row_p_sai['quantidade']} unidades.")
+                            st.error(f"Erro: Saldo Indisponível! Estoque atual: {row_p_sai['quantidade']} unidades.")
                         elif not sai_responsavel.strip():
-                            st.error("Informe o nome do servidor que realizou a retirada física do material.")
+                            st.error("Informe o nome do servidor responsável.")
                         else:
                             novo_calculo_qtd_sai = int(row_p_sai["quantidade"]) - sai_qtd
                             if atualizar_dados("produtos", {"quantidade": novo_calculo_qtd_sai}, "id", int(row_p_sai["id"])):
@@ -595,30 +601,19 @@ else:
             st.text_input("Operador logado:", value=st.session_state.NOME_USUARIO_LOGADO, disabled=True)
             st.text_input("Conta de Login:", value=st.session_state.LOGIN_USUARIO_LOGADO, disabled=True)
             st.text_input("E-mail Cadastrado:", value=st.session_state.EMAIL_USUARIO_LOGADO, disabled=True)
-            nova_senha_input = st.text_input("Nova Senha de Segurança:", type="password", placeholder="Insira a nova senha desejada")
+            nova_senha = st.text_input("Nova Senha Operacional:", type="password", placeholder="Digite a nova senha")
             
             if st.form_submit_button("Atualizar Minha Senha", type="primary"):
-                if nova_senha_input.strip():
-                    dados_user_ativos = buscar_dados("usuarios")
-                    user_alvo_id = None
-                    for us in dados_user_ativos:
-                        if us["email"].lower() == st.session_state.EMAIL_USUARIO_LOGADO.lower():
-                            user_alvo_id = us["id"]
+                if nova_senha.strip():
+                    # Busca o registro completo para encontrar a Id correta do usuário logado
+                    usuarios_lista = buscar_dados("usuarios")
+                    id_user = None
+                    for u in usuarios_lista:
+                        if u["usuario"].lower() == st.session_state.LOGIN_USUARIO_LOGADO.lower():
+                            id_user = u["id"]
                             break
                     
-                    if user_alvo_id and atualizar_dados("usuarios", {"senha": nova_senha_input.strip()}, "id", int(user_alvo_id)):
-                        st.success("Sua senha particular foi modificada e salva criptografada na nuvem!")
-                    else:
-                        st.error("Erro interno ao tentar localizar seu registro de ID.")
+                    if id_user and atualizar_dados("usuarios", {"senha": nova_senha.strip()}, "id", int(id_user)):
+                        st.success("Sua senha corporativa foi modificada com sucesso!")
                 else:
-                    st.error("O campo de nova senha não pode ficar vazio.")
-
-    # --- MÓDULO 8: LOGOUT / ENCERRAMENTO DE SESSÃO ---
-    elif escolha == "🚪 Encerrar Sessão":
-        st.session_state.autenticado = False
-        st.session_state.NOME_USUARIO_LOGADO = ""
-        st.session_state.PERFIL_USUARIO = ""
-        st.session_state.EMAIL_USUARIO_LOGADO = ""
-        st.session_state.LOGIN_USUARIO_LOGADO = ""
-        st.success("Sessão finalizada com sucesso! Até logo.")
-        st.rerun()
+                    st.error("A nova senha não pode ficar em branco.")
