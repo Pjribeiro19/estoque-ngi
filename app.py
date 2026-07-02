@@ -1,49 +1,39 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import sqlite3
-import secrets  # Para geração de tokens seguros
 
 # =============================================================================
 # INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (SQLite)
 # =============================================================================
 def inicializar_banco_automatico():
+    # Cria ou conecta ao arquivo de banco de dados na mesma pasta do app
     conn = sqlite3.connect("almoxarifado.db", check_same_thread=False)
     cursor = conn.cursor()
     
-    # 1. Cria/Atualiza tabela de usuários (agora com colunas de token de recuperação)
+    # 1. Cria tabela de usuários automaticamente
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             nome TEXT,
             email TEXT PRIMARY KEY,
             senha TEXT,
-            perfil TEXT,
-            token_recuperacao TEXT,
-            token_expiracao TEXT
+            perfil TEXT
         )
     """)
-    
-    # Bloco de migração de segurança (Garante as colunas se o banco já existia antes)
-    cursor.execute("PRAGMA table_info(usuarios)")
-    colunas = [col[1] for col in cursor.fetchall()]
-    if "token_recuperacao" not in colunas:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN token_recuperacao TEXT")
-    if "token_expiracao" not in colunas:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN token_expiracao TEXT")
     
     # Garante o usuário Administrador padrão para o primeiro acesso
     cursor.execute("SELECT COUNT(*) FROM usuarios")
     if cursor.fetchone()[0] == 0:
         cursor.execute("""
-            INSERT INTO usuarios (nome, email, senha, perfil, token_recuperacao, token_expiracao) 
-            VALUES ('Administrador Padrão', 'admin@ngi.com', '123', 'Administrador', NULL, NULL)
+            INSERT INTO usuarios (nome, email, senha, perfil) 
+            VALUES ('Administrador Padrão', 'admin@ngi.com', '123', 'Administrador')
         """)
         conn.commit()
 
-    # 2. Cria tabela de produtos
+    # 2. Cria tabela de produtos automaticamente
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS produtos (
             codigo TEXT PRIMARY KEY,
@@ -54,6 +44,7 @@ def inicializar_banco_automatico():
         )
     """)
     
+    # Adiciona itens iniciais se a tabela de produtos estiver vazia
     cursor.execute("SELECT COUNT(*) FROM produtos")
     if cursor.fetchone()[0] == 0:
         produtos_iniciais = [
@@ -64,7 +55,7 @@ def inicializar_banco_automatico():
         cursor.executemany("INSERT INTO produtos VALUES (?, ?, ?, ?, ?)", produtos_iniciais)
         conn.commit()
 
-    # 3. Cria tabela de coordenações
+    # 3. Cria tabela de coordenações automaticamente
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS coordenacoes (
             sigla TEXT PRIMARY KEY,
@@ -72,6 +63,7 @@ def inicializar_banco_automatico():
         )
     """)
     
+    # Adiciona coordenações iniciais se estiver vazia
     cursor.execute("SELECT COUNT(*) FROM coordenacoes")
     if cursor.fetchone()[0] == 0:
         coord_iniciais = [
@@ -81,7 +73,7 @@ def inicializar_banco_automatico():
         cursor.executemany("INSERT INTO coordenacoes VALUES (?, ?)", coord_iniciais)
         conn.commit()
 
-    # 4. Cria tabela de categorias
+    # 4. Cria tabela de categorias automaticamente
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS categorias (
             nome TEXT PRIMARY KEY
@@ -93,7 +85,7 @@ def inicializar_banco_automatico():
         cursor.executemany("INSERT INTO categorias VALUES (?)", cat_iniciais)
         conn.commit()
 
-    # 5. Cria tabela de movimentações
+    # 5. Cria tabela de movimentações automaticamente
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS movimentacoes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -110,6 +102,7 @@ def inicializar_banco_automatico():
     conn.commit()
     return conn
 
+# Ativa o banco de dados local
 conn = inicializar_banco_automatico()
 
 # =============================================================================
@@ -132,14 +125,16 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- ESTILIZAÇÃO CSS (Com suporte total ao fechar/abrir no celular) ---
+# --- ESTILIZAÇÃO CSS CORRIGIDA (Restaurando botão de recolher no mobile) ---
 st.markdown("""
     <style>
     @media (max-width: 991px) {
         [data-testid="stSidebar"] {
+            /* Permite o comportamento nativo de abrir/fechar do Streamlit no mobile */
             min-width: 260px !important;
             max-width: 260px !important;
         }
+        /* O botão de fechar não é mais ocultado */
         [data-testid="stAppViewBlockContainer"] {
             padding-left: 1rem !important;
             padding-right: 1rem !important;
@@ -201,20 +196,9 @@ if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = ""
 
 # =============================================================================
-# DETECÇÃO E CAPTURA DE TOKENS VIA URL (Query Parameters)
-# =============================================================================
-query_params = st.query_params
-token_url = query_params.get("token")
-
-if token_url and not st.session_state.autenticado:
-    st.session_state.sub_tela_login = "redefinir_senha"
-
-# =============================================================================
-# FLUXO 1: FLUXO DE LOGIN E RECUPERAÇÃO
+# FLUXO 1: FLUXO DE LOGIN
 # =============================================================================
 if not st.session_state.autenticado:
-    
-    # --- SUB-TELA: LOGIN TRADICIONAL ---
     if st.session_state.sub_tela_login == "login":
         st.markdown("<br><br>", unsafe_allow_html=True)
         col_l1, col_l2, col_l3 = st.columns([1, 1.2, 1])
@@ -253,7 +237,6 @@ if not st.session_state.autenticado:
                 st.session_state.sub_tela_login = "esqueci"
                 st.rerun()
 
-    # --- SUB-TELA: SOLICITAR RECUPERAÇÃO (GERAR LINK) ---
     elif st.session_state.sub_tela_login == "esqueci":
         col_r1, col_r2, col_r3 = st.columns([1, 1.2, 1])
         with col_r2:
@@ -261,128 +244,42 @@ if not st.session_state.autenticado:
             st.markdown("### 🔑 Recuperar Acesso")
             email_recuperar = st.text_input("E-mail corporativo", placeholder="exemplo@icmbio.gov.br")
 
-            if st.button("Enviar Link de Redefinição", type="primary", use_container_width=True):
+            if st.button("Enviar Instruções", type="primary", use_container_width=True):
                 if email_recuperar.strip():
                     cursor = conn.cursor()
                     cursor.execute("SELECT COUNT(*) FROM usuarios WHERE LOWER(email) = ?", (email_recuperar.strip().lower(),))
-                    
                     if cursor.fetchone()[0] > 0:
                         if EMAIL_REMETENTE == "configurar_no_secrets@email.com":
                             st.error("Erro de configuração nos Secrets do Streamlit.")
                         else:
                             try:
-                                # Gerar token seguro de 32 caracteres e expiração para 1 hora
-                                token = secrets.token_urlsafe(32)
-                                expiracao = (datetime.now() + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
-                                
-                                # Gravar dados temporários no usuário correspondente
-                                cursor.execute("""
-                                    UPDATE usuarios 
-                                    SET token_recuperacao = ?, token_expiracao = ? 
-                                    WHERE LOWER(email) = ?
-                                """, (token, expiracao, email_recuperar.strip().lower()))
-                                conn.commit()
-                                
-                                # Detectar a URL de origem do sistema rodando
-                                try:
-                                    url_base = st.get_option("browser.serverAddress")
-                                except:
-                                    url_base = "localhost:8501" # Fallback local padrao
-                                
-                                # Monta o link dinâmico para redefinição
-                                link_redefinicao = f"http://{url_base}/?token={token}"
-                                
                                 msg = MIMEMultipart()
                                 msg['From'] = EMAIL_REMETENTE
                                 msg['To'] = email_recuperar.strip()
-                                msg['Subject'] = "Redefinição de Senha - Almoxarifado NGI Carajás"
-                                
-                                corpo_email = f"""Olá,
-
-Uma solicitação de redefinição de senha foi feita para sua conta no Sistema de Almoxarifado NGI Carajás.
-
-Para criar uma nova senha, clique ou copie o link abaixo:
-{link_redefinicao}
-
-Este link é válido por 1 hora. Se você não solicitou essa mudança, ignore este e-mail.
-"""
+                                msg['Subject'] = "Recuperação de Senha - Sistema de Almoxarifado NGI Carajás"
+                                corpo_email = f"Sua senha provisória de contingência é: 123"
                                 msg.attach(MIMEText(corpo_email, 'plain'))
-                                
                                 server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
                                 server.starttls()
                                 server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
                                 server.sendmail(EMAIL_REMETENTE, email_recuperar.strip(), msg.as_string())
                                 server.quit()
-                                
-                                st.success(f"Sucesso! Link enviado para {email_recuperar}")
+                                st.success(f"Sucesso! Instruções enviadas para {email_recuperar}")
                             except Exception as e:
                                 st.error(f"Erro ao tentar enviar o e-mail: {e}")
                     else:
                         st.error("Este e-mail não foi encontrado no sistema.")
                 else:
                     st.warning("Por favor, digite um e-mail válido.")
-            
             if st.button("Voltar para o Login", use_container_width=True):
                 st.session_state.sub_tela_login = "login"
                 st.rerun()
-
-    # --- SUB-TELA: ENTRADA VIA LINK (FORMULÁRIO DE NOVA SENHA) ---
-    elif st.session_state.sub_tela_login == "redefinir_senha":
-        col_rf1, col_rf2, col_rf3 = st.columns([1, 1.2, 1])
-        with col_rf2:
-            st.write("<br><br>", unsafe_allow_html=True)
-            st.markdown("### 🔄 Criar Nova Senha")
-            
-            cursor = conn.cursor()
-            cursor.execute("SELECT email, token_expiracao FROM usuarios WHERE token_recuperacao = ?", (token_url,))
-            dados_token = cursor.fetchone()
-            
-            if dados_token:
-                email_usuario, data_expiracao_str = dados_token
-                data_expiracao = datetime.strptime(data_expiracao_str, "%Y-%m-%d %H:%M:%S")
-                
-                # Valida se o link ainda está dentro do prazo de validade de 1h
-                if datetime.now() < data_expiracao:
-                    nova_senha = st.text_input("Nova Senha:", type="password")
-                    confirmar_senha = st.text_input("Confirme a Nova Senha:", type="password")
-                    
-                    if st.button("Salvar Nova Senha", type="primary", use_container_width=True):
-                        if not nova_senha:
-                            st.error("O campo de senha não pode ficar em branco.")
-                        elif nova_senha != confirmar_senha:
-                            st.error("As senhas digitadas não conferem!")
-                        else:
-                            # Atualiza para a nova senha e destrói o token para não ser reusado
-                            cursor.execute("""
-                                UPDATE usuarios 
-                                SET senha = ?, token_recuperacao = NULL, token_expiracao = NULL 
-                                WHERE email = ?
-                            """, (nova_senha.strip(), email_usuario))
-                            conn.commit()
-                            
-                            # Limpa os query parameters da URL visual do navegador
-                            st.query_params.clear()
-                            
-                            st.success("Senha atualizada com sucesso!")
-                            st.session_state.sub_tela_login = "login"
-                            st.rerun()
-                else:
-                    st.error("❌ Este link de redefinição expirou! Solicite um novo link.")
-                    if st.button("Solicitar Novo Link", use_container_width=True):
-                        st.query_params.clear()
-                        st.session_state.sub_tela_login = "esqueci"
-                        st.rerun()
-            else:
-                st.error("❌ Link inválido ou token de redefinição já utilizado.")
-                if st.button("Ir para o Login", use_container_width=True):
-                    st.query_params.clear()
-                    st.session_state.sub_tela_login = "login"
-                    st.rerun()
 
 # =============================================================================
 # FLUXO 2: SISTEMA PRINCIPAL (PÓS-AUTENTICAÇÃO)
 # =============================================================================
 else:
+    # Sincroniza dinamicamente as tabelas do SQLite com os DataFrames da tela
     df_produtos = pd.read_sql_query("SELECT codigo AS Código, item AS Item, quantidade AS Quantidade, categoria AS Categoria, valor_unitario AS [Valor Unitário] FROM produtos", conn)
     df_movimentacoes = pd.read_sql_query("SELECT data AS Data, tipo AS Tipo, codigo AS Código, item AS Item, quantidade AS Quantidade, responsavel AS [Responsável pela Retirada], coordenacao AS [Coordenação] FROM movimentacoes", conn)
     df_coordenacoes = pd.read_sql_query("SELECT sigla AS Sigla, nome AS Nome FROM coordenacoes", conn)
@@ -573,7 +470,7 @@ else:
                     if n and e:
                         try:
                             cursor = conn.cursor()
-                            cursor.execute("INSERT INTO usuarios (nome, email, senha, perfil) VALUES (?, ?, ?, ?)", (n.strip(), e.strip().lower(), s if s else "123", p))
+                            cursor.execute("INSERT INTO usuarios VALUES (?, ?, ?, ?)", (n.strip(), e.strip().lower(), s if s else "123", p))
                             conn.commit()
                             st.success("Criado!")
                             st.rerun()
