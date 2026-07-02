@@ -124,45 +124,39 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- ESTILIZAÇÃO CSS ATUALIZADA (Suporte a Dark Mode e Mobile Nativo) ---
+# --- ESTILIZAÇÃO CSS COMPATÍVEL (Mobile Nativo + Suporte Dark Mode) ---
 st.markdown("""
     <style>
-    /* Oculta menus padrão do Streamlit mantendo a acessibilidade */
+    /* Remove menus padrões poluídos */
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
     
-    /* Configuração adaptável da Sidebar (Garante legibilidade no claro e escuro) */
-    [data-testid="stSidebar"] {
-        background-color: var(--background-color) !important;
-        border-right: 1px solid var(--secondary-background-color);
-    }
-    
-    /* Customização dos itens do menu lateral usando variáveis dinâmicas de tema */
+    /* Customização dos itens de rádio da Sidebar usando cores dinâmicas do sistema */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
         color: var(--text-color) !important;
         font-weight: 500;
-        padding: 12px 16px;
-        border-radius: 4px;
-        margin-bottom: 2px;
+        padding: 10px 14px;
+        border-radius: 6px;
+        margin-bottom: 4px;
         transition: all 0.2s ease;
     }
     
-    /* Efeito de Hover adaptável */
+    /* Efeito hover suave e adaptável */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {
         background-color: rgba(76, 175, 80, 0.15) !important;
         color: #4CAF50 !important;
         cursor: pointer;
     }
     
-    /* Item Selecionado */
+    /* Estilo do item ativo selecionado */
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] input:checked + div {
         background-color: rgba(76, 175, 80, 0.25) !important;
-        border-radius: 4px;
+        border-radius: 6px;
         color: #4CAF50 !important;
         font-weight: bold !important;
     }
     
-    /* Botões principais */
+    /* Botões Padrão Primários */
     div.stButton > button:first-child[kind="primary"] {
         background-color: #4CAF50 !important;
         border-color: #4CAF50 !important;
@@ -173,13 +167,14 @@ st.markdown("""
         border-color: #43a047 !important;
     }
     
+    /* Container para a Logotipo */
     .img-container {
         display: flex;
         justify-content: center;
         align-items: center;
         width: 100%;
         margin-bottom: 20px;
-        background-color: white; /* Mantém fundo branco para a logo do ICMBio não sumir no escuro */
+        background-color: white; 
         padding: 15px;
         border-radius: 8px;
     }
@@ -280,7 +275,6 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (PÓS-AUTENTICAÇÃO)
 # =============================================================================
 else:
-    # Sincroniza as tabelas do SQLite com os DataFrames da tela
     df_produtos = pd.read_sql_query("SELECT codigo AS Código, item AS Item, quantidade AS Quantidade, categoria AS Categoria, valor_unitario AS [Valor Unitário] FROM produtos", conn)
     df_movimentacoes = pd.read_sql_query("SELECT data AS Data, tipo AS Tipo, codigo AS Código, item AS Item, quantidade AS Quantidade, responsavel AS [Responsável pela Retirada], coordenacao AS [Coordenação] FROM movimentacoes", conn)
     df_coordenacoes = pd.read_sql_query("SELECT sigla AS Sigla, nome AS Nome FROM coordenacoes", conn)
@@ -325,7 +319,7 @@ else:
         if termo_busca:
             df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
         if categoria_selecionada != "Todas":
-            df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
+            df_filtrado = df_filtrado[df_filtrado['Category'] == categoria_selecionada] if 'Category' in df_filtrado.columns else df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
         st.write("### 📋 Estoque Atualizado")
         if df_filtrado.empty:
