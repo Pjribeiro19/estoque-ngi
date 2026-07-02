@@ -125,23 +125,20 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- ESTILIZAÇÃO CSS (Manutenção total do seu layout original) ---
+# --- ESTILIZAÇÃO CSS CORRIGIDA (Restaurando botão de recolher no mobile) ---
 st.markdown("""
     <style>
     @media (max-width: 991px) {
         [data-testid="stSidebar"] {
-            transform: none !important;
-            position: relative !important;
-            min-width: 250px !important;
-            max-width: 250px !important;
-            display: block !important;
+            /* Permite o comportamento nativo de abrir/fechar do Streamlit no mobile */
+            min-width: 260px !important;
+            max-width: 260px !important;
         }
-        [data-testid="stSidebar"] button { display: none !important; }
-        .main { flex-direction: row !important; }
+        /* O botão de fechar não é mais ocultado */
         [data-testid="stAppViewBlockContainer"] {
             padding-left: 1rem !important;
             padding-right: 1rem !important;
-            min-width: calc(100vw - 250px) !important;
+            width: 100% !important;
         }
     }
     [data-testid="stSidebarNav"] {display: none;}
@@ -213,7 +210,6 @@ if not st.session_state.autenticado:
             """, unsafe_allow_html=True)
             st.markdown("<h2 style='text-align: center; color: #1e5934; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
             
-            # AJUSTE AQUI: Removido os valores/placeholders padrões para iniciar vazio
             usuario_input = st.text_input("Usuário / E-mail")
             senha_input = st.text_input("Senha", type="password")
             st.markdown("<br>", unsafe_allow_html=True)
@@ -289,7 +285,7 @@ else:
     df_coordenacoes = pd.read_sql_query("SELECT sigla AS Sigla, nome AS Nome FROM coordenacoes", conn)
     
     df_cat_bruto = pd.read_sql_query("SELECT nome FROM categories" if "categories" in pd.read_sql_query("SELECT name FROM sqlite_master WHERE type='table'", conn).values else "SELECT nome FROM categorias", conn)
-    lista_categorias = df_cat_bruto["nome"].tolist()
+    lista_categories = df_cat_bruto["nome"].tolist()
 
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
@@ -306,8 +302,14 @@ else:
         ]
         escolha = st.radio("", menu_opcoes, label_visibility="collapsed")
 
+    # --- Sair do Sistema ---
+    if escolha == "🚪 Sair":
+        st.session_state.autenticado = False
+        st.session_state.NOME_USUARIO_LOGADO = ""
+        st.rerun()
+
     # --- TELA: PAINEL GERAL ---
-    if escolha == "🎛️ Painel Geral":
+    elif escolha == "🎛️ Painel Geral":
         st.title("🎛️ Painel Geral de Estoque")
         c1, c2, c3 = st.columns(3)
         c1.metric("Total de Itens Cadastrados", len(df_produtos))
@@ -318,7 +320,7 @@ else:
         st.write("### 🔍 Ferramentas de Busca e Filtro")
         col_filtro1, col_filtro2 = st.columns([2, 1])
         termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite para pesquisar...")
-        categoria_selecionada = col_filtro2.selectbox("Filtrar por Categoria:", ["Todas"] + lista_categorias)
+        categoria_selecionada = col_filtro2.selectbox("Filtrar por Categoria:", ["Todas"] + lista_categories)
         
         df_filtrado = df_produtos.copy()
         if termo_busca:
@@ -353,7 +355,7 @@ else:
                 col_a, col_b = st.columns(2)
                 cod = col_a.text_input("Código")
                 nome_it = col_b.text_input("Nome do Material")
-                cat_it = col_a.selectbox("Categoria", lista_categorias)
+                cat_it = col_a.selectbox("Categoria", lista_categories)
                 val_unit = col_b.number_input("Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
                 st.caption("ℹ️ Novos materiais são registrados com saldo inicial 0.")
                 
@@ -385,8 +387,8 @@ else:
                 edit_qtd = col_ed1.number_input("Quantidade (Ajuste):", min_value=0, value=int(df_raw_prod.loc[opcao_selecionada, "quantidade"]))
                 
                 cat_atual = df_raw_prod.loc[opcao_selecionada, "categoria"]
-                idx_cat_padrao = lista_categorias.index(cat_atual) if cat_atual in lista_categorias else 0
-                edit_cat = col_ed2.selectbox("Categoria:", lista_categorias, index=idx_cat_padrao)
+                idx_cat_padrao = lista_categories.index(cat_atual) if cat_atual in lista_categories else 0
+                edit_cat = col_ed2.selectbox("Categoria:", lista_categories, index=idx_cat_padrao)
                 edit_val = st.number_input("Valor Unitário:", min_value=0.0, step=0.01, format="%.2f", value=float(df_raw_prod.loc[opcao_selecionada, "valor_unitario"]))
                 
                 col_b_prod1, col_b_prod2 = st.columns([1, 4])
@@ -429,11 +431,11 @@ else:
                         except sqlite3.IntegrityError:
                             st.error("Esta categoria já existe.")
             with col_cat2:
-                st.dataframe(pd.DataFrame(lista_categorias, columns=["Categorias Ativas"]), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(lista_categories, columns=["Categorias Ativas"]), use_container_width=True, hide_index=True)
                 
         with aba_gerenciar_cat:
-            if lista_categorias:
-                cat_selecionada = st.selectbox("Selecione a categoria:", lista_categorias)
+            if lista_categories:
+                cat_selecionada = st.selectbox("Selecione a categoria:", lista_categories)
                 edit_nome_cat = st.text_input("Editar Nome:", value=cat_selecionada)
                 
                 c_btn_cat1, c_btn_cat2 = st.columns([1, 4])
@@ -571,7 +573,7 @@ else:
                 with st.form("form_registrar_entrada", clear_on_submit=True):
                     col_e1, col_e2 = st.columns(2)
                     data_entrada = col_e1.date_input("Data:", value=datetime.today(), format="DD/MM/YYYY")
-                    idx_prod_ent = col_e2.selectbox("Material:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})")
+                    idx_prod_ent = col_e2.selectbox("Material (Entrada):", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})")
                     qtd_entrada = st.number_input("Quantidade Entrada:", min_value=1, step=1)
                     
                     if st.form_submit_button("Confirmar Entrada", type="primary"):
@@ -596,7 +598,7 @@ else:
                 with st.form("form_registrar_saida", clear_on_submit=True):
                     col_s1, col_s2 = st.columns(2)
                     data_saida = col_s1.date_input("Data:", value=datetime.today(), format="DD/MM/YYYY")
-                    idx_prod_sai = col_s2.selectbox("Material:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})")
+                    idx_prod_sai = col_s2.selectbox("Material (Saída):", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})")
                     qtd_saida = col_s1.number_input("Quantidade Saída:", min_value=1, step=1)
                     
                     lista_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["Sem Coordenações"]
@@ -617,32 +619,22 @@ else:
                             cursor = conn.cursor()
                             cursor.execute("UPDATE produtos SET quantidade = ? WHERE codigo = ?", (novo_saldo, cod_p))
                             cursor.execute("""
-                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantity, responsavel, coordenacao) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?)
-                            """ if "quantity" in pd.read_sql_query("PRAGMA table_info(movimentacoes)", conn)["name"].tolist() else """
                                 INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
                                 VALUES (?, ?, ?, ?, ?, ?, ?)
                             """, (data_saida.strftime("%d/%m/%Y"), "Saída", cod_p, nome_p, qtd_saida, resp_retirada.strip(), coord_retirada))
                             conn.commit()
                             st.success("Saída registrada com sucesso!")
                             st.rerun()
-                            
+
         with aba_historico:
-            st.write("### 📜 Registros de Fluxo")
+            st.write("### 📋 Histórico Geral de Entradas e Saídas")
             if df_movimentacoes.empty:
-                st.info("Nenhuma movimentação realizada até o momento.")
+                st.info("Nenhuma movimentação foi registrada ainda.")
             else:
                 st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
 
     # --- TELA: PERFIL ---
     elif escolha == "👤 Perfil":
-        st.title("👤 Meu Perfil de Acesso")
+        st.title("👤 Meu Perfil")
         st.write(f"**Usuário conectado:** {st.session_state.NOME_USUARIO_LOGADO}")
-        st.info("As configurações de alteração de senha individual podem ser adicionadas aqui.")
-
-    # --- TELA: SAIR ---
-    elif escolha == "🚪 Sair":
-        st.session_state.autenticado = False
-        st.session_state.NOME_USUARIO_LOGADO = ""
-        st.session_state.sub_tela_login = "login"
-        st.rerun()
+        st.info("Para alterar sua senha ou dados de cadastro, entre em contato com o administrador do sistema.")
