@@ -286,12 +286,12 @@ else:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("---")
         menu_opcoes = [
-            "🎛️ Painel Geral",
-            "➕ Cadastrar Produto",
+            "📊 Painel Geral",
+            "📦 Cadastrar Produto",
             "🗂️ Cadastrar Categoria",
             "👥 Cadastrar Usuário",
             "🏢 Cadastrar Coordenação",
-            "🔄 Movimentação de Entrada e Saída",
+            "🔄 Movimentação de Estoque",
             "🚪 Sair"
         ]
         escolha = st.radio("Navegação", menu_opcoes, label_visibility="collapsed")
@@ -302,17 +302,56 @@ else:
         st.rerun()
 
     # --- TELA: PAINEL GERAL ---
-    elif escolha == "🎛️ Painel Geral":
-        st.title("🎛️ Painel Geral de Estoque")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Total de Itens Cadastrados", len(df_produtos))
-        c2.metric("Produtos Esgotados", len(df_produtos[df_produtos['Quantidade'] == 0]) if not df_produtos.empty else 0)
-        c3.metric("Movimentações Realizadas", len(df_movimentacoes))
-        st.write("---")
+    elif escolha == "📊 Painel Geral":
+        # Cabeçalho corporativo integrado e profissional
+        st.markdown("""
+            <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+                <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+                    📊 Dashboard de Controle de Estoque
+                </h1>
+                <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                    Visão Geral de Saldos, Alertas de Materiais e Fluxo de Insumos NGI Carajás
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
         
-        st.write("### 🔍 Ferramentas de Busca e Filtro")
+        # Bloco de Cartões Executivos Customizados (Substituindo o st.metric cru)
+        c1, c2, c3 = st.columns(3)
+        total_itens = len(df_produtos)
+        produtos_esgotados = len(df_produtos[df_produtos['Quantidade'] == 0]) if not df_produtos.empty else 0
+        total_movimentacoes = len(df_movimentacoes)
+        
+        c1.markdown(f"""
+            <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 5px solid #4CAF50; padding: 18px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Total de Itens Cadastrados</span>
+                <h2 style="color: #4CAF50; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_itens}</h2>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # Cartão dinâmico: Alerta vermelho corporativo suave se houver material zerado
+        cor_esgotados = "#c62828" if produtos_esgotados > 0 else "#4CAF50"
+        bg_esgotados = "rgba(198, 40, 40, 0.08)" if produtos_esgotados > 0 else "rgba(76, 175, 80, 0.08)"
+        
+        c2.markdown(f"""
+            <div style="background-color: {bg_esgotados}; border-left: 5px solid {cor_esgotados}; padding: 18px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Produtos Esgotados</span>
+                <h2 style="color: {cor_esgotados}; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{produtos_esgotados}</h2>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        c3.markdown(f"""
+            <div style="background-color: rgba(33, 150, 243, 0.08); border-left: 5px solid #2196F3; padding: 18px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Movimentações Realizadas</span>
+                <h2 style="color: #2196F3; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_movimentacoes}</h2>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("<br><hr style='margin: 10px 0 25px 0; opacity: 0.15;'>", unsafe_allow_html=True)
+        
+        # Filtros e Ferramentas de Busca
+        st.markdown("<h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>🔍 Filtros de Consulta</h3>", unsafe_allow_html=True)
         col_filtro1, col_filtro2 = st.columns([2, 1])
-        termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite para pesquisar...")
+        termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...")
         categoria_selecionada = col_filtro2.selectbox("Filtrar por Categoria:", ["Todas"] + lista_categorias)
         
         df_filtrado = df_produtos.copy()
@@ -321,7 +360,7 @@ else:
         if categoria_selecionada != "Todas":
             df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
-        st.write("### 📋 Estoque Atualizado")
+        st.markdown("<br><h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>📋 Posição Atual do Estoque</h3>", unsafe_allow_html=True)
         if df_filtrado.empty:
             st.info("Nenhum material encontrado com os filtros aplicados.")
         else:
@@ -333,13 +372,13 @@ else:
 
             def destacar_zerados(row):
                 if row['Quantidade'] == 0:
-                    return ['background-color: rgba(198, 40, 40, 0.2); color: #c62828; font-weight: bold'] * len(row)
+                    return ['background-color: rgba(198, 40, 40, 0.12); color: #c62828; font-weight: bold;'] * len(row)
                 return [''] * len(row)
                 
             st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
 
     # --- TELA: CADASTRAR PRODUTO ---
-    elif escolha == "➕ Cadastrar Produto":
+    elif escolha == "📦 Cadastrar Produto":
         st.title("➕ Gerenciamento de Produtos")
         aba_cad_prod, aba_gerenciar_prod = st.tabs(["➕ Novo Material", "✏️ Editar / Excluir Produtos"])
         
@@ -552,7 +591,7 @@ else:
                         st.rerun()
 
     # --- TELA: MOVIMENTAÇÃO DE ENTRADA E SAÍDA ---
-    elif escolha == "🔄 Movimentação de Entrada e Saída":
+    elif escolha == "🔄 Movimentação de Estoque":
         st.title("🔄 Movimentação de Entrada e Saída")
         aba_entrada, aba_saida, aba_historico = st.tabs(["📥 Registrar Entrada", "📤 Registrar Saída", "📋 Histórico de Entradas/Saídas"])
         
