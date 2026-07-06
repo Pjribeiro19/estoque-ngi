@@ -224,7 +224,7 @@ if not st.session_state.autenticado:
                         if str(senha_banco) == str(senha_input).strip():
                             st.session_state.autenticado = True
                             st.session_state.NOME_USUARIO_LOGADO = nome_banco
-                            st.session_state.PERFIL_USUARIO_LOGADO = perfil_banco
+                            st.session_state.PERFIL_USUARIO_LOGADO = str(perfil_banco).strip()
                             st.rerun()
                         else:
                             st.error("❌ Senha incorreta!")
@@ -291,22 +291,23 @@ else:
         st.markdown(f"**Perfil:** `{st.session_state.PERFIL_USUARIO_LOGADO}`")
         st.write("---")
         
-        # Menu ajustado para incluir a tela de categorias para o Usuário Comum
-        if st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
-            menu_opcoes = [
-                "🎛️ Painel Geral",
-                "➕ Cadastrar Produto",
-                "🗂️ Cadastrar Categoria",
-                "🔄 Movimentação de Entrada e Saída",
-                "🚪 Sair"
-            ]
-        else:
+        # CHECAGEM BLINDADA: Se contiver "admin" (Independente de como foi escrito no banco), libera tudo.
+        if "admin" in st.session_state.PERFIL_USUARIO_LOGADO.lower():
             menu_opcoes = [
                 "🎛️ Painel Geral",
                 "➕ Cadastrar Produto",
                 "🗂️ Cadastrar Categoria",
                 "👥 Cadastrar Usuário",
                 "🏢 Cadastrar Coordenação",
+                "🔄 Movimentação de Entrada e Saída",
+                "🚪 Sair"
+            ]
+        else:
+            # Qualquer outro perfil (Usuário Comum, Usuário, etc.) fica limitado aqui
+            menu_opcoes = [
+                "🎛️ Painel Geral",
+                "➕ Cadastrar Produto",
+                "🗂️ Cadastrar Categoria",
                 "🔄 Movimentação de Entrada e Saída",
                 "🚪 Sair"
             ]
@@ -651,6 +652,6 @@ else:
         with aba_historico:
             st.markdown("### 📋 Histórico Completo de Movimentações")
             if df_movimentacoes.empty:
-                st.info("Nenhum movimentação registrada até o momento.")
+                st.info("Nenhuma movimentação registrada até o momento.")
             else:
                 st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
