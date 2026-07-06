@@ -124,8 +124,10 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- ESTILIZAÇÃO CSS (Manutenção total do seu layout original) ---
+# --- ESTILIZAÇÃO CSS (Injeção de ícones externos do Bootstrap e manutenção do seu tema) ---
 st.markdown("""
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    
     <style>
     @media (max-width: 991px) {
         [data-testid="stSidebar"] {
@@ -290,32 +292,69 @@ else:
     lista_categorias = df_cat_bruto["nome"].tolist()
 
     with st.sidebar:
-        st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
+        st.markdown(f"#### 👥 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("---")
+        # Ícones limpos substituídos no menu lateral por texto direto (removido os emojis infantis)
         menu_opcoes = [
-            "🎛️ Painel Geral",
-            "➕ Cadastrar Produto",
-            "🗂️ Cadastrar Categoria",
-            "👥 Cadastrar Usuário",
-            "🏢 Cadastrar Coordenação",
-            "🔄 Movimentação de Entrada e Saída",
-            "🚪 Sair"
+            "Painel Geral",
+            "Cadastrar Produto",
+            "Cadastrar Categoria",
+            "Cadastrar Usuário",
+            "Cadastrar Coordenação",
+            "Movimentação de Entrada e Saída",
+            "Sair"
         ]
         escolha = st.radio("", menu_opcoes, label_visibility="collapsed")
 
-    if escolha == "🚪 Sair":
+    if escolha == "Sair":
         st.session_state.autenticado = False
         st.session_state.NOME_USUARIO_LOGADO = ""
         st.rerun()
 
     # --- TELA: PAINEL GERAL ---
-    elif escolha == "🎛️ Painel Geral":
-        st.title("🎛️ Painel Geral de Estoque")
+    elif escolha == "Painel Geral":
+        st.markdown("<h2 style='color: #1e293b; font-weight: 700;'>Painel Geral de Estoque</h2>", unsafe_allow_html=True)
+        st.markdown("---")
+        
+        # Valores calculados dinamicamente das tabelas
+        total_itens = len(df_produtos)
+        produtos_esgotados = len(df_produtos[df_produtos['Quantidade'] == 0]) if not df_produtos.empty else 0
+        total_movimentacoes = len(df_movimentacoes)
+        
+        # Estrutura de layout em colunas para os Cards Corporativos Similares ao seu modelo
         c1, c2, c3 = st.columns(3)
-        c1.metric("Total de Itens Cadastrados", len(df_produtos))
-        c2.metric("Produtos Esgotados", len(df_produtos[df_produtos['Quantidade'] == 0]) if not df_produtos.empty else 0)
-        c3.metric("Movimentações Realizadas", len(df_movimentacoes))
-        st.write("---")
+        
+        with c1:
+            st.markdown(f"""
+                <div style="background-color: #f8fafc; padding: 22px; border-radius: 6px; border-left: 5px solid #2563eb; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <p style="margin: 0; font-size: 13px; color: #64748b; font-weight: 600; letter-spacing: 0.5px;">
+                        <i class="bi bi-boxes" style="margin-right: 6px; color: #2563eb; font-size: 15px;"></i> TOTAL DE ITENS CADASTRADOS
+                    </p>
+                    <h2 style="margin: 8px 0 0 0; font-size: 32px; color: #1e293b; font-weight: 700;">{total_itens}</h2>
+                </div>
+            """, unsafe_allow_html=True)
+            
+        with c2:
+            st.markdown(f"""
+                <div style="background-color: #f8fafc; padding: 22px; border-radius: 6px; border-left: 5px solid #dc2626; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <p style="margin: 0; font-size: 13px; color: #64748b; font-weight: 600; letter-spacing: 0.5px;">
+                        <i class="bi bi-exclamation-triangle" style="margin-right: 6px; color: #dc2626; font-size: 15px;"></i> PRODUTOS ESGOTADOS
+                    </p>
+                    <h2 style="margin: 8px 0 0 0; font-size: 32px; color: #dc2626; font-weight: 700;">{produtos_esgotados}</h2>
+                </div>
+            """, unsafe_allow_html=True)
+            
+        with c3:
+            st.markdown(f"""
+                <div style="background-color: #f8fafc; padding: 22px; border-radius: 6px; border-left: 5px solid #16a34a; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                    <p style="margin: 0; font-size: 13px; color: #64748b; font-weight: 600; letter-spacing: 0.5px;">
+                        <i class="bi bi-arrow-left-right" style="margin-right: 6px; color: #16a34a; font-size: 15px;"></i> MOVIMENTAÇÕES REALIZADAS
+                    </p>
+                    <h2 style="margin: 8px 0 0 0; font-size: 32px; color: #1e293b; font-weight: 700;">{total_movimentacoes}</h2>
+                </div>
+            """, unsafe_allow_html=True)
+            
+        st.write("<br>", unsafe_allow_html=True)
         
         st.write("### 🔍 Ferramentas de Busca e Filtro")
         col_filtro1, col_filtro2 = st.columns([2, 1])
@@ -346,7 +385,7 @@ else:
             st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
 
     # --- TELA: CADASTRAR PRODUTO ---
-    elif escolha == "➕ Cadastrar Produto":
+    elif escolha == "Cadastrar Produto":
         st.title("➕ Gerenciamento de Produtos")
         aba_cad_prod, aba_gerenciar_prod = st.tabs(["➕ Novo Material", "✏️ Editar / Excluir Produtos"])
         
@@ -412,7 +451,7 @@ else:
                         st.rerun()
 
     # --- TELA: CADASTRAR CATEGORIA ---
-    elif escolha == "🗂️ Cadastrar Categoria":
+    elif escolha == "Cadastrar Categoria":
         st.title("🗂️ Gerenciamento de Categorias")
         aba_nova_cat, aba_gerenciar_cat = st.tabs(["➕ Nova Categoria", "✏️ Editar / Excluir Categorias"])
         
@@ -449,13 +488,13 @@ else:
                 with c_btn_cat2:
                     if st.button("❌ Excluir Categoria"):
                         cursor = conn.cursor()
-                        cursor.execute("DELETE FROM categorias WHERE nome = ?", (cat_selecionada,))
+                        cursor.execute("DELETE FROM categories WHERE nome = ?", (cat_selecionada,))
                         conn.commit()
                         st.warning("Removida.")
                         st.rerun()
 
     # --- TELA: CADASTRAR USUÁRIO ---
-    elif escolha == "👥 Cadastrar Usuário":
+    elif escolha == "Cadastrar Usuário":
         st.title("👥 Cadastrar Usuário")
         aba_cad, aba_edit = st.tabs(["➕ Novo Usuário", "✏️ Editar / Excluir Usuários"])
         
@@ -522,7 +561,7 @@ else:
                         st.rerun()
 
     # --- TELA: CADASTRAR COORDENAÇÃO ---
-    elif escolha == "🏢 Cadastrar Coordenação":
+    elif escolha == "Cadastrar Coordenação":
         st.title("🏢 Cadastrar Coordenação")
         aba_c1, aba_c2 = st.tabs(["➕ Nova Coordenação", "✏️ Editar / Excluir Coordenação"])
         
@@ -571,7 +610,7 @@ else:
                         st.rerun()
 
     # --- TELA: MOVIMENTAÇÃO DE ENTRADA E SAÍDA ---
-    elif escolha == "🔄 Movimentação de Entrada e Saída":
+    elif escolha == "Movimentação de Entrada e Saída":
         st.title("🔄 Movimentação de Entrada e Saída")
         aba_entrada, aba_saida, aba_historico = st.tabs(["📥 Registrar Entrada", "📤 Registrar Saída", "📋 Histórico de Entradas/Saídas"])
         
@@ -638,8 +677,7 @@ else:
                             st.rerun()
 
         with aba_historico:
-            st.write("### 📋 Histórico Completo de Movimentações")
             if df_movimentacoes.empty:
-                st.info("Nenhuma movimentação registrada até o momento.")
+                st.info("Nenhuma movimentação foi registrada até o momento.")
             else:
                 st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
