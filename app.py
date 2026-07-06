@@ -5,6 +5,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import sqlite3
+from streamlit_option_menu import option_menu
 
 # =============================================================================
 # INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (SQLite)
@@ -13,7 +14,7 @@ def inicializar_banco_automatico():
     conn = sqlite3.connect("almoxarifado.db", check_same_thread=False)
     cursor = conn.cursor()
     
-    # 1. Cria tabela de usuários automaticamente
+    # 1. Tabela de usuários
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             nome TEXT,
@@ -23,7 +24,6 @@ def inicializar_banco_automatico():
         )
     """)
     
-    # Garante o usuário Administrador padrão para o primeiro acesso
     cursor.execute("SELECT COUNT(*) FROM usuarios")
     if cursor.fetchone()[0] == 0:
         cursor.execute("""
@@ -32,7 +32,7 @@ def inicializar_banco_automatico():
         """)
         conn.commit()
 
-    # 2. Cria tabela de produtos automaticamente
+    # 2. Tabela de produtos
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS produtos (
             codigo TEXT PRIMARY KEY,
@@ -43,7 +43,6 @@ def inicializar_banco_automatico():
         )
     """)
     
-    # Adiciona itens iniciais se a tabela de produtos estiver vazia
     cursor.execute("SELECT COUNT(*) FROM produtos")
     if cursor.fetchone()[0] == 0:
         produtos_iniciais = [
@@ -54,7 +53,7 @@ def inicializar_banco_automatico():
         cursor.executemany("INSERT INTO produtos VALUES (?, ?, ?, ?, ?)", produtos_iniciais)
         conn.commit()
 
-    # 3. Cria tabela de coordenações automaticamente
+    # 3. Tabela de coordenações
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS coordenacoes (
             sigla TEXT PRIMARY KEY,
@@ -62,7 +61,6 @@ def inicializar_banco_automatico():
         )
     """)
     
-    # Adiciona coordenações iniciais se estiver vazia
     cursor.execute("SELECT COUNT(*) FROM coordenacoes")
     if cursor.fetchone()[0] == 0:
         cursor.executemany("INSERT INTO coordenacoes VALUES (?, ?)", [
@@ -71,7 +69,7 @@ def inicializar_banco_automatico():
         ])
         conn.commit()
 
-    # 4. Cria tabela de categorias automaticamente
+    # 4. Tabela de categorias
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS categorias (
             nome TEXT PRIMARY KEY
@@ -83,7 +81,7 @@ def inicializar_banco_automatico():
         cursor.executemany("INSERT INTO categorias VALUES (?)", cat_iniciais)
         conn.commit()
 
-    # 5. Cria tabela de movimentações automaticamente
+    # 5. Tabela de movimentações
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS movimentacoes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -123,37 +121,12 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- ESTILIZAÇÃO CSS COMPATÍVEL (Mobile Nativo + Suporte Dark Mode) ---
+# --- ESTILIZAÇÃO CSS COMPATÍVEL (Limpeza de Layout e Suporte) ---
 st.markdown("""
     <style>
-    /* Remove menus padrões poluídos */
+    /* Remove menus padrões poluídos e a navegação nativa por rádio */
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
-    
-    /* Customização dos itens de rádio da Sidebar usando cores dinâmicas do sistema */
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
-        color: var(--text-color) !important;
-        font-weight: 500;
-        padding: 10px 14px;
-        border-radius: 6px;
-        margin-bottom: 4px;
-        transition: all 0.2s ease;
-    }
-    
-    /* Efeito hover suave e adaptável */
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {
-        background-color: rgba(76, 175, 80, 0.15) !important;
-        color: #4CAF50 !important;
-        cursor: pointer;
-    }
-    
-    /* Estilo do item ativo selecionado */
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] input:checked + div {
-        background-color: rgba(76, 175, 80, 0.25) !important;
-        border-radius: 6px;
-        color: #4CAF50 !important;
-        font-weight: bold !important;
-    }
     
     /* Botões Padrão Primários */
     div.stButton > button:first-child[kind="primary"] {
@@ -274,7 +247,6 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (PÓS-AUTENTICAÇÃO)
 # =============================================================================
 else:
-    # Carrega dados do banco com segurança
     df_produtos = pd.read_sql_query("SELECT codigo AS Código, item AS Item, quantidade AS Quantidade, categoria AS Categoria, valor_unitario AS [Valor Unitário] FROM produtos", conn)
     df_movimentacoes = pd.read_sql_query("SELECT data AS Data, tipo AS Tipo, codigo AS Código, item AS Item, quantidade AS Quantidade, responsavel AS [Responsável], coordenacao AS [Coordenação] FROM movimentacoes", conn)
     df_coordenacoes = pd.read_sql_query("SELECT sigla AS Sigla, nome AS Nome FROM coordenacoes", conn)
@@ -282,29 +254,59 @@ else:
     df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
     lista_categorias = df_cat_bruto["nome"].tolist()
 
+    # --- MENU LATERAL ATUALIZADO COM OS ÍCONES MODERNOS ---
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("---")
         
-        # MAPEAMENTO DE ÍCONES SEMELHANTES AO EXEMPLO (Bootstrap Icons nativos)
-        menu_opcoes = [
-            "📊 Painel Geral",
-            "📦 Cadastrar Produto",
-            "📂 Cadastrar Categoria",
-            "👥 Cadastrar Usuário",
-            "🏢 Cadastrar Coordenação",
-            "🔄 Movimentação de Estoque",
-            "🚪 Sair do Sistema"
-        ]
-        escolha = st.radio("Navegação", menu_opcoes, label_visibility="collapsed")
+        escolha = option_menu(
+            menu_title=None,
+            options=[
+                "Painel Geral", 
+                "Cadastrar Produto", 
+                "Cadastrar Categoria", 
+                "Cadastrar Usuário", 
+                "Cadastrar Coordenação",
+                "Movimentação de Estoque",
+                "Sair do Sistema"
+            ],
+            # Classes de ícones planos e limpos (idêntico à sua imagem de referência)
+            icons=[
+                "grid",             # Painel Geral
+                "box",              # Cadastrar Produto
+                "folder",           # Cadastrar Categoria
+                "person-plus",      # Cadastrar Usuário
+                "building",         # Cadastrar Coordenação
+                "arrow-left-right", # Movimentação
+                "box-arrow-right"   # Sair do Sistema
+            ],
+            menu_icon="cast",
+            default_index=0,
+            styles={
+                "container": {"padding": "0!important", "background-color": "transparent"},
+                "icon": {"color": "#64748b", "font-size": "15px"}, 
+                "nav-link": {
+                    "font-size": "14px", 
+                    "text-align": "left", 
+                    "margin": "0px", 
+                    "color": "#334155",
+                    "--hover-color": "rgba(76, 175, 80, 0.12)"
+                },
+                "nav-link-selected": {
+                    "background-color": "#4CAF50", 
+                    "color": "white", 
+                    "font-weight": "500"
+                },
+            }
+        )
 
-    if escolha == "🚪 Sair do Sistema":
+    if escolha == "Sair do Sistema":
         st.session_state.autenticado = False
         st.session_state.NOME_USUARIO_LOGADO = ""
         st.rerun()
 
     # --- TELA: PAINEL GERAL ---
-    elif escolha == "📊 Painel Geral":
+    elif escolha == "Painel Geral":
         st.markdown("""
             <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
@@ -322,8 +324,8 @@ else:
         total_movimentacoes = len(df_movimentacoes)
         
         c1.markdown(f"""
-            <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 5px solid #4CAF50; padding: 18px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Total de Itens Cadastrados</span>
+            <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 5px solid #4CAF50; padding: 18px; border-radius: 4px;">
+                <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase;">Total de Itens Cadastrados</span>
                 <h2 style="color: #4CAF50; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_itens}</h2>
             </div>
         """, unsafe_allow_html=True)
@@ -332,15 +334,15 @@ else:
         bg_esgotados = "rgba(198, 40, 40, 0.08)" if produtos_esgotados > 0 else "rgba(76, 175, 80, 0.08)"
         
         c2.markdown(f"""
-            <div style="background-color: {bg_esgotados}; border-left: 5px solid {cor_esgotados}; padding: 18px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Produtos Esgotados</span>
+            <div style="background-color: {bg_esgotados}; border-left: 5px solid {cor_esgotados}; padding: 18px; border-radius: 4px;">
+                <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase;">Produtos Esgotados</span>
                 <h2 style="color: {cor_esgotados}; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{produtos_esgotados}</h2>
             </div>
         """, unsafe_allow_html=True)
         
         c3.markdown(f"""
-            <div style="background-color: rgba(33, 150, 243, 0.08); border-left: 5px solid #2196F3; padding: 18px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-                <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">Movimentações Realizadas</span>
+            <div style="background-color: rgba(33, 150, 243, 0.08); border-left: 5px solid #2196F3; padding: 18px; border-radius: 4px;">
+                <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase;">Movimentações Realizadas</span>
                 <h2 style="color: #2196F3; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_movimentacoes}</h2>
             </div>
         """, unsafe_allow_html=True)
@@ -376,7 +378,7 @@ else:
             st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
 
     # --- TELA: CADASTRAR PRODUTO ---
-    elif escolha == "📦 Cadastrar Produto":
+    elif escolha == "Cadastrar Produto":
         st.title("Gerenciamento de Produtos")
         aba_cad_prod, aba_gerenciar_prod = st.tabs(["Novo Material", "Editar / Excluir Produtos"])
         
@@ -440,7 +442,7 @@ else:
                         st.rerun()
 
     # --- TELA: CADASTRAR CATEGORIA ---
-    elif escolha == "📂 Cadastrar Categoria":
+    elif escolha == "Cadastrar Categoria":
         st.title("Gerenciamento de Categorias")
         aba_nova_cat, aba_gerenciar_cat = st.tabs(["Nova Categoria", "Editar / Excluir Categorias"])
         
@@ -477,13 +479,13 @@ else:
                 with c_btn_cat2:
                     if st.button("Excluir Categoria"):
                         cursor = conn.cursor()
-                        cursor.execute("DELETE FROM categories WHERE nome = ?", (cat_selecionada,))
+                        cursor.execute("DELETE FROM categorias WHERE nome = ?", (cat_selecionada,))
                         conn.commit()
                         st.warning("Removida.")
                         st.rerun()
 
     # --- TELA: CADASTRAR USUÁRIO ---
-    elif escolha == "👥 Cadastrar Usuário":
+    elif escolha == "Cadastrar Usuário":
         st.title("Cadastrar Usuário")
         aba_cad, aba_edit = st.tabs(["Novo Usuário", "Editar / Excluir Usuários"])
         
@@ -541,7 +543,7 @@ else:
                         st.rerun()
 
     # --- TELA: CADASTRAR COORDENAÇÃO ---
-    elif escolha == "🏢 Cadastrar Coordenação":
+    elif escolha == "Cadastrar Coordenação":
         st.title("Cadastrar Coordenação")
         aba_c1, aba_c2 = st.tabs(["Nova Coordenação", "Editar / Excluir Coordenação"])
         
@@ -589,7 +591,7 @@ else:
                         st.rerun()
 
     # --- TELA: MOVIMENTAÇÃO DE ESTOQUE ---
-    elif escolha == "🔄 Movimentação de Estoque":
+    elif escolha == "Movimentação de Estoque":
         st.title("🔄 Movimentação de Entrada e Saída")
         aba_entrada, aba_saida, aba_historico = st.tabs(["📥 Registrar Entrada", "📤 Registrar Saída", "📋 Histórico de Entradas/Saídas"])
         
@@ -622,46 +624,44 @@ else:
                         st.success(f"Entrada de {qtd_entrada} unidade(s) de '{nome_p}' processada com sucesso!")
                         st.rerun()
 
-        # 2. ABA DE SAÍDA (Reconstruída e Finalizada)
+        # 2. ABA DE SAÍDA
         with aba_saida:
             if df_raw_prod.empty:
                 st.info("Nenhum material cadastrado para movimentação.")
             else:
                 with st.form("form_registrar_saida", clear_on_submit=True):
                     col_s1, col_s2 = st.columns(2)
-                    data_saida = col_s1.date_input("Data de Retirada:", value=datetime.today(), format="DD/MM/YYYY")
-                    idx_prod_sai = col_s2.selectbox("Material para Retirada:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Disponível: {df_raw_prod.loc[x, 'quantidade']})")
+                    data_saida = col_s1.date_input("Data da Saída:", value=datetime.today(), format="DD/MM/YYYY")
+                    idx_prod_sai = col_s2.selectbox("Material para Saída:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})")
                     
-                    col_s3, col_s4 = st.columns(2)
-                    responsavel_saida = col_s3.text_input("Responsável pela Retirada:")
-                    coordenacao_saida = col_s4.selectbox("Coordenação Destino:", lista_siglas_coord)
-                    
-                    qtd_saida = st.number_input("Quantidade Retirada:", min_value=1, step=1)
+                    qtd_saida = col_s1.number_input("Quantidade de Saída:", min_value=1, step=1)
+                    resp_saida = col_s2.text_input("Responsável pela Retirada:", placeholder="Ex: Nome do Servidor")
+                    coord_saida = st.selectbox("Coordenação / Setor:", lista_siglas_coord)
                     
                     if st.form_submit_button("Confirmar Saída", type="primary"):
-                        saldo_atual = int(df_raw_prod.loc[idx_prod_sai, "quantidade"])
-                        nome_p = df_raw_prod.loc[idx_prod_sai, "item"]
+                        saldo_disponivel = int(df_raw_prod.loc[idx_prod_sai, "quantidade"])
                         cod_p = df_raw_prod.loc[idx_prod_sai, "codigo"]
+                        nome_p = df_raw_prod.loc[idx_prod_sai, "item"]
                         
-                        if responsavel_saida.strip() == "":
-                            st.error("Por favor, preencha o nome do responsável pela retirada.")
-                        elif qtd_saida > saldo_atual:
-                            st.error(f"Quantidade insuficiente no estoque! Saldo disponível de '{nome_p}': {saldo_atual}")
+                        if qtd_saida > saldo_disponivel:
+                            st.error(f"❌ Saldo Insuficiente! O saldo atual de '{nome_p}' é {saldo_disponivel} unidade(s).")
+                        elif not resp_saida.strip():
+                            st.error("⚠️ Por favor, informe o responsável pela retirada.")
                         else:
-                            novo_saldo = saldo_atual - qtd_saida
+                            novo_saldo = saldo_disponivel - qtd_saida
                             cursor = conn.cursor()
                             cursor.execute("UPDATE produtos SET quantidade = ? WHERE codigo = ?", (novo_saldo, cod_p))
                             cursor.execute("""
                                 INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
                                 VALUES (?, ?, ?, ?, ?, ?, ?)
-                            """, (data_saida.strftime("%d/%m/%Y"), "Saída", cod_p, nome_p, qtd_saida, responsavel_saida.strip(), coordenacao_saida))
+                            """, (data_saida.strftime("%d/%m/%Y"), "Saída", cod_p, nome_p, qtd_saida, resp_saida.strip(), coord_saida))
                             conn.commit()
-                            st.success(f"Saída de {qtd_saida} unidade(s) de '{nome_p}' concluída com sucesso!")
+                            st.success(f"Saída de {qtd_saida} unidade(s) de '{nome_p}' processada com sucesso!")
                             st.rerun()
 
-        # 3. ABA DE HISTÓRICO
+        # 3. HISTÓRICO
         with aba_historico:
             if df_movimentacoes.empty:
-                st.info("Nenhuma movimentação foi registrada ainda.")
+                st.info("Nenhuma movimentação registrada no histórico.")
             else:
                 st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
