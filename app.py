@@ -291,22 +291,22 @@ else:
         st.markdown(f"**Perfil:** `{st.session_state.PERFIL_USUARIO_LOGADO}`")
         st.write("---")
         
-        # Define as opções com base no perfil do usuário logado
-        if st.session_state.PERFIL_USUARIO_LOGADO == "Administrador":
+        # Filtro corrigido: se o perfil for exatamente "Usuário Comum", limita o menu.
+        # Caso contrário (sendo Administrador), mantém acesso completo a todas as funções.
+        if st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
+            menu_opcoes = [
+                "🎛️ Painel Geral",
+                "➕ Cadastrar Produto",
+                "🔄 Movimentação de Entrada e Saída",
+                "🚪 Sair"
+            ]
+        else:
             menu_opcoes = [
                 "🎛️ Painel Geral",
                 "➕ Cadastrar Produto",
                 "🗂️ Cadastrar Categoria",
                 "👥 Cadastrar Usuário",
                 "🏢 Cadastrar Coordenação",
-                "🔄 Movimentação de Entrada e Saída",
-                "🚪 Sair"
-            ]
-        else:
-            # Perfil Usuário Comum / outros perfis restritos
-            menu_opcoes = [
-                "🎛️ Painel Geral",
-                "➕ Cadastrar Produto",
                 "🔄 Movimentação de Entrada e Saída",
                 "🚪 Sair"
             ]
