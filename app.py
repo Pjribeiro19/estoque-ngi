@@ -286,24 +286,25 @@ else:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("---")
         
+        # MAPEAMENTO DE ÍCONES SEMELHANTES AO EXEMPLO (Bootstrap Icons nativos)
         menu_opcoes = [
-            "▪ Painel Geral",
-            "▪ Cadastrar Produto",
-            "▪ Cadastrar Categoria",
-            "▪ Cadastrar Usuário",
-            "▪ Cadastrar Coordenação",
-            "▪ Movimentação de Estoque",
-            "▪ Sair do Sistema"
+            "📊 Painel Geral",
+            "📦 Cadastrar Produto",
+            "📂 Cadastrar Categoria",
+            "👥 Cadastrar Usuário",
+            "🏢 Cadastrar Coordenação",
+            "🔄 Movimentação de Estoque",
+            "🚪 Sair do Sistema"
         ]
         escolha = st.radio("Navegação", menu_opcoes, label_visibility="collapsed")
 
-    if escolha == "▪ Sair do Sistema":
+    if escolha == "🚪 Sair do Sistema":
         st.session_state.autenticado = False
         st.session_state.NOME_USUARIO_LOGADO = ""
         st.rerun()
 
     # --- TELA: PAINEL GERAL ---
-    elif escolha == "▪ Painel Geral":
+    elif escolha == "📊 Painel Geral":
         st.markdown("""
             <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
@@ -375,7 +376,7 @@ else:
             st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
 
     # --- TELA: CADASTRAR PRODUTO ---
-    elif escolha == "▪ Cadastrar Produto":
+    elif escolha == "📦 Cadastrar Produto":
         st.title("Gerenciamento de Produtos")
         aba_cad_prod, aba_gerenciar_prod = st.tabs(["Novo Material", "Editar / Excluir Produtos"])
         
@@ -439,7 +440,7 @@ else:
                         st.rerun()
 
     # --- TELA: CADASTRAR CATEGORIA ---
-    elif escolha == "▪ Cadastrar Categoria":
+    elif escolha == "📂 Cadastrar Categoria":
         st.title("Gerenciamento de Categorias")
         aba_nova_cat, aba_gerenciar_cat = st.tabs(["Nova Categoria", "Editar / Excluir Categorias"])
         
@@ -476,13 +477,13 @@ else:
                 with c_btn_cat2:
                     if st.button("Excluir Categoria"):
                         cursor = conn.cursor()
-                        cursor.execute("DELETE FROM categorias WHERE nome = ?", (cat_selecionada,))
+                        cursor.execute("DELETE FROM categories WHERE nome = ?", (cat_selecionada,))
                         conn.commit()
                         st.warning("Removida.")
                         st.rerun()
 
     # --- TELA: CADASTRAR USUÁRIO ---
-    elif escolha == "▪ Cadastrar Usuário":
+    elif escolha == "👥 Cadastrar Usuário":
         st.title("Cadastrar Usuário")
         aba_cad, aba_edit = st.tabs(["Novo Usuário", "Editar / Excluir Usuários"])
         
@@ -540,7 +541,7 @@ else:
                         st.rerun()
 
     # --- TELA: CADASTRAR COORDENAÇÃO ---
-    elif escolha == "▪ Cadastrar Coordenação":
+    elif escolha == "🏢 Cadastrar Coordenação":
         st.title("Cadastrar Coordenação")
         aba_c1, aba_c2 = st.tabs(["Nova Coordenação", "Editar / Excluir Coordenação"])
         
@@ -587,8 +588,8 @@ else:
                         st.warning("Removida.")
                         st.rerun()
 
-    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (COMPLETA) ---
-    elif escolha == "▪ Movimentação de Estoque":
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE ---
+    elif escolha == "🔄 Movimentação de Estoque":
         st.title("🔄 Movimentação de Entrada e Saída")
         aba_entrada, aba_saida, aba_historico = st.tabs(["📥 Registrar Entrada", "📤 Registrar Saída", "📋 Histórico de Entradas/Saídas"])
         
@@ -621,30 +622,31 @@ else:
                         st.success(f"Entrada de {qtd_entrada} unidade(s) de '{nome_p}' processada com sucesso!")
                         st.rerun()
 
-        # 2. ABA DE SAÍDA
+        # 2. ABA DE SAÍDA (Reconstruída e Finalizada)
         with aba_saida:
             if df_raw_prod.empty:
                 st.info("Nenhum material cadastrado para movimentação.")
             else:
                 with st.form("form_registrar_saida", clear_on_submit=True):
                     col_s1, col_s2 = st.columns(2)
-                    data_saida = col_s1.date_input("Data da Retirada:", value=datetime.today(), format="DD/MM/YYYY")
-                    idx_prod_sai = col_s2.selectbox("Material para Retirada:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Disponível: {df_raw_prod.loc[x, 'quantidade']})")
+                    data_saida = col_s1.date_input("Data de Retirada:", value=datetime.today(), format="DD/MM/YYYY")
+                    idx_prod_sai = col_s2.selectbox("Material para Retirada:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Disponível: {df_raw_prod.loc[x, 'quantidade']})")
                     
                     col_s3, col_s4 = st.columns(2)
-                    responsavel_retirada = col_s3.text_input("Responsável pela Retirada:")
-                    coordenacao_destino = col_s4.selectbox("Coordenação / Setor Destino:", lista_siglas_coord)
-                    qtd_saida = st.number_input("Quantidade a Retirar:", min_value=1, step=1)
+                    responsavel_saida = col_s3.text_input("Responsável pela Retirada:")
+                    coordenacao_saida = col_s4.selectbox("Coordenação Destino:", lista_siglas_coord)
+                    
+                    qtd_saida = st.number_input("Quantidade Retirada:", min_value=1, step=1)
                     
                     if st.form_submit_button("Confirmar Saída", type="primary"):
                         saldo_atual = int(df_raw_prod.loc[idx_prod_sai, "quantidade"])
-                        cod_p = df_raw_prod.loc[idx_prod_sai, "codigo"]
                         nome_p = df_raw_prod.loc[idx_prod_sai, "item"]
+                        cod_p = df_raw_prod.loc[idx_prod_sai, "codigo"]
                         
-                        if responsavel_retirada.strip() == "":
-                            st.error("Erro! É obrigatório informar o nome do responsável pela retirada.")
+                        if responsavel_saida.strip() == "":
+                            st.error("Por favor, preencha o nome do responsável pela retirada.")
                         elif qtd_saida > saldo_atual:
-                            st.error(f"Erro de Saldo! Você tentou retirar {qtd_saida} unidades, mas o saldo atual é de apenas {saldo_atual}.")
+                            st.error(f"Quantidade insuficiente no estoque! Saldo disponível de '{nome_p}': {saldo_atual}")
                         else:
                             novo_saldo = saldo_atual - qtd_saida
                             cursor = conn.cursor()
@@ -652,16 +654,14 @@ else:
                             cursor.execute("""
                                 INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
                                 VALUES (?, ?, ?, ?, ?, ?, ?)
-                            """, (data_saida.strftime("%d/%m/%Y"), "Saída", cod_p, nome_p, qtd_saida, responsavel_retirada.strip(), coordenacao_destino))
+                            """, (data_saida.strftime("%d/%m/%Y"), "Saída", cod_p, nome_p, qtd_saida, responsavel_saida.strip(), coordenacao_saida))
                             conn.commit()
-                            st.success(f"Saída de {qtd_saida} unidade(s) de '{nome_p}' concluída!")
+                            st.success(f"Saída de {qtd_saida} unidade(s) de '{nome_p}' concluída com sucesso!")
                             st.rerun()
 
         # 3. ABA DE HISTÓRICO
         with aba_historico:
-            st.markdown("<h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>📋 Registro Histórico Geral</h3>", unsafe_allow_html=True)
             if df_movimentacoes.empty:
-                st.info("Nenhuma movimentação foi registrada até o momento.")
+                st.info("Nenhuma movimentação foi registrada ainda.")
             else:
-                # Ordena por data mais recente de forma simples ou exibe o dataframe limpo
                 st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
