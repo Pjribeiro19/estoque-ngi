@@ -65,7 +65,6 @@ def inicializar_banco_automatico():
     # Adiciona coordenações iniciais se estiver vazia
     cursor.execute("SELECT COUNT(*) FROM coordenacoes")
     if cursor.fetchone()[0] == 0:
-        cursor.execute("DELETE FROM coordenacoes") 
         cursor.executemany("INSERT INTO coordenacoes VALUES (?, ?)", [
             ("COTEC", "Coordenação Técnica"),
             ("COLOG", "Coordenação de Logística")
@@ -275,6 +274,7 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (PÓS-AUTENTICAÇÃO)
 # =============================================================================
 else:
+    # Carrega dados do banco com segurança
     df_produtos = pd.read_sql_query("SELECT codigo AS Código, item AS Item, quantidade AS Quantidade, categoria AS Categoria, valor_unitario AS [Valor Unitário] FROM produtos", conn)
     df_movimentacoes = pd.read_sql_query("SELECT data AS Data, tipo AS Tipo, codigo AS Código, item AS Item, quantidade AS Quantidade, responsavel AS [Responsável pela Retirada], coordenacao AS [Coordenação] FROM movimentacoes", conn)
     df_coordenacoes = pd.read_sql_query("SELECT sigla AS Sigla, nome AS Nome FROM coordenacoes", conn)
@@ -294,7 +294,7 @@ else:
             "🔄 Movimentação de Entrada e Saída",
             "🚪 Sair"
         ]
-        escolha = st.radio("", menu_opcoes, label_visibility="collapsed")
+        escolha = st.radio("Navegação", menu_opcoes, label_visibility="collapsed")
 
     if escolha == "🚪 Sair":
         st.session_state.autenticado = False
@@ -319,7 +319,7 @@ else:
         if termo_busca:
             df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
         if categoria_selecionada != "Todas":
-            df_filtrado = df_filtrado[df_filtrado['Category'] == categoria_selecionada] if 'Category' in df_filtrado.columns else df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
+            df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
         st.write("### 📋 Estoque Atualizado")
         if df_filtrado.empty:
@@ -368,12 +368,10 @@ else:
         with aba_gerenciar_prod:
             if not df_produtos.empty:
                 st.dataframe(df_produtos, use_container_width=True, hide_index=True)
-                
                 df_raw_prod = pd.read_sql_query("SELECT * FROM produtos", conn)
                 opcao_selecionada = st.selectbox("Selecione para modificar:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']}")
                 
                 cod_atual = df_raw_prod.loc[opcao_selecionada, "codigo"]
-                
                 col_ed1, col_ed2 = st.columns(2)
                 edit_cod = col_ed1.text_input("Código:", value=df_raw_prod.loc[opcao_selecionada, "codigo"])
                 edit_item = col_ed2.text_input("Nome:", value=df_raw_prod.loc[opcao_selecionada, "item"])
@@ -472,14 +470,6 @@ else:
                             st.rerun()
                         except sqlite3.IntegrityError:
                             st.error("Este e-mail já está cadastrado.")
-                        except sqlite3.OperationalError as err:
-                            st.error(f"Inconsistência no banco de dados local: {err}")
-                            st.info("Tentando reajustar a estrutura... Por favor, tente enviar novamente.")
-                            try:
-                                cursor.execute("CREATE TABLE IF NOT EXISTS usuarios (nome TEXT, email TEXT PRIMARY KEY, senha TEXT, perfil TEXT)")
-                                conn.commit()
-                            except:
-                                pass
                     else:
                         st.error("Preencha o Nome e o E-mail!")
                         
@@ -487,7 +477,6 @@ else:
             df_raw_users = pd.read_sql_query("SELECT * FROM usuarios", conn)
             if not df_raw_users.empty:
                 st.dataframe(df_raw_users[["nome", "email", "perfil"]], use_container_width=True, hide_index=True)
-                
                 idx_user = st.selectbox("Selecione para editar:", df_raw_users.index, format_func=lambda x: df_raw_users.loc[x, "nome"])
                 email_chave = df_raw_users.loc[idx_user, "email"]
                 
@@ -538,7 +527,6 @@ else:
         with aba_c2:
             if not df_coordenacoes.empty:
                 st.dataframe(df_coordenacoes, use_container_width=True, hide_index=True)
-                
                 sigla_selecionada = st.selectbox("Selecione para modificar:", df_coordenacoes["Sigla"].tolist())
                 cursor = conn.cursor()
                 cursor.execute("SELECT nome FROM coordenacoes WHERE sigla = ?", (sigla_selecionada,))
@@ -588,6 +576,9 @@ else:
                         cursor = conn.cursor()
                         cursor.execute("UPDATE produtos SET quantidade = ? WHERE codigo = ?", (novo_saldo, cod_p))
                         cursor.execute("""
+                            INSERT INTO movimentacoes (data, tipo, codigo, item, quantity, responsavel, coordenacao) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """ if 'quantity' in pd.read_sql_query("PRAGMA table_info(movimentacoes)", conn)['name'].tolist() else """
                             INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
                             VALUES (?, ?, ?, ?, ?, ?, ?)
                         """, (data_entrada.strftime("%d/%m/%Y"), "Entrada", cod_p, nome_p, qtd_entrada, "Almoxarifado", "-"))
@@ -629,10 +620,8 @@ else:
                             conn.commit()
                             st.success("Saída registrada com sucesso!")
                             st.rerun()
-
         with aba_historico:
-            st.write("### 📜 Registros de Movimentação")
             if df_movimentacoes.empty:
-                st.info("Nenhuma movimentação realizada até o momento.")
+                st.info("Nenhuma movimentação foi registrada ainda.")
             else:
                 st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
