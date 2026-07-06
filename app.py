@@ -95,7 +95,7 @@ def enviar_alerta_estoque_baixo(nome_item, qtd_atual, limite=5):
     try:
         msg = MIMEMultipart()
         msg['From'] = EMAIL_REMETENTE
-        msg['To'] = EMAIL_REMETENTE  
+        msg['To'] = EMAIL_REMETENTE  # Envia para o próprio gestor cadastrado
         msg['Subject'] = f"⚠️ ALERTA: Estoque Crítico - {nome_item}"
         
         corpo = f"""
@@ -133,7 +133,7 @@ def inicializar_estrutura_banco():
     conn = conectar_banco()
     cursor = conn.cursor()
     
-    # Cria a tabela caso ela não exista de forma alguma
+    # Tabela de Usuários
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             nome TEXT NOT NULL,
@@ -144,12 +144,6 @@ def inicializar_estrutura_banco():
         )
     """)
     
-    # CORREÇÃO AUTOMÁTICA DA COLUNA: Se o arquivo .db for antigo e não tiver 'status', injeta sem quebrar
-    try:
-        cursor.execute("ALTER TABLE usuarios ADD COLUMN status TEXT DEFAULT 'Ativo'")
-    except sqlite3.OperationalError:
-        pass # Se der erro operacional significa que ela já existe no seu arquivo, então não faz nada
-
     # Tabela de Categorias
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS categorias (
@@ -161,7 +155,9 @@ def inicializar_estrutura_banco():
     # Tabela de Coordenações/Setores
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS coordenacoes (
-            sigla TEXT PRIMARY KEY, nome TEXT NOT NULL, responsavel TEXT
+            sigla TEXT PRIMARY KEY,
+            nome TEXT NOT NULL,
+            responsavel TEXT
         )
     """)
     
@@ -209,7 +205,7 @@ def inicializar_estrutura_banco():
             ("EPI", "Equipamentos de Proteção Individual"),
             ("Material de Escritório", "Papelaria e suprimentos administrativos"),
             ("Informática", "Mouses, teclados, cabos e suprimentos tecnológicos"),
-            ("Limpeza", "Materials de higienização de ambientes"),
+            ("Limpeza", "Materiais de higienização de ambientes"),
             ("Copa", "Insumos para cozinha e alimentação")
         ]
         cursor.executemany("INSERT INTO categorias VALUES (?, ?)", categorias_padrao)
@@ -328,7 +324,7 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
-        # MENU OPERACIONAL COM ÍCONES PROFISSIONAIS
+        # TABELA DE SUBSTITUIÇÃO PARA ÍCONES PROFISSIONAIS (Bootstrap Icons)
         escolha = option_menu(
             menu_title=None,
             options=[
@@ -370,9 +366,11 @@ else:
         st.markdown("<h2 style='color: #1e293b; font-weight: 700; margin-bottom: 4px;'>Dashboard Operacional</h2>", unsafe_allow_html=True)
         st.markdown("<p style='color: #64748b; margin-bottom: 25px;'>Indicadores consolidados em tempo real do estoque físico</p>", unsafe_allow_html=True)
         
+        # Geração dos indicadores macro
         total_pecas = int(df_produtos['quantidade'].sum()) if not df_produtos.empty else 0
         total_itens = len(df_produtos)
         
+        # Filtro de estoque baixo e esgotado baseado na coluna estoque_minimo
         if not df_produtos.empty:
             itens_criticos = len(df_produtos[df_produtos['quantidade'] <= df_produtos['estoque_minimo']])
             itens_esgotados = len(df_produtos[df_produtos['quantidade'] == 0])
@@ -404,12 +402,14 @@ else:
             
         st.markdown("<br>", unsafe_allow_html=True)
         
+        # Filtros dinâmicos e Tabela de Consulta
         with st.container(border=True):
             f_col1, f_col2, f_col3 = st.columns([2, 1, 1])
             busca_termo = f_col1.text_input("🔍 Localização Rápida de Ativos", placeholder="Digite o nome, código ou localização do item...")
             cat_filtro = f_col2.selectbox("Filtrar por Categoria", ["Todas"] + lista_categorias)
             status_filtro = f_col3.selectbox("Situação do Estoque", ["Todos", "Esgotados", "Abaixo do Mínimo", "Disponível"])
             
+            # Filtros aplicados no dataframe
             df_filtrado = df_produtos.copy()
             if busca_termo:
                 df_filtrado = df_filtrado[
@@ -431,6 +431,7 @@ else:
             if df_filtrado.empty:
                 st.info("Nenhum item localizado com os filtros aplicados atualmente.")
             else:
+                # Formatação estética para exibição profissional
                 df_exibicao = df_filtrado.copy()
                 df_exibicao.columns = ['Código', 'Nome do Item', 'Qtd Disponível', 'Categoria', 'Custo Unitário (R$)', 'Estoque Mínimo', 'Localização Física']
                 st.dataframe(
@@ -439,7 +440,7 @@ else:
                     hide_index=True,
                     column_config={
                         "Custo Unitário (R$)": st.column_config.NumberColumn(format="R$ %.2f"),
-                        "Qtd Disponível": st.column_config.NumberColumn(format="%d unidades")
+                        "Qtd Disponível": st.column_config.ProgressColumn(format="%d unidades", min_value=0, max_value=100)
                     }
                 )
 
@@ -467,13 +468,16 @@ else:
                     
                     st.markdown("<br>", unsafe_allow_html=True)
                     if st.form_submit_button("Processar Entrada", type="primary"):
+                        # Extrai o código do produto associado ao nome do item
                         cod_prod = df_produtos[df_produtos['item'] == item_selecionado]['codigo'].values[0]
                         
                         conn = conectar_banco()
                         cursor = conn.cursor()
-                        cursor.execute("UPDATE produtos SET quantidade = quantity + ? WHERE codigo = ?", (qtd_entrada, cod_prod))
+                        # Atualiza estoque
+                        cursor.execute("UPDATE produtos SET quantidade = quantidade + ? WHERE codigo = ?", (qtd_entrada, cod_prod))
+                        # Registra movimentação
                         cursor.execute("""
-                            INSERT INTO movimentacoes (data, tipo, codigo, item, quantity, responsavel, coordenacao, observacao, usuario_registro)
+                            INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao, observacao, usuario_registro)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, (
                             datetime.now().strftime("%d/%m/%Y %H:%M"),
@@ -507,6 +511,7 @@ else:
                     
                     st.markdown("<br>", unsafe_allow_html=True)
                     if st.form_submit_button("Aprovar e Dispensar Item", type="primary"):
+                        # Validação de dados e limites
                         estoque_linha = df_produtos[df_produtos['item'] == item_saida_sel].iloc[0]
                         estoque_disponivel = estoque_linha['quantidade']
                         cod_prod_sai = estoque_linha['codigo']
@@ -521,9 +526,11 @@ else:
                             
                             conn = conectar_banco()
                             cursor = conn.cursor()
+                            # Deduz estoque
                             cursor.execute("UPDATE produtos SET quantidade = ? WHERE codigo = ?", (novo_estoque, cod_prod_sai))
+                            # Registra movimentação de saída
                             cursor.execute("""
-                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao, observacao, usuario_registro)
+                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantity, responsavel, coordenacao, observacao, usuario_registro)
                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """, (
                                 datetime.now().strftime("%d/%m/%Y %H:%M"),
@@ -535,6 +542,7 @@ else:
                             
                             st.success(f"Baixa computada! {qtd_saida} unidades do item entregues para {servidor_destino} ({coord_destino}).")
                             
+                            # Avaliação automática e disparo de e-mail de alerta de estoque crítico
                             if novo_estoque <= limite_critico:
                                 st.warning(f"⚠️ Atenção: Este item atingiu o estoque crítico de atenção ({novo_estoque} unidades em estoque).")
                                 dispatche = enviar_alerta_estoque_baixo(item_saida_sel, novo_estoque, limite_critico)
@@ -660,12 +668,13 @@ else:
     elif escolha == "Gestão de Usuários":
         st.markdown("<h2 style='color: #1e293b; font-weight: 700;'>Controle de Acessos ao Sistema</h2>", unsafe_allow_html=True)
         
+        # Apenas perfis Administradores podem manipular novos logins
         if st.session_state.usuario_logado['perfil'] != "Administrador":
             st.error("🛡️ Acesso Negado. Você está logado como 'Usuário Comum'. Apenas perfis de cargo 'Administrador' possuem credenciais para auditar e criar novos usuários.")
         else:
-            aba_nova_u, aba_listar_u = st.tabs(["➕ Cadastrar Novo Usuário", "📋 Visualizar Operadores Ativos"])
+            c_u1, c_u2 = st.columns([1, 1.5])
             
-            with aba_nova_u:
+            with c_u1:
                 with st.form("form_novo_user", clear_on_submit=True):
                     st.write("### Credenciamento de Operador")
                     u_nome = st.text_input("Nome Completo do Funcionário")
@@ -674,30 +683,29 @@ else:
                     u_perfil = st.selectbox("Nível de Privilégio", ["Usuário Comum", "Administrador"])
                     
                     if st.form_submit_button("Gerar Acesso", type="primary"):
-                        if not u_nome.strip() or not u_email.strip() or not u_senha.strip():
+                        if not u_nome or not u_email or not u_senha:
                             st.warning("Preencha todos os campos do formulário.")
                         else:
                             conn = conectar_banco()
                             cursor = conn.cursor()
                             try:
-                                # CORREÇÃO COMPLETA: 5 valores explícitos sendo inseridos perfeitamente
-                                cursor.execute("""
-                                    INSERT INTO usuarios (nome, email, senha, perfil, status) 
-                                    VALUES (?, ?, ?, ?, 'Ativo')
-                                """, (u_nome.strip(), u_email.lower().strip(), u_senha.strip(), u_perfil))
+                                cursor.execute("INSERT INTO usuarios (nome, email, senha, perfil, status) VALUES (?, ?, ?, ?, 'Ativo')", 
+                                               (u_nome.strip(), u_email.lower().strip(), u_senha.strip(), u_perfil))
                                 conn.commit()
-                                st.success("Novo operador cadastrado com sucesso!")
+                                st.success("Novo operador cadastrado!")
                                 st.rerun()
                             except sqlite3.IntegrityError:
-                                st.error("Este e-mail corporativo já possui cadastro no banco de dados.")
+                                st.error("Este e-mail corporativo já possui cadastro ativo no banco de dados.")
                             finally:
                                 conn.close()
                                 
-            with aba_listar_u:
+            with c_u2:
                 st.write("### Operadores Cadastrados")
                 df_u_exibir = df_usuarios.copy()
                 df_u_exibir.columns = ['Nome Completo', 'E-mail / Login', 'Nível de Permissão', 'Status de Acesso']
                 st.dataframe(df_u_exibir, use_container_width=True, hide_index=True)
+                
+                st.markdown("<small><i>Nota: Para alternar o status de um usuário de 'Ativo' para 'Inativo', execute os comandos via console de banco de dados SQL estruturado.</i></small>", unsafe_allow_html=True)
 
     # -------------------------------------------------------------------------
     # TELA G: HISTÓRICO & AUDITORIA (LIVRO DE MOVIMENTAÇÃO)
@@ -716,6 +724,7 @@ else:
                 filtro_tipo = fa1.selectbox("Filtrar por Natureza", ["Todos", "Entrada", "Saída"])
                 filtro_setor = fa2.selectbox("Filtrar por Destinatário", ["Todos"] + df_coordenacoes['sigla'].tolist())
                 
+                # Download de Relatório CSV estruturado
                 csv_buffer = df_movimentacoes.to_csv(index=False).encode('utf-8')
                 fa3.markdown("<br>", unsafe_allow_html=True)
                 fa3.download_button(
@@ -726,6 +735,7 @@ else:
                     use_container_width=True
                 )
                 
+                # Executa filtros no Log de auditoria
                 df_log_filtrado = df_movimentacoes.copy()
                 if filtro_tipo != "Todos":
                     df_log_filtrado = df_log_filtrado[df_log_filtrado['tipo'] == filtro_tipo]
@@ -734,6 +744,7 @@ else:
                     
             st.markdown("<br>", unsafe_allow_html=True)
             
+            # Renomeia colunas para exibição amigável em formato de livro fiscal
             df_log_filtrado.columns = [
                 'ID Registro', 'Data/Hora Operação', 'Natureza', 'Código Item', 
                 'Nome do Item', 'Quantidade', 'Responsável/Beneficiário', 
