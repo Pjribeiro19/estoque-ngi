@@ -144,11 +144,11 @@ def inicializar_estrutura_banco():
         )
     """)
     
-    # CORREÇÃO AUTOMÁTICA DA COLUNA: Se o arquivo .db for antigo e não tiver 'status', injeta sem quebrar
+    # Adiciona a coluna status se o seu arquivo antigo não tiver
     try:
         cursor.execute("ALTER TABLE usuarios ADD COLUMN status TEXT DEFAULT 'Ativo'")
     except sqlite3.OperationalError:
-        pass # Se der erro operacional significa que ela já existe no seu arquivo, então não faz nada
+        pass 
 
     # Tabela de Categorias
     cursor.execute("""
@@ -237,7 +237,6 @@ def inicializar_estrutura_banco():
     conn.commit()
     conn.close()
 
-# Inicializa o banco de dados antes da aplicação rodar
 inicializar_estrutura_banco()
 
 # =============================================================================
@@ -309,7 +308,6 @@ if not st.session_state.autenticado:
 # 6. SISTEMA PRINCIPAL (APLICAÇÃO INTERNA POST-LOGIN)
 # =============================================================================
 else:
-    # Coleta centralizada de Dataframes para otimização de telas
     conn = conectar_banco()
     df_produtos = pd.read_sql_query("SELECT * FROM produtos", conn)
     df_movimentacoes = pd.read_sql_query("SELECT * FROM movimentacoes ORDER BY id DESC", conn)
@@ -318,7 +316,6 @@ else:
     lista_categorias = pd.read_sql_query("SELECT nome FROM categorias", conn)["nome"].tolist()
     conn.close()
 
-    # --- MENU LATERAL INTEGRADO COM BOOTSTRAP ICONS PRO ---
     with st.sidebar:
         st.markdown(f"""
             <div style="padding: 10px 0; border-bottom: 1px solid #e2e8f0; margin-bottom: 15px;">
@@ -328,7 +325,6 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
-        # MENU OPERACIONAL COM ÍCONES PROFISSIONAIS
         escolha = option_menu(
             menu_title=None,
             options=[
@@ -341,16 +337,7 @@ else:
                 "Histórico & Auditoria",
                 "Sair do Sistema"
             ],
-            icons=[
-                "speedometer2",      # Painel Geral
-                "arrow-left-right",  # Movimentação
-                "box-seam",          # Cadastrar Produto
-                "tags",              # Cadastrar Categoria
-                "building-gear",     # Cadastrar Coordenação
-                "people",            # Gestão de Usuários
-                "journal-text",      # Histórico & Auditoria
-                "door-open"          # Sair do Sistema
-            ],
+            icons=["speedometer2", "arrow-left-right", "box-seam", "tags", "building-gear", "people", "journal-text", "door-open"],
             menu_icon="cast", 
             default_index=0,
             styles={
@@ -444,7 +431,7 @@ else:
                 )
 
     # -------------------------------------------------------------------------
-    # TELA B: MOVIMENTAÇÃO (ENTRADAS E SAÍDAS)
+    # TELA B: MOVIMENTAÇÃO (CORRIGIDA: 'quantity' para 'quantidade')
     # -------------------------------------------------------------------------
     elif escolha == "Movimentação":
         st.markdown("<h2 style='color: #1e293b; font-weight: 700;'>Fluxos de Entrada e Saída</h2>", unsafe_allow_html=True)
@@ -471,9 +458,10 @@ else:
                         
                         conn = conectar_banco()
                         cursor = conn.cursor()
-                        cursor.execute("UPDATE produtos SET quantidade = quantity + ? WHERE codigo = ?", (qtd_entrada, cod_prod))
+                        # CORREÇÃO DA OPERAÇÃO: Mudado 'quantity' para 'quantidade' para bater com o banco
+                        cursor.execute("UPDATE produtos SET quantidade = quantidade + ? WHERE codigo = ?", (qtd_entrada, cod_prod))
                         cursor.execute("""
-                            INSERT INTO movimentacoes (data, tipo, codigo, item, quantity, responsavel, coordenacao, observacao, usuario_registro)
+                            INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao, observacao, usuario_registro)
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, (
                             datetime.now().strftime("%d/%m/%Y %H:%M"),
@@ -655,7 +643,7 @@ else:
             st.dataframe(df_co_exibicao, use_container_width=True, hide_index=True)
 
     # -------------------------------------------------------------------------
-    # TELA F: GESTÃO DE USUÁRIOS (NÍVEIS DE ACESSO)
+    # TELA F: GESTÃO DE USUÁRIOS
     # -------------------------------------------------------------------------
     elif escolha == "Gestão de Usuários":
         st.markdown("<h2 style='color: #1e293b; font-weight: 700;'>Controle de Acessos ao Sistema</h2>", unsafe_allow_html=True)
@@ -680,18 +668,20 @@ else:
                             conn = conectar_banco()
                             cursor = conn.cursor()
                             try:
-                                # CORREÇÃO COMPLETA: 5 valores explícitos sendo inseridos perfeitamente
                                 cursor.execute("""
                                     INSERT INTO usuarios (nome, email, senha, perfil, status) 
                                     VALUES (?, ?, ?, ?, 'Ativo')
                                 """, (u_nome.strip(), u_email.lower().strip(), u_senha.strip(), u_perfil))
                                 conn.commit()
                                 st.success("Novo operador cadastrado com sucesso!")
-                                st.rerun()
+                                r_run = True
                             except sqlite3.IntegrityError:
                                 st.error("Este e-mail corporativo já possui cadastro no banco de dados.")
+                                r_run = False
                             finally:
                                 conn.close()
+                            if r_run:
+                                st.rerun()
                                 
             with aba_listar_u:
                 st.write("### Operadores Cadastrados")
