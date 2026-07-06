@@ -224,7 +224,7 @@ if not st.session_state.autenticado:
                         if str(senha_banco) == str(senha_input).strip():
                             st.session_state.autenticado = True
                             st.session_state.NOME_USUARIO_LOGADO = nome_banco
-                            st.session_state.PERFIL_USUARIO_LOGADO = str(perfil_banco).strip()
+                            st.session_state.PERFIL_USUARIO_LOGADO = perfil_banco
                             st.rerun()
                         else:
                             st.error("❌ Senha incorreta!")
@@ -291,23 +291,22 @@ else:
         st.markdown(f"**Perfil:** `{st.session_state.PERFIL_USUARIO_LOGADO}`")
         st.write("---")
         
-        # CHECAGEM BLINDADA: Se contiver "admin" (Independente de como foi escrito no banco), libera tudo.
-        if "admin" in st.session_state.PERFIL_USUARIO_LOGADO.lower():
+        # Filtro corrigido: se o perfil for exatamente "Usuário Comum", limita o menu.
+        # Caso contrário (sendo Administrador), mantém acesso completo a todas as funções.
+        if st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
+            menu_opcoes = [
+                "🎛️ Painel Geral",
+                "➕ Cadastrar Produto",
+                "🔄 Movimentação de Entrada e Saída",
+                "🚪 Sair"
+            ]
+        else:
             menu_opcoes = [
                 "🎛️ Painel Geral",
                 "➕ Cadastrar Produto",
                 "🗂️ Cadastrar Categoria",
                 "👥 Cadastrar Usuário",
                 "🏢 Cadastrar Coordenação",
-                "🔄 Movimentação de Entrada e Saída",
-                "🚪 Sair"
-            ]
-        else:
-            # Qualquer outro perfil (Usuário Comum, Usuário, etc.) fica limitado aqui
-            menu_opcoes = [
-                "🎛️ Painel Geral",
-                "➕ Cadastrar Produto",
-                "🗂️ Cadastrar Categoria",
                 "🔄 Movimentação de Entrada e Saída",
                 "🚪 Sair"
             ]
