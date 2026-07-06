@@ -191,6 +191,9 @@ if "sub_tela_login" not in st.session_state:
 if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = ""
 
+if "PERFIL_USUARIO_LOGADO" not in st.session_state:
+    st.session_state.PERFIL_USUARIO_LOGADO = ""
+
 # =============================================================================
 # FLUXO 1: FLUXO DE LOGIN
 # =============================================================================
@@ -213,14 +216,15 @@ if not st.session_state.autenticado:
             if st.button("Entrar no Sistema", type="primary", use_container_width=True):
                 if usuario_input and senha_input:
                     cursor = conn.cursor()
-                    cursor.execute("SELECT nome, senha FROM usuarios WHERE LOWER(email) = ?", (usuario_input.strip().lower(),))
+                    cursor.execute("SELECT nome, senha, perfil FROM usuarios WHERE LOWER(email) = ?", (usuario_input.strip().lower(),))
                     resultado = cursor.fetchone()
                     
                     if resultado:
-                        nome_banco, senha_banco = resultado
+                        nome_banco, senha_banco, perfil_banco = resultado
                         if str(senha_banco) == str(senha_input).strip():
                             st.session_state.autenticado = True
                             st.session_state.NOME_USUARIO_LOGADO = nome_banco
+                            st.session_state.PERFIL_USUARIO_LOGADO = perfil_banco
                             st.rerun()
                         else:
                             st.error("❌ Senha incorreta!")
@@ -284,21 +288,35 @@ else:
 
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
+        st.markdown(f"**Perfil:** `{st.session_state.PERFIL_USUARIO_LOGADO}`")
         st.write("---")
-        menu_opcoes = [
-            "🎛️ Painel Geral",
-            "➕ Cadastrar Produto",
-            "🗂️ Cadastrar Categoria",
-            "👥 Cadastrar Usuário",
-            "🏢 Cadastrar Coordenação",
-            "🔄 Movimentação de Entrada e Saída",
-            "🚪 Sair"
-        ]
+        
+        # Define as opções com base no perfil do usuário logado
+        if st.session_state.PERFIL_USUARIO_LOGADO == "Administrador":
+            menu_opcoes = [
+                "🎛️ Painel Geral",
+                "➕ Cadastrar Produto",
+                "🗂️ Cadastrar Categoria",
+                "👥 Cadastrar Usuário",
+                "🏢 Cadastrar Coordenação",
+                "🔄 Movimentação de Entrada e Saída",
+                "🚪 Sair"
+            ]
+        else:
+            # Perfil Usuário Comum / outros perfis restritos
+            menu_opcoes = [
+                "🎛️ Painel Geral",
+                "➕ Cadastrar Produto",
+                "🔄 Movimentação de Entrada e Saída",
+                "🚪 Sair"
+            ]
+            
         escolha = st.radio("", menu_opcoes, label_visibility="collapsed")
 
     if escolha == "🚪 Sair":
         st.session_state.autenticado = False
         st.session_state.NOME_USUARIO_LOGADO = ""
+        st.session_state.PERFIL_USUARIO_LOGADO = ""
         st.rerun()
 
     # --- TELA: PAINEL GERAL ---
@@ -631,8 +649,8 @@ else:
                             st.rerun()
 
         with aba_historico:
-            st.write("### 📜 Registros de Movimentação")
+            st.markdown("### 📋 Histórico Completo de Movimentações")
             if df_movimentacoes.empty:
-                st.info("Nenhuma movimentação realizada até o momento.")
+                st.info("Nenhuma movimentação registrada até o momento.")
             else:
                 st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
