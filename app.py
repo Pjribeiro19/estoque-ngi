@@ -133,7 +133,8 @@ def inicializar_estrutura_banco():
     conn = conectar_banco()
     cursor = conn.cursor()
     
-    # Tabela de Usuários
+    # Executa comandos PRAGMA para atualizar as tabelas existentes caso necessário
+    # Tabela de Usuários atualizada com coluna 'status' de forma resiliente
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             nome TEXT NOT NULL,
@@ -144,6 +145,12 @@ def inicializar_estrutura_banco():
         )
     """)
     
+    # Garantir que a coluna status existe caso a tabela tenha sido criada antiga
+    try:
+        cursor.execute("ALTER TABLE usuarios ADD COLUMN status TEXT DEFAULT 'Ativo'")
+    except sqlite3.OperationalError:
+        pass # Coluna já existe
+
     # Tabela de Categorias
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS categorias (
@@ -155,9 +162,7 @@ def inicializar_estrutura_banco():
     # Tabela de Coordenações/Setores
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS coordenacoes (
-            sigla TEXT PRIMARY KEY,
-            nome TEXT NOT NULL,
-            responsavel TEXT
+            sigla TEXT PRIMARY KEY, nome TEXT NOT NULL, responsavel TEXT
         )
     """)
     
@@ -659,9 +664,9 @@ else:
         if st.session_state.usuario_logado['perfil'] != "Administrador":
             st.error("🛡️ Acesso Negado. Você está logado como 'Usuário Comum'. Apenas perfis de cargo 'Administrador' possuem credenciais para auditar e criar novos usuários.")
         else:
-            c_u1, c_u2 = st.columns([1, 1.5])
+            aba_nova_u, aba_listar_u = st.tabs(["➕ Cadastrar Novo Usuário", "📋 Visualizar Operadores Ativos"])
             
-            with c_u1:
+            with aba_nova_u:
                 with st.form("form_novo_user", clear_on_submit=True):
                     st.write("### Credenciamento de Operador")
                     u_nome = st.text_input("Nome Completo do Funcionário")
@@ -670,29 +675,30 @@ else:
                     u_perfil = st.selectbox("Nível de Privilégio", ["Usuário Comum", "Administrador"])
                     
                     if st.form_submit_button("Gerar Acesso", type="primary"):
-                        if not u_nome or not u_email or not u_senha:
+                        if not u_nome.strip() or not u_email.strip() or not u_senha.strip():
                             st.warning("Preencha todos os campos do formulário.")
                         else:
                             conn = conectar_banco()
                             cursor = conn.cursor()
                             try:
-                                cursor.execute("INSERT INTO usuarios (nome, email, senha, perfil, status) VALUES (?, ?, ?, ?, 'Ativo')", 
-                                               (u_nome.strip(), u_email.lower().strip(), u_senha.strip(), u_perfil))
+                                # CORREÇÃO INTEGRAL DO BUG AQUI: 5 campos correspondendo exatamente a 5 parâmetros
+                                cursor.execute("""
+                                    INSERT INTO usuarios (nome, email, senha, perfil, status) 
+                                    VALUES (?, ?, ?, ?, 'Ativo')
+                                """, (u_nome.strip(), u_email.lower().strip(), u_senha.strip(), u_perfil))
                                 conn.commit()
-                                st.success("Novo operador cadastrado!")
+                                st.success("Novo operador cadastrado com sucesso!")
                                 st.rerun()
                             except sqlite3.IntegrityError:
-                                .error("Este e-mail corporativo já possui cadastro ativo no banco de dados.")
+                                st.error("Este e-mail corporativo já possui cadastro no banco de dados.")
                             finally:
                                 conn.close()
                                 
-            with c_u2:
+            with aba_listar_u:
                 st.write("### Operadores Cadastrados")
                 df_u_exibir = df_usuarios.copy()
                 df_u_exibir.columns = ['Nome Completo', 'E-mail / Login', 'Nível de Permissão', 'Status de Acesso']
                 st.dataframe(df_u_exibir, use_container_width=True, hide_index=True)
-                
-                st.markdown("<small><i>Nota: Para alternar o status de um usuário de 'Ativo' para 'Inativo', execute os comandos via console de banco de dados SQL estruturado.</i></small>", unsafe_allow_html=True)
 
     # -------------------------------------------------------------------------
     # TELA G: HISTÓRICO & AUDITORIA (LIVRO DE MOVIMENTAÇÃO)
