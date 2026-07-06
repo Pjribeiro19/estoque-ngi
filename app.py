@@ -66,12 +66,6 @@ def inicializar_banco_automatico():
     # Adiciona coordenações iniciais se estiver vazia
     cursor.execute("SELECT COUNT(*) FROM coordenacoes")
     if cursor.fetchone()[0] == 0:
-        coord_iniciais = [
-            ("COTEC", "Coordenação Técnica"),
-            ("COLOG", "Coordenação de Logística")
-        ]
-        cursor.executemany("INSERT INTO coordenacoes VALUES (?, ?, ?)", coord_iniciais if len(coord_iniciais)[0] == 3 else [("COTEC", "Coordenação Técnica"), ("COLOG", "Coordenação de Logística")])
-        cursor.execute("DELETE FROM coordenacoes") # Reset seguro para o padrão de 2 colunas
         cursor.executemany("INSERT INTO coordenacoes VALUES (?, ?)", [
             ("COTEC", "Coordenação Técnica"),
             ("COLOG", "Coordenação de Logística")
@@ -90,7 +84,7 @@ def inicializar_banco_automatico():
         cursor.executemany("INSERT INTO categorias VALUES (?)", cat_iniciais)
         conn.commit()
 
-    # 5. Cria tabela de movimentações automaticamente (Estritamente 'quantidade')
+    # 5. Cria tabela de movimentações automaticamente
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS movimentacoes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -332,7 +326,7 @@ else:
         if termo_busca:
             df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
         if categoria_selecionada != "Todas":
-            df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
+            df_filtrado = df_filtrado[df_filtrado['Category'] == categoria_selecionada] if 'Category' in df_filtrado.columns else df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
         st.write("### 📋 Estoque Atualizado")
         if df_filtrado.empty:
@@ -460,7 +454,7 @@ else:
                         st.warning("Removida.")
                         st.rerun()
 
-    # --- TELA: CADASTRAR USUÁRIO (BLINDADA CONTRA OPERATIONALERROR) ---
+    # --- TELA: CADASTRAR USUÁRIO ---
     elif escolha == "👥 Cadastrar Usuário":
         st.title("👥 Cadastrar Usuário")
         aba_cad, aba_edit = st.tabs(["➕ Novo Usuário", "✏️ Editar / Excluir Usuários"])
@@ -476,7 +470,6 @@ else:
                     if n and e:
                         try:
                             cursor = conn.cursor()
-                            # MODIFICAÇÃO: Inserção explícita para evitar falhas com colunas
                             cursor.execute("""
                                 INSERT INTO usuarios (nome, email, senha, perfil) 
                                 VALUES (?, ?, ?, ?)
@@ -487,7 +480,6 @@ else:
                         except sqlite3.IntegrityError:
                             st.error("Este e-mail já está cadastrado.")
                         except sqlite3.OperationalError as err:
-                            # Caso a tabela no servidor esteja com dados corrompidos ou estrutura antiga
                             st.error(f"Inconsistência no banco de dados local: {err}")
                             st.info("Tentando reajustar a estrutura... Por favor, tente enviar novamente.")
                             try:
@@ -592,7 +584,7 @@ else:
                 with st.form("form_registrar_entrada", clear_on_submit=True):
                     col_e1, col_e2 = st.columns(2)
                     data_entrada = col_e1.date_input("Data:", value=datetime.today(), format="DD/MM/YYYY")
-                    idx_prod_ent = col_e2.selectbox("Material:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})")
+                    idx_prod_ent = col_e2.selectbox("Material:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})", key="mov_ent_prod")
                     qtd_entrada = st.number_input("Quantidade Entrada:", min_value=1, step=1)
                     
                     if st.form_submit_button("Confirmar Entrada", type="primary"):
@@ -617,7 +609,7 @@ else:
                 with st.form("form_registrar_saida", clear_on_submit=True):
                     col_s1, col_s2 = st.columns(2)
                     data_saida = col_s1.date_input("Data:", value=datetime.today(), format="DD/MM/YYYY")
-                    idx_prod_sai = col_s2.selectbox("Material:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})")
+                    idx_prod_sai = col_s2.selectbox("Material:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})", key="mov_sai_prod")
                     qtd_saida = col_s1.number_input("Quantidade Saída:", min_value=1, step=1)
                     
                     lista_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["Sem Coordenações"]
@@ -630,9 +622,9 @@ else:
                         qtd_disp = int(df_raw_prod.loc[idx_prod_sai, "quantidade"])
                         
                         if not resp_retirada.strip():
-                            st.error("Insira o nome do responsável!")
+                            st.error("❌ Por favor, preencha o nome do responsável pela retirada.")
                         elif qtd_saida > qtd_disp:
-                            st.error(f"Estoque insuficiente! Disponível: {qtd_disp}")
+                            st.error(f"❌ Quantidade insuficiente em estoque! Saldo atual de {nome_p}: {qtd_disp}")
                         else:
                             novo_saldo = qtd_disp - qtd_saida
                             cursor = conn.cursor()
@@ -646,8 +638,8 @@ else:
                             st.rerun()
 
         with aba_historico:
-            st.write("### 📜 Registros de Movimentação")
+            st.write("### 📋 Histórico Completo de Movimentações")
             if df_movimentacoes.empty:
-                st.info("Nenhuma movimentação realizada até o momento.")
+                st.info("Nenhuma movimentação registrada até o momento.")
             else:
-                st.dataframe(df_movimentacoes, use_container_width=True
+                st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
