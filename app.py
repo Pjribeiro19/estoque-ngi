@@ -291,12 +291,12 @@ else:
         st.markdown(f"**Perfil:** `{st.session_state.PERFIL_USUARIO_LOGADO}`")
         st.write("---")
         
-        # Filtro corrigido: se o perfil for exatamente "Usuário Comum", limita o menu.
-        # Caso contrário (sendo Administrador), mantém acesso completo a todas as funções.
+        # Menu ajustado para incluir a tela de categorias para o Usuário Comum
         if st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
             menu_opcoes = [
                 "🎛️ Painel Geral",
                 "➕ Cadastrar Produto",
+                "🗂️ Cadastrar Categoria",
                 "🔄 Movimentação de Entrada e Saída",
                 "🚪 Sair"
             ]
@@ -651,6 +651,6 @@ else:
         with aba_historico:
             st.markdown("### 📋 Histórico Completo de Movimentações")
             if df_movimentacoes.empty:
-                st.info("Nenhuma movimentação registrada até o momento.")
+                st.info("Nenhum movimentação registrada até o momento.")
             else:
                 st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
