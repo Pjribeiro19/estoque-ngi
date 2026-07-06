@@ -276,7 +276,7 @@ if not st.session_state.autenticado:
 else:
     # Carrega dados do banco com segurança
     df_produtos = pd.read_sql_query("SELECT codigo AS Código, item AS Item, quantidade AS Quantidade, categoria AS Categoria, valor_unitario AS [Valor Unitário] FROM produtos", conn)
-    df_movimentacoes = pd.read_sql_query("SELECT data AS Data, tipo AS Tipo, codigo AS Código, item AS Item, quantidade AS Quantidade, responsavel AS [Responsável pela Retirada], coordenacao AS [Coordenação] FROM movimentacoes", conn)
+    df_movimentacoes = pd.read_sql_query("SELECT data AS Data, tipo AS Tipo, codigo AS Código, item AS Item, quantidade AS Quantidade, responsavel AS [Responsável], coordenacao AS [Coordenação] FROM movimentacoes", conn)
     df_coordenacoes = pd.read_sql_query("SELECT sigla AS Sigla, nome AS Nome FROM coordenacoes", conn)
     
     df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
@@ -285,29 +285,29 @@ else:
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("---")
+        
         menu_opcoes = [
-            "📊 Painel Geral",
-            "📦 Cadastrar Produto",
-            "🗂️ Cadastrar Categoria",
-            "👥 Cadastrar Usuário",
-            "🏢 Cadastrar Coordenação",
-            "🔄 Movimentação de Estoque",
-            "🚪 Sair"
+            "▪ Painel Geral",
+            "▪ Cadastrar Produto",
+            "▪ Cadastrar Categoria",
+            "▪ Cadastrar Usuário",
+            "▪ Cadastrar Coordenação",
+            "▪ Movimentação de Estoque",
+            "▪ Sair do Sistema"
         ]
         escolha = st.radio("Navegação", menu_opcoes, label_visibility="collapsed")
 
-    if escolha == "🚪 Sair":
+    if escolha == "▪ Sair do Sistema":
         st.session_state.autenticado = False
         st.session_state.NOME_USUARIO_LOGADO = ""
         st.rerun()
 
     # --- TELA: PAINEL GERAL ---
-    elif escolha == "📊 Painel Geral":
-        # Cabeçalho corporativo integrado e profissional
+    elif escolha == "▪ Painel Geral":
         st.markdown("""
             <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
-                    📊 Dashboard de Controle de Estoque
+                    Painel Geral de Controle
                 </h1>
                 <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                     Visão Geral de Saldos, Alertas de Materiais e Fluxo de Insumos NGI Carajás
@@ -315,7 +315,6 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
-        # Bloco de Cartões Executivos Customizados (Substituindo o st.metric cru)
         c1, c2, c3 = st.columns(3)
         total_itens = len(df_produtos)
         produtos_esgotados = len(df_produtos[df_produtos['Quantidade'] == 0]) if not df_produtos.empty else 0
@@ -328,7 +327,6 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
-        # Cartão dinâmico: Alerta vermelho corporativo suave se houver material zerado
         cor_esgotados = "#c62828" if produtos_esgotados > 0 else "#4CAF50"
         bg_esgotados = "rgba(198, 40, 40, 0.08)" if produtos_esgotados > 0 else "rgba(76, 175, 80, 0.08)"
         
@@ -348,7 +346,6 @@ else:
         
         st.markdown("<br><hr style='margin: 10px 0 25px 0; opacity: 0.15;'>", unsafe_allow_html=True)
         
-        # Filtros e Ferramentas de Busca
         st.markdown("<h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>🔍 Filtros de Consulta</h3>", unsafe_allow_html=True)
         col_filtro1, col_filtro2 = st.columns([2, 1])
         termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...")
@@ -378,9 +375,9 @@ else:
             st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
 
     # --- TELA: CADASTRAR PRODUTO ---
-    elif escolha == "📦 Cadastrar Produto":
-        st.title("➕ Gerenciamento de Produtos")
-        aba_cad_prod, aba_gerenciar_prod = st.tabs(["➕ Novo Material", "✏️ Editar / Excluir Produtos"])
+    elif escolha == "▪ Cadastrar Produto":
+        st.title("Gerenciamento de Produtos")
+        aba_cad_prod, aba_gerenciar_prod = st.tabs(["Novo Material", "Editar / Excluir Produtos"])
         
         with aba_cad_prod:
             with st.form("form_novo_produto", clear_on_submit=True):
@@ -434,7 +431,7 @@ else:
                         st.success("Modificado com sucesso!")
                         st.rerun()
                 with col_b_prod2:
-                    if st.button("❌ Excluir Produto"):
+                    if st.button("Excluir Produto"):
                         cursor = conn.cursor()
                         cursor.execute("DELETE FROM produtos WHERE codigo = ?", (cod_atual,))
                         conn.commit()
@@ -442,9 +439,9 @@ else:
                         st.rerun()
 
     # --- TELA: CADASTRAR CATEGORIA ---
-    elif escolha == "🗂️ Cadastrar Categoria":
-        st.title("🗂️ Gerenciamento de Categorias")
-        aba_nova_cat, aba_gerenciar_cat = st.tabs(["➕ Nova Categoria", "✏️ Editar / Excluir Categorias"])
+    elif escolha == "▪ Cadastrar Categoria":
+        st.title("Gerenciamento de Categorias")
+        aba_nova_cat, aba_gerenciar_cat = st.tabs(["Nova Categoria", "Editar / Excluir Categorias"])
         
         with aba_nova_cat:
             col_cat1, col_cat2 = st.columns([1, 2])
@@ -477,7 +474,7 @@ else:
                         st.success("Atualizado!")
                         st.rerun()
                 with c_btn_cat2:
-                    if st.button("❌ Excluir Categoria"):
+                    if st.button("Excluir Categoria"):
                         cursor = conn.cursor()
                         cursor.execute("DELETE FROM categorias WHERE nome = ?", (cat_selecionada,))
                         conn.commit()
@@ -485,9 +482,9 @@ else:
                         st.rerun()
 
     # --- TELA: CADASTRAR USUÁRIO ---
-    elif escolha == "👥 Cadastrar Usuário":
-        st.title("👥 Cadastrar Usuário")
-        aba_cad, aba_edit = st.tabs(["➕ Novo Usuário", "✏️ Editar / Excluir Usuários"])
+    elif escolha == "▪ Cadastrar Usuário":
+        st.title("Cadastrar Usuário")
+        aba_cad, aba_edit = st.tabs(["Novo Usuário", "Editar / Excluir Usuários"])
         
         with aba_cad:
             with st.form("cad_user", clear_on_submit=True):
@@ -535,7 +532,7 @@ else:
                         st.success("Atualizado!")
                         st.rerun()
                 with c_btn_u2:
-                    if st.button("❌ Excluir Usuário"):
+                    if st.button("Excluir Usuário"):
                         cursor = conn.cursor()
                         cursor.execute("DELETE FROM usuarios WHERE email = ?", (email_chave,))
                         conn.commit()
@@ -543,9 +540,9 @@ else:
                         st.rerun()
 
     # --- TELA: CADASTRAR COORDENAÇÃO ---
-    elif escolha == "🏢 Cadastrar Coordenação":
-        st.title("🏢 Cadastrar Coordenação")
-        aba_c1, aba_c2 = st.tabs(["➕ Nova Coordenação", "✏️ Editar / Excluir Coordenação"])
+    elif escolha == "▪ Cadastrar Coordenação":
+        st.title("Cadastrar Coordenação")
+        aba_c1, aba_c2 = st.tabs(["Nova Coordenação", "Editar / Excluir Coordenação"])
         
         with aba_c1:
             with st.form("cad_coord", clear_on_submit=True):
@@ -583,29 +580,31 @@ else:
                         st.success("Salvo!")
                         st.rerun()
                 with c_btn_co2:
-                    if st.button("❌ Excluir Coordenação"):
+                    if st.button("Excluir Coordenação"):
                         cursor = conn.cursor()
                         cursor.execute("DELETE FROM coordenacoes WHERE sigla = ?", (sigla_selecionada,))
                         conn.commit()
                         st.warning("Removida.")
                         st.rerun()
 
-    # --- TELA: MOVIMENTAÇÃO DE ENTRADA E SAÍDA ---
-    elif escolha == "🔄 Movimentação de Estoque":
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (COMPLETA) ---
+    elif escolha == "▪ Movimentação de Estoque":
         st.title("🔄 Movimentação de Entrada e Saída")
         aba_entrada, aba_saida, aba_historico = st.tabs(["📥 Registrar Entrada", "📤 Registrar Saída", "📋 Histórico de Entradas/Saídas"])
         
         df_raw_prod = pd.read_sql_query("SELECT * FROM produtos", conn)
+        lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["-"]
         
+        # 1. ABA DE ENTRADA
         with aba_entrada:
             if df_raw_prod.empty:
                 st.info("Nenhum material cadastrado para movimentação.")
             else:
                 with st.form("form_registrar_entrada", clear_on_submit=True):
                     col_e1, col_e2 = st.columns(2)
-                    data_entrada = col_e1.date_input("Data:", value=datetime.today(), format="DD/MM/YYYY")
-                    idx_prod_ent = col_e2.selectbox("Material:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})")
-                    qtd_entrada = st.number_input("Quantidade Entrada:", min_value=1, step=1)
+                    data_entrada = col_e1.date_input("Data da Entrada:", value=datetime.today(), format="DD/MM/YYYY")
+                    idx_prod_ent = col_e2.selectbox("Material para Entrada:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})")
+                    qtd_entrada = st.number_input("Quantidade de Entrada:", min_value=1, step=1)
                     
                     if st.form_submit_button("Confirmar Entrada", type="primary"):
                         cod_p = df_raw_prod.loc[idx_prod_ent, "codigo"]
@@ -615,52 +614,54 @@ else:
                         cursor = conn.cursor()
                         cursor.execute("UPDATE produtos SET quantidade = ? WHERE codigo = ?", (novo_saldo, cod_p))
                         cursor.execute("""
-                            INSERT INTO movimentacoes (data, tipo, codigo, item, quantity, responsavel, coordenacao) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """ if 'quantity' in pd.read_sql_query("PRAGMA table_info(movimentacoes)", conn)['name'].tolist() else """
                             INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
                             VALUES (?, ?, ?, ?, ?, ?, ?)
                         """, (data_entrada.strftime("%d/%m/%Y"), "Entrada", cod_p, nome_p, qtd_entrada, "Almoxarifado", "-"))
                         conn.commit()
-                        st.success("Entrada registrada com sucesso!")
+                        st.success(f"Entrada de {qtd_entrada} unidade(s) de '{nome_p}' processada com sucesso!")
                         st.rerun()
-                        
+
+        # 2. ABA DE SAÍDA
         with aba_saida:
             if df_raw_prod.empty:
                 st.info("Nenhum material cadastrado para movimentação.")
             else:
                 with st.form("form_registrar_saida", clear_on_submit=True):
                     col_s1, col_s2 = st.columns(2)
-                    data_saida = col_s1.date_input("Data:", value=datetime.today(), format="DD/MM/YYYY")
-                    idx_prod_sai = col_s2.selectbox("Material:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})")
-                    qtd_saida = col_s1.number_input("Quantidade Saída:", min_value=1, step=1)
+                    data_saida = col_s1.date_input("Data da Retirada:", value=datetime.today(), format="DD/MM/YYYY")
+                    idx_prod_sai = col_s2.selectbox("Material para Retirada:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Disponível: {df_raw_prod.loc[x, 'quantidade']})")
                     
-                    lista_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["Sem Coordenações"]
-                    coord_retirada = col_s2.selectbox("Destino:", lista_coord)
-                    resp_retirada = st.text_input("Responsável pela Retirada:")
+                    col_s3, col_s4 = st.columns(2)
+                    responsavel_retirada = col_s3.text_input("Responsável pela Retirada:")
+                    coordenacao_destino = col_s4.selectbox("Coordenação / Setor Destino:", lista_siglas_coord)
+                    qtd_saida = st.number_input("Quantidade a Retirar:", min_value=1, step=1)
                     
                     if st.form_submit_button("Confirmar Saída", type="primary"):
+                        saldo_atual = int(df_raw_prod.loc[idx_prod_sai, "quantidade"])
                         cod_p = df_raw_prod.loc[idx_prod_sai, "codigo"]
                         nome_p = df_raw_prod.loc[idx_prod_sai, "item"]
-                        qtd_disp = int(df_raw_prod.loc[idx_prod_sai, "quantidade"])
                         
-                        if not resp_retirada.strip():
-                            st.error("Insira o nome do responsável!")
-                        elif qtd_saida > qtd_disp:
-                            st.error(f"Estoque insuficiente! Disponível: {qtd_disp}")
+                        if responsavel_retirada.strip() == "":
+                            st.error("Erro! É obrigatório informar o nome do responsável pela retirada.")
+                        elif qtd_saida > saldo_atual:
+                            st.error(f"Erro de Saldo! Você tentou retirar {qtd_saida} unidades, mas o saldo atual é de apenas {saldo_atual}.")
                         else:
-                            novo_saldo = qtd_disp - qtd_saida
+                            novo_saldo = saldo_atual - qtd_saida
                             cursor = conn.cursor()
                             cursor.execute("UPDATE produtos SET quantidade = ? WHERE codigo = ?", (novo_saldo, cod_p))
                             cursor.execute("""
                                 INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
                                 VALUES (?, ?, ?, ?, ?, ?, ?)
-                            """, (data_saida.strftime("%d/%m/%Y"), "Saída", cod_p, nome_p, qtd_saida, resp_retirada.strip(), coord_retirada))
+                            """, (data_saida.strftime("%d/%m/%Y"), "Saída", cod_p, nome_p, qtd_saida, responsavel_retirada.strip(), coordenacao_destino))
                             conn.commit()
-                            st.success("Saída registrada com sucesso!")
+                            st.success(f"Saída de {qtd_saida} unidade(s) de '{nome_p}' concluída!")
                             st.rerun()
+
+        # 3. ABA DE HISTÓRICO
         with aba_historico:
+            st.markdown("<h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>📋 Registro Histórico Geral</h3>", unsafe_allow_html=True)
             if df_movimentacoes.empty:
-                st.info("Nenhuma movimentação foi registrada ainda.")
+                st.info("Nenhuma movimentação foi registrada até o momento.")
             else:
+                # Ordena por data mais recente de forma simples ou exibe o dataframe limpo
                 st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
