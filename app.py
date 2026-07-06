@@ -224,8 +224,7 @@ if not st.session_state.autenticado:
                         if str(senha_banco) == str(senha_input).strip():
                             st.session_state.autenticado = True
                             st.session_state.NOME_USUARIO_LOGADO = nome_banco
-                            # CORREÇÃO 1: Normaliza a string do perfil removendo espaços e tratando caixa alta/baixa
-                            st.session_state.PERFIL_USUARIO_LOGADO = str(perfil_banco).strip().lower()
+                            st.session_state.PERFIL_USUARIO_LOGADO = perfil_banco
                             st.rerun()
                         else:
                             st.error("❌ Senha incorreta!")
@@ -289,17 +288,15 @@ else:
 
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
-        st.markdown(f"**Perfil Ativo:** `{st.session_state.PERFIL_USUARIO_LOGADO.upper()}`")
+        st.markdown(f"**Perfil:** `{st.session_state.PERFIL_USUARIO_LOGADO}`")
         st.write("---")
         
-        # CORREÇÃO 2: Verificação direta e segura com a string normalizada em lower().
-        if "admin" in st.session_state.PERFIL_USUARIO_LOGADO:
+        # Filtro corrigido: se o perfil for exatamente "Usuário Comum", limita o menu.
+        # Caso contrário (sendo Administrador), mantém acesso completo a todas as funções.
+        if st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
             menu_opcoes = [
                 "🎛️ Painel Geral",
                 "➕ Cadastrar Produto",
-                "🗂️ Cadastrar Categoria",
-                "👥 Cadastrar Usuário",
-                "🏢 Cadastrar Coordenação",
                 "🔄 Movimentação de Entrada e Saída",
                 "🚪 Sair"
             ]
@@ -308,6 +305,8 @@ else:
                 "🎛️ Painel Geral",
                 "➕ Cadastrar Produto",
                 "🗂️ Cadastrar Categoria",
+                "👥 Cadastrar Usuário",
+                "🏢 Cadastrar Coordenação",
                 "🔄 Movimentação de Entrada e Saída",
                 "🚪 Sair"
             ]
@@ -513,7 +512,7 @@ else:
                 edit_n = st.text_input("Nome:", value=df_raw_users.loc[idx_user, "nome"])
                 edit_e = st.text_input("E-mail:", value=df_raw_users.loc[idx_user, "email"])
                 edit_s = st.text_input("Senha:", value=df_raw_users.loc[idx_user, "senha"], type="password")
-                edit_p = st.selectbox("Perfil:", ["Administrador", "Usuário Comum"], index=0 if "admin" in str(df_raw_users.loc[idx_user, "perfil"]).lower() else 1)
+                edit_p = st.selectbox("Perfil:", ["Administrador", "Usuário Comum"], index=0 if df_raw_users.loc[idx_user, "perfil"] == "Administrador" else 1)
                 
                 c_btn_u1, c_btn_u2 = st.columns([1, 4])
                 with c_btn_u1:
@@ -558,7 +557,7 @@ else:
             if not df_coordenacoes.empty:
                 st.dataframe(df_coordenacoes, use_container_width=True, hide_index=True)
                 
-                sigla_selecionada = st.selectbox("Selecione para modifier:", df_coordenacoes["Sigla"].tolist())
+                sigla_selecionada = st.selectbox("Selecione para modificar:", df_coordenacoes["Sigla"].tolist())
                 cursor = conn.cursor()
                 cursor.execute("SELECT nome FROM coordenacoes WHERE sigla = ?", (sigla_selecionada,))
                 nome_atual_c = cursor.fetchone()[0]
