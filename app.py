@@ -591,11 +591,11 @@ else:
                         st.warning("Removida.")
                         st.rerun()
 
-    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE ---
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (CORRIGIDA) ---
     elif escolha == "Movimentação de Estoque":
         st.title("🔄 Movimentação de Entrada e Saída")
         
-        # Correção visual: Criação das abas para separar Entrada, Saída e Histórico
+        # As abas agora controlam o isolamento de cada formulário
         aba_entrada, aba_saida, aba_historico = st.tabs(["📥 Registrar Entrada", "📤 Registrar Saída", "📋 Histórico de Entradas/Saídas"])
         
         df_raw_prod = pd.read_sql_query("SELECT * FROM produtos", conn)
@@ -608,9 +608,9 @@ else:
             else:
                 with st.form("form_registrar_entrada", clear_on_submit=True):
                     col_e1, col_e2 = st.columns(2)
-                    data_entrada = col_e1.date_input("Data da Entrada:", value=datetime.today(), format="DD/MM/YYYY", key="dt_entrada")
-                    idx_prod_ent = col_e2.selectbox("Material para Entrada:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})", key="sel_entrada")
-                    qtd_entrada = st.number_input("Quantidade de Entrada:", min_value=1, step=1, key="num_entrada")
+                    data_entrada = col_e1.date_input("Data da Entrada:", value=datetime.today(), format="DD/MM/YYYY")
+                    idx_prod_ent = col_e2.selectbox("Material para Entrada:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})")
+                    qtd_entrada = st.number_input("Quantidade de Entrada:", min_value=1, step=1)
                     
                     if st.form_submit_button("Confirmar Entrada", type="primary"):
                         cod_p = df_raw_prod.loc[idx_prod_ent, "codigo"]
@@ -627,20 +627,20 @@ else:
                         st.success(f"Entrada de {qtd_entrada} unidade(s) de '{nome_p}' processada com sucesso!")
                         st.rerun()
 
-        # 2. ABA DE SAÍDA (Código corrigido e isolado)
+        # 2. ABA DE SAÍDA - Completamente isolada da Entrada
         with aba_saida:
             if df_raw_prod.empty:
                 st.info("Nenhum material cadastrado para movimentação.")
             else:
                 with st.form("form_registrar_saida", clear_on_submit=True):
                     col_s1, col_s2 = st.columns(2)
-                    data_saida = col_s1.date_input("Data da Saída:", value=datetime.today(), format="DD/MM/YYYY", key="dt_saida")
-                    idx_prod_sai = col_s2.selectbox("Material para Saída:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})", key="sel_saida")
+                    data_saida = col_s1.date_input("Data da Saída:", value=datetime.today(), format="DD/MM/YYYY")
+                    idx_prod_sai = col_s2.selectbox("Material para Saída:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})")
                     
                     col_s3, col_s4 = st.columns(2)
-                    qtd_saida = col_s3.number_input("Quantidade de Saída:", min_value=1, step=1, key="num_saida")
-                    coord_destino = col_s4.selectbox("Coordenação de Destino:", lista_siglas_coord, key="coord_saida")
-                    responsavel_retirada = st.text_input("Responsável pela Retirada:", placeholder="Nome de quem está retirando o material")
+                    qtd_saida = col_s3.number_input("Quantidade de Saída:", min_value=1, step=1)
+                    coord_destino = col_s4.selectbox("Coordenação de Destino:", lista_siglas_coord)
+                    responsavel_retirada = st.text_input("Responsável pela Retirada:", placeholder="Nome de quem está retirando")
                     
                     if st.form_submit_button("Confirmar Saída", type="primary"):
                         saldo_disponivel = int(df_raw_prod.loc[idx_prod_sai, "quantidade"])
@@ -650,7 +650,7 @@ else:
                         if responsavel_retirada.strip() == "":
                             st.error("Por favor, preencha o nome do Responsável pela Retirada!")
                         elif qtd_saida > saldo_disponivel:
-                            st.error(f"Quantidade indisponível! O saldo atual de '{nome_p}' é apenas {saldo_disponivel} unidade(s).")
+                            st.error(f"Quantidade indisponível! O saldo atual de '{nome_p}' é de apenas {saldo_disponivel} unidade(s).")
                         else:
                             novo_saldo = saldo_disponivel - qtd_saida
                             cursor = conn.cursor()
