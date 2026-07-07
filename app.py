@@ -4,14 +4,22 @@ from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import sqlite3
+import psycopg2
+from psycopg2.extras import DictCursor
 from streamlit_option_menu import option_menu
 
 # =============================================================================
-# INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (SQLite)
+# CONEXÃO E INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (Neon Postgres)
 # =============================================================================
 def inicializar_banco_automatico():
-    conn = sqlite3.connect("almoxarifado.db", check_same_thread=False)
+    # Obtém a string de conexão dos secrets do Streamlit
+    try:
+        conn_string = st.secrets["postgres"]["url"]
+        conn = psycopg2.connect(conn_string)
+    except Exception as e:
+        st.error(f"Erro ao conectar ao Neon Postgres: {e}")
+        st.stop()
+        
     cursor = conn.cursor()
     
     # 1. Tabela de usuários
@@ -21,14 +29,14 @@ def inicializar_banco_automatico():
             email TEXT PRIMARY KEY,
             senha TEXT,
             perfil TEXT
-        )
+        );
     """)
     
-    cursor.execute("SELECT COUNT(*) FROM usuarios")
+    cursor.execute("SELECT COUNT(*) FROM usuarios;")
     if cursor.fetchone()[0] == 0:
         cursor.execute("""
             INSERT INTO usuarios (nome, email, senha, perfil) 
-            VALUES ('Administrador Padrão', 'admin@ngi.com', '123', 'Administrador')
+            VALUES ('Administrador Padrão', 'admin@ngi.com', '123', 'Administrador');
         """)
         conn.commit()
 
@@ -40,17 +48,17 @@ def inicializar_banco_automatico():
             quantidade INTEGER,
             categoria TEXT,
             valor_unitario REAL
-        )
+        );
     """)
     
-    cursor.execute("SELECT COUNT(*) FROM produtos")
+    cursor.execute("SELECT COUNT(*) FROM produtos;")
     if cursor.fetchone()[0] == 0:
         produtos_iniciais = [
             ("001", "Capacete de Segurança", 15, "EPI", 45.00),
             ("002", "Resma Papel A4", 0, "Material de Escritório", 28.50),
             ("003", "Luva de Raspa", 50, "EPI", 12.00)
         ]
-        cursor.executemany("INSERT INTO produtos VALUES (?, ?, ?, ?, ?)", produtos_iniciais)
+        cursor.executemany("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", produtos_iniciais)
         conn.commit()
 
     # 3. Tabela de coordenações
@@ -58,12 +66,12 @@ def inicializar_banco_automatico():
         CREATE TABLE IF NOT EXISTS coordenacoes (
             sigla TEXT PRIMARY KEY,
             nome TEXT
-        )
+        );
     """)
     
-    cursor.execute("SELECT COUNT(*) FROM coordenacoes")
+    cursor.execute("SELECT COUNT(*) FROM coordenacoes;")
     if cursor.fetchone()[0] == 0:
-        cursor.executemany("INSERT INTO coordenacoes VALUES (?, ?)", [
+        cursor.executemany("INSERT INTO coordenacoes VALUES (%s, %s);", [
             ("COTEC", "Coordenação Técnica"),
             ("COLOG", "Coordenação de Logística")
         ])
@@ -73,18 +81,18 @@ def inicializar_banco_automatico():
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS categorias (
             nome TEXT PRIMARY KEY
-        )
+        );
     """)
-    cursor.execute("SELECT COUNT(*) FROM categorias")
+    cursor.execute("SELECT COUNT(*) FROM categorias;")
     if cursor.fetchone()[0] == 0:
         cat_iniciais = [("EPI",), ("Material de Escritório",), ("Informática",), ("Limpeza",), ("Copa",)]
-        cursor.executemany("INSERT INTO categorias VALUES (?)", cat_iniciais)
+        cursor.executemany("INSERT INTO categorias VALUES (%s);", cat_iniciais)
         conn.commit()
 
     # 5. Tabela de movimentações
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS movimentacoes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             data TEXT,
             tipo TEXT,
             codigo TEXT,
@@ -92,13 +100,13 @@ def inicializar_banco_automatico():
             quantidade INTEGER,
             responsavel TEXT,
             coordenacao TEXT
-        )
+        );
     """)
     
     conn.commit()
     return conn
 
-# Ativa o banco de dados
+# Conecta e garante a estrutura no Neon
 conn = inicializar_banco_automatico()
 
 # =============================================================================
@@ -121,14 +129,12 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- ESTILIZAÇÃO CSS COMPATÍVEL (Limpeza de Layout e Suporte) ---
+# --- ESTILIZAÇÃO CSS ---
 st.markdown("""
     <style>
-    /* Remove menus padrões poluídos e a navegação nativa por rádio */
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
     
-    /* Botões Padrão Primários */
     div.stButton > button:first-child[kind="primary"] {
         background-color: #4CAF50 !important;
         border-color: #4CAF50 !important;
@@ -139,7 +145,6 @@ st.markdown("""
         border-color: #43a047 !important;
     }
     
-    /* Container para a Logotipo */
     .img-container {
         display: flex;
         justify-content: center;
@@ -185,7 +190,7 @@ if not st.session_state.autenticado:
             if st.button("Entrar no Sistema", type="primary", use_container_width=True):
                 if usuario_input and senha_input:
                     cursor = conn.cursor()
-                    cursor.execute("SELECT nome, senha FROM usuarios WHERE LOWER(email) = ?", (usuario_input.strip().lower(),))
+                    cursor.execute("SELECT nome, senha FROM usuarios WHERE LOWER(email) = %s;", (usuario_input.strip().lower(),))
                     resultado = cursor.fetchone()
                     
                     if resultado:
@@ -215,7 +220,7 @@ if not st.session_state.autenticado:
             if st.button("Enviar Instruções", type="primary", use_container_width=True):
                 if email_recuperar.strip():
                     cursor = conn.cursor()
-                    cursor.execute("SELECT COUNT(*) FROM usuarios WHERE LOWER(email) = ?", (email_recuperar.strip().lower(),))
+                    cursor.execute("SELECT COUNT(*) FROM usuarios WHERE LOWER(email) = %s;", (email_recuperar.strip().lower(),))
                     if cursor.fetchone()[0] > 0:
                         if EMAIL_REMETENTE == "configurar_no_secrets@email.com":
                             st.error("Erro de configuração nos Secrets do Streamlit.")
@@ -247,14 +252,14 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (PÓS-AUTENTICAÇÃO)
 # =============================================================================
 else:
-    df_produtos = pd.read_sql_query("SELECT codigo AS Código, item AS Item, quantidade AS Quantidade, categoria AS Categoria, valor_unitario AS [Valor Unitário] FROM produtos", conn)
-    df_movimentacoes = pd.read_sql_query("SELECT data AS Data, tipo AS Tipo, codigo AS Código, item AS Item, quantidade AS Quantidade, responsavel AS [Responsável], coordenacao AS [Coordenação] FROM movimentacoes", conn)
-    df_coordenacoes = pd.read_sql_query("SELECT sigla AS Sigla, nome AS Nome FROM coordenacoes", conn)
+    df_produtos = pd.read_sql_query("SELECT codigo AS \"Código\", item AS \"Item\", quantidade AS \"Quantidade\", categoria AS \"Categoria\", valor_unitario AS \"Valor Unitário\" FROM produtos", conn)
+    df_movimentacoes = pd.read_sql_query("SELECT data AS \"Data\", tipo AS \"Tipo\", codigo AS \"Código\", item AS \"Item\", quantidade AS \"Quantidade\", responsavel AS \"Responsável\", coordenacao AS \"Coordenação\" FROM movimentacoes", conn)
+    df_coordenacoes = pd.read_sql_query("SELECT sigla AS \"Sigla\", nome AS \"Nome\" FROM coordenacoes", conn)
     
     df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
     lista_categorias = df_cat_bruto["nome"].tolist()
 
-    # --- MENU LATERAL ATUALIZADO COM OS ÍCONES MODERNOS ---
+    # --- MENU LATERAL ---
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("---")
@@ -270,16 +275,7 @@ else:
                 "Movimentação de Estoque",
                 "Sair do Sistema"
             ],
-            # Classes de ícones planos e limpos (idêntico à sua imagem de referência)
-            icons=[
-                "grid",             # Painel Geral
-                "box",              # Cadastrar Produto
-                "folder",           # Cadastrar Categoria
-                "person-plus",      # Cadastrar Usuário
-                "building",         # Cadastrar Coordenação
-                "arrow-left-right", # Movimentação
-                "box-arrow-right"   # Sair do Sistema
-            ],
+            icons=["grid", "box", "folder", "person-plus", "building", "arrow-left-right", "box-arrow-right"],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -395,11 +391,12 @@ else:
                     if cod and nome_it:
                         try:
                             cursor = conn.cursor()
-                            cursor.execute("INSERT INTO produtos VALUES (?, ?, ?, ?, ?)", (cod.strip(), nome_it.strip(), 0, cat_it, float(val_unit)))
+                            cursor.execute("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", (cod.strip(), nome_it.strip(), 0, cat_it, float(val_unit)))
                             conn.commit()
                             st.success(f"Sucesso! {nome_it} adicionado.")
                             st.rerun()
-                        except sqlite3.IntegrityError:
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
                             st.error(f"Erro! Código {cod} já existe.")
                     else:
                         st.error("Preencha todos os campos!")
@@ -427,8 +424,8 @@ else:
                         cursor = conn.cursor()
                         cursor.execute("""
                             UPDATE produtos 
-                            SET codigo = ?, item = ?, quantidade = ?, categoria = ?, valor_unitario = ? 
-                            WHERE codigo = ?
+                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
+                            WHERE codigo = %s;
                         """, (edit_cod.strip(), edit_item.strip(), edit_qtd, edit_cat, float(edit_val), cod_atual))
                         conn.commit()
                         st.success("Modificado com sucesso!")
@@ -436,7 +433,7 @@ else:
                 with col_b_prod2:
                     if st.button("Excluir Produto"):
                         cursor = conn.cursor()
-                        cursor.execute("DELETE FROM produtos WHERE codigo = ?", (cod_atual,))
+                        cursor.execute("DELETE FROM produtos WHERE codigo = %s;", (cod_atual,))
                         conn.commit()
                         st.warning("Removido com sucesso.")
                         st.rerun()
@@ -454,11 +451,12 @@ else:
                     if nova_cat and nova_cat.strip():
                         try:
                             cursor = conn.cursor()
-                            cursor.execute("INSERT INTO categorias VALUES (?)", (nova_cat.strip(),))
+                            cursor.execute("INSERT INTO categorias VALUES (%s);", (nova_cat.strip(),))
                             conn.commit()
                             st.success("Adicionada!")
                             st.rerun()
-                        except sqlite3.IntegrityError:
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
                             st.error("Esta categoria já existe.")
             with col_cat2:
                 st.dataframe(pd.DataFrame(lista_categorias, columns=["Categorias Ativas"]), use_container_width=True, hide_index=True)
@@ -472,14 +470,14 @@ else:
                 with c_btn_cat1:
                     if st.button("Salvar Edição", type="primary"):
                         cursor = conn.cursor()
-                        cursor.execute("UPDATE categorias SET nome = ? WHERE nome = ?", (edit_nome_cat.strip(), cat_selecionada))
+                        cursor.execute("UPDATE categorias SET nome = %s WHERE nome = %s;", (edit_nome_cat.strip(), cat_selecionada))
                         conn.commit()
                         st.success("Atualizado!")
                         st.rerun()
                 with c_btn_cat2:
                     if st.button("Excluir Categoria"):
                         cursor = conn.cursor()
-                        cursor.execute("DELETE FROM categorias WHERE nome = ?", (cat_selecionada,))
+                        cursor.execute("DELETE FROM categorias WHERE nome = %s;", (cat_selecionada,))
                         conn.commit()
                         st.warning("Removida.")
                         st.rerun()
@@ -502,12 +500,13 @@ else:
                             cursor = conn.cursor()
                             cursor.execute("""
                                 INSERT INTO usuarios (nome, email, senha, perfil) 
-                                VALUES (?, ?, ?, ?)
+                                VALUES (%s, %s, %s, %s);
                             """, (n.strip(), e.strip().lower(), s if s else "123", p))
                             conn.commit()
                             st.success("Usuário registrado com sucesso!")
                             st.rerun()
-                        except sqlite3.IntegrityError:
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
                             st.error("Este e-mail já está cadastrado.")
                     else:
                         st.error("Preencha o Nome e o E-mail!")
@@ -529,7 +528,7 @@ else:
                     if st.button("Atualizar Dados", type="primary"):
                         cursor = conn.cursor()
                         cursor.execute("""
-                            UPDATE usuarios SET nome = ?, email = ?, senha = ?, perfil = ? WHERE email = ?
+                            UPDATE usuarios SET nome = %s, email = %s, senha = %s, perfil = %s WHERE email = %s;
                         """, (edit_n.strip(), edit_e.strip().lower(), edit_s, edit_p, email_chave))
                         conn.commit()
                         st.success("Atualizado!")
@@ -537,7 +536,7 @@ else:
                 with c_btn_u2:
                     if st.button("Excluir Usuário"):
                         cursor = conn.cursor()
-                        cursor.execute("DELETE FROM usuarios WHERE email = ?", (email_chave,))
+                        cursor.execute("DELETE FROM usuarios WHERE email = %s;", (email_chave,))
                         conn.commit()
                         st.warning("Removido.")
                         st.rerun()
@@ -555,11 +554,12 @@ else:
                     if s_coord and nc:
                         try:
                             cursor = conn.cursor()
-                            cursor.execute("INSERT INTO coordenacoes VALUES (?, ?)", (s_coord.strip().upper(), nc.strip()))
+                            cursor.execute("INSERT INTO coordenacoes VALUES (%s, %s);", (s_coord.strip().upper(), nc.strip()))
                             conn.commit()
                             st.success("Cadastrada!")
                             st.rerun()
-                        except sqlite3.IntegrityError:
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
                             st.error("Esta sigla já está registrada.")
                     else:
                         st.error("Preencha todos os campos!")
@@ -568,7 +568,7 @@ else:
                 st.dataframe(df_coordenacoes, use_container_width=True, hide_index=True)
                 sigla_selecionada = st.selectbox("Selecione para modificar:", df_coordenacoes["Sigla"].tolist())
                 cursor = conn.cursor()
-                cursor.execute("SELECT nome FROM coordenacoes WHERE sigla = ?", (sigla_selecionada,))
+                cursor.execute("SELECT nome FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
                 nome_atual_c = cursor.fetchone()[0]
                 
                 edit_sigla = st.text_input("Sigla:", value=sigla_selecionada)
@@ -578,14 +578,14 @@ else:
                 with c_btn_co1:
                     if st.button("Salvar Edição", type="primary"):
                         cursor = conn.cursor()
-                        cursor.execute("UPDATE coordenacoes SET sigla = ?, nome = ? WHERE sigla = ?", (edit_sigla.strip().upper(), edit_nc.strip(), sigla_selecionada))
+                        cursor.execute("UPDATE coordenacoes SET sigla = %s, nome = %s WHERE sigla = %s;", (edit_sigla.strip().upper(), edit_nc.strip(), sigla_selecionada))
                         conn.commit()
                         st.success("Salvo!")
                         st.rerun()
                 with c_btn_co2:
                     if st.button("Excluir Coordenação"):
                         cursor = conn.cursor()
-                        cursor.execute("DELETE FROM coordenacoes WHERE sigla = ?", (sigla_selecionada,))
+                        cursor.execute("DELETE FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
                         conn.commit()
                         st.warning("Removida.")
                         st.rerun()
@@ -615,10 +615,10 @@ else:
                         novo_saldo = int(df_raw_prod.loc[idx_prod_ent, "quantidade"]) + qtd_entrada
                         
                         cursor = conn.cursor()
-                        cursor.execute("UPDATE produtos SET quantidade = ? WHERE codigo = ?", (novo_saldo, cod_p))
+                        cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (novo_saldo, cod_p))
                         cursor.execute("""
                             INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s);
                         """, (data_entrada.strftime("%d/%m/%Y"), "Entrada", cod_p, nome_p, qtd_entrada, "Almoxarifado", "-"))
                         conn.commit()
                         st.success(f"Entrada de {qtd_entrada} unidade(s) de '{nome_p}' processada com sucesso!")
@@ -633,35 +633,34 @@ else:
                     col_s1, col_s2 = st.columns(2)
                     data_saida = col_s1.date_input("Data da Saída:", value=datetime.today(), format="DD/MM/YYYY")
                     idx_prod_sai = col_s2.selectbox("Material para Saída:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})")
-                    
-                    qtd_saida = col_s1.number_input("Quantidade de Saída:", min_value=1, step=1)
-                    resp_saida = col_s2.text_input("Responsável pela Retirada:", placeholder="Ex: Nome do Servidor")
-                    coord_saida = st.selectbox("Coordenação / Setor:", lista_siglas_coord)
+                    qtd_saida = st.number_input("Quantidade de Saída:", min_value=1, step=1)
+                    resp_saida = col_s1.text_input("Responsável pela Retirada:")
+                    coord_saida = col_s2.selectbox("Coordenação Destino:", lista_siglas_coord)
                     
                     if st.form_submit_button("Confirmar Saída", type="primary"):
-                        saldo_disponivel = int(df_raw_prod.loc[idx_prod_sai, "quantidade"])
+                        saldo_atual = int(df_raw_prod.loc[idx_prod_sai, "quantidade"])
                         cod_p = df_raw_prod.loc[idx_prod_sai, "codigo"]
                         nome_p = df_raw_prod.loc[idx_prod_sai, "item"]
                         
-                        if qtd_saida > saldo_disponivel:
-                            st.error(f"❌ Saldo Insuficiente! O saldo atual de '{nome_p}' é {saldo_disponivel} unidade(s).")
-                        elif not resp_saida.strip():
-                            st.error("⚠️ Por favor, informe o responsável pela retirada.")
+                        if resp_saida.strip() == "":
+                            st.error("Informe o responsável pela retirada!")
+                        elif qtd_saida > saldo_atual:
+                            st.error(f"Saldo insuficiente! Quantidade disponível de '{nome_p}': {saldo_atual}")
                         else:
-                            novo_saldo = saldo_disponivel - qtd_saida
+                            novo_saldo = saldo_atual - qtd_saida
                             cursor = conn.cursor()
-                            cursor.execute("UPDATE produtos SET quantidade = ? WHERE codigo = ?", (novo_saldo, cod_p))
+                            cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (novo_saldo, cod_p))
                             cursor.execute("""
                                 INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
-                                VALUES (?, ?, ?, ?, ?, ?, ?)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s);
                             """, (data_saida.strftime("%d/%m/%Y"), "Saída", cod_p, nome_p, qtd_saida, resp_saida.strip(), coord_saida))
                             conn.commit()
-                            st.success(f"Saída de {qtd_saida} unidade(s) de '{nome_p}' processada com sucesso!")
+                            st.success(f"Saída de {qtd_saida} unidade(s) de '{nome_p}' concluída!")
                             st.rerun()
 
-        # 3. HISTÓRICO
+        # 3. ABA DE HISTÓRICO
         with aba_historico:
             if df_movimentacoes.empty:
-                st.info("Nenhuma movimentação registrada no histórico.")
+                st.info("Nenhuma movimentação registrada até o momento.")
             else:
                 st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
