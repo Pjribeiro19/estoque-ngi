@@ -591,25 +591,52 @@ else:
                         st.warning("Removida.")
                         st.rerun()
 
-    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (CORRIGIDA) ---
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (CORRIGIDA E ISOLADA VIA IF/ELIF) ---
     elif escolha == "Movimentação de Estoque":
         st.title("🔄 Movimentação de Entrada e Saída")
         
-        # As abas agora controlam o isolamento de cada formulário
-        aba_entrada, aba_saida, aba_historico = st.tabs(["📥 Registrar Entrada", "📤 Registrar Saída", "📋 Histórico de Entradas/Saídas"])
+        # Substituído st.tabs por option_menu horizontal para forçar destruição/criação lógica dos elementos
+        modo_movimento = option_menu(
+            menu_title=None,
+            options=["📥 Registrar Entrada", "📤 Registrar Saída", "📋 Histórico de Entradas/Saídas"],
+            icons=["arrow-down-circle", "arrow-up-circle", "clock-history"],
+            menu_icon="cast",
+            default_index=0,
+            orientation="horizontal",
+            styles={
+                "container": {"padding": "0!important", "background-color": "#f8fafc", "margin-bottom": "25px"},
+                "icon": {"color": "#64748b", "font-size": "14px"}, 
+                "nav-link": {
+                    "font-size": "14px", 
+                    "text-align": "center", 
+                    "margin": "0px", 
+                    "color": "#334155",
+                },
+                "nav-link-selected": {
+                    "background-color": "#4CAF50", 
+                    "color": "white", 
+                    "font-weight": "bold"
+                },
+            }
+        )
         
         df_raw_prod = pd.read_sql_query("SELECT * FROM produtos", conn)
         lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["-"]
         
-        # 1. ABA DE ENTRADA
-        with aba_entrada:
+        # 1. BLOCO EXCLUSIVO: ENTRADA
+        if modo_movimento == "📥 Registrar Entrada":
             if df_raw_prod.empty:
                 st.info("Nenhum material cadastrado para movimentação.")
             else:
+                st.subheader("Registrar Entrada de Material")
                 with st.form("form_registrar_entrada", clear_on_submit=True):
                     col_e1, col_e2 = st.columns(2)
                     data_entrada = col_e1.date_input("Data da Entrada:", value=datetime.today(), format="DD/MM/YYYY")
-                    idx_prod_ent = col_e2.selectbox("Material para Entrada:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})")
+                    idx_prod_ent = col_e2.selectbox(
+                        "Material para Entrada:", 
+                        df_raw_prod.index, 
+                        format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})"
+                    )
                     qtd_entrada = st.number_input("Quantidade de Entrada:", min_value=1, step=1)
                     
                     if st.form_submit_button("Confirmar Entrada", type="primary"):
@@ -627,15 +654,20 @@ else:
                         st.success(f"Entrada de {qtd_entrada} unidade(s) de '{nome_p}' processada com sucesso!")
                         st.rerun()
 
-        # 2. ABA DE SAÍDA - Completamente isolada da Entrada
-        with aba_saida:
+        # 2. BLOCO EXCLUSIVO: SAÍDA
+        elif modo_movimento == "📤 Registrar Saída":
             if df_raw_prod.empty:
                 st.info("Nenhum material cadastrado para movimentação.")
             else:
+                st.subheader("Registrar Saída de Material")
                 with st.form("form_registrar_saida", clear_on_submit=True):
                     col_s1, col_s2 = st.columns(2)
                     data_saida = col_s1.date_input("Data da Saída:", value=datetime.today(), format="DD/MM/YYYY")
-                    idx_prod_sai = col_s2.selectbox("Material para Saída:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})")
+                    idx_prod_sai = col_s2.selectbox(
+                        "Material para Saída:", 
+                        df_raw_prod.index, 
+                        format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})"
+                    )
                     
                     col_s3, col_s4 = st.columns(2)
                     qtd_saida = col_s3.number_input("Quantidade de Saída:", min_value=1, step=1)
@@ -663,8 +695,8 @@ else:
                             st.success(f"Saída de {qtd_saida} unidade(s) de '{nome_p}' gravada!")
                             st.rerun()
 
-        # 3. ABA DE HISTÓRICO
-        with aba_historico:
+        # 3. BLOCO EXCLUSIVO: HISTÓRICO
+        elif modo_movimento == "📋 Histórico de Entradas/Saídas":
             st.subheader("Histórico Geral de Movimentações")
             if df_movimentacoes.empty:
                 st.info("Nenhuma movimentação realizada até o momento.")
