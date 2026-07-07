@@ -252,9 +252,9 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (PÓS-AUTENTICAÇÃO)
 # =============================================================================
 else:
-    df_produtos = pd.read_sql_query("SELECT codigo AS \"Código\", item AS \"Item\", quantidade AS \"Quantidade\", categoria AS \"Categoria\", valor_unitario AS \"Valor Unitário\" FROM produtos", conn)
-    df_movimentacoes = pd.read_sql_query("SELECT data AS \"Data\", tipo AS \"Tipo\", codigo AS \"Código\", item AS \"Item\", quantidade AS \"Quantidade\", responsavel AS \"Responsável\", coordenacao AS \"Coordenação\" FROM movimentacoes", conn)
-    df_coordenacoes = pd.read_sql_query("SELECT sigla AS \"Sigla\", nome AS \"Nome\" FROM coordenacoes", conn)
+    df_produtos = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
+    df_movimentacoes = pd.read_sql_query('SELECT data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenacao AS "Coordenação" FROM movimentacoes', conn)
+    df_coordenacoes = pd.read_sql_query('SELECT sigla AS "Sigla", nome AS "Nome" FROM coordenacoes', conn)
     
     df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
     lista_categorias = df_cat_bruto["nome"].tolist()
@@ -424,7 +424,7 @@ else:
                         cursor = conn.cursor()
                         cursor.execute("""
                             UPDATE produtos 
-                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
+                            SET codigo = %s, item = %s, quantidade = %s, category = %s, valor_unitario = %s 
                             WHERE codigo = %s;
                         """, (edit_cod.strip(), edit_item.strip(), edit_qtd, edit_cat, float(edit_val), cod_atual))
                         conn.commit()
@@ -482,7 +482,7 @@ else:
                         st.warning("Removida.")
                         st.rerun()
 
-    # --- TELA: CADASTRAR USUÁRIO ---
+    # --- TELA: CADASTRAR USUÁRIO (AJUSTADO) ---
     elif escolha == "Cadastrar Usuário":
         st.title("Cadastrar Usuário")
         aba_cad, aba_edit = st.tabs(["Novo Usuário", "Editar / Excluir Usuários"])
@@ -512,10 +512,12 @@ else:
                         st.error("Preencha o Nome e o E-mail!")
                         
         with aba_edit:
-            df_raw_users = pd.read_sql_query("SELECT * FROM usuarios", conn)
+            # Consulta em tempo real realizada no momento do carregamento da aba
+            df_raw_users = pd.read_sql_query("SELECT nome, email, perfil, senha FROM usuarios ORDER BY nome ASC", conn)
+            
             if not df_raw_users.empty:
                 st.dataframe(df_raw_users[["nome", "email", "perfil"]], use_container_width=True, hide_index=True)
-                idx_user = st.selectbox("Selecione para editar:", df_raw_users.index, format_func=lambda x: df_raw_users.loc[x, "nome"])
+                idx_user = st.selectbox("Selecione para editar:", df_raw_users.index, format_func=lambda x: f"{df_raw_users.loc[x, 'nome']} ({df_raw_users.loc[x, 'email']})")
                 email_chave = df_raw_users.loc[idx_user, "email"]
                 
                 edit_n = st.text_input("Nome:", value=df_raw_users.loc[idx_user, "nome"])
@@ -632,35 +634,36 @@ else:
                 with st.form("form_registrar_saida", clear_on_submit=True):
                     col_s1, col_s2 = st.columns(2)
                     data_saida = col_s1.date_input("Data da Saída:", value=datetime.today(), format="DD/MM/YYYY")
-                    idx_prod_sai = col_s2.selectbox("Material para Saída:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})")
-                    qtd_saida = st.number_input("Quantidade de Saída:", min_value=1, step=1)
-                    resp_saida = col_s1.text_input("Responsável pela Retirada:")
-                    coord_saida = col_s2.selectbox("Coordenação Destino:", lista_siglas_coord)
+                    idx_prod_sai = col_s2.selectbox("Material para Retirada:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Disponível: {df_raw_prod.loc[x, 'quantidade']})")
+                    
+                    qtd_saida = col_s1.number_input("Quantidade de Saída:", min_value=1, step=1)
+                    resp_saida = col_s2.text_input("Responsável pela Retirada:")
+                    coord_dest = st.selectbox("Coordenação de Destino:", lista_siglas_coord)
                     
                     if st.form_submit_button("Confirmar Saída", type="primary"):
-                        saldo_atual = int(df_raw_prod.loc[idx_prod_sai, "quantidade"])
+                        saldo_disponivel = int(df_raw_prod.loc[idx_prod_sai, "quantidade"])
                         cod_p = df_raw_prod.loc[idx_prod_sai, "codigo"]
                         nome_p = df_raw_prod.loc[idx_prod_sai, "item"]
                         
-                        if resp_saida.strip() == "":
-                            st.error("Informe o responsável pela retirada!")
-                        elif qtd_saida > saldo_atual:
-                            st.error(f"Saldo insuficiente! Quantidade disponível de '{nome_p}': {saldo_atual}")
+                        if qtd_saida > saldo_disponivel:
+                            st.error(f"Saldo insuficiente! Você tentou retirar {qtd_saida} unidades, mas existem apenas {saldo_disponivel} disponíveis.")
+                        elif not resp_saida.strip():
+                            st.error("Informe o nome do responsável pela retirada.")
                         else:
-                            novo_saldo = saldo_atual - qtd_saida
+                            novo_saldo = saldo_disponivel - qtd_saida
                             cursor = conn.cursor()
                             cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (novo_saldo, cod_p))
                             cursor.execute("""
                                 INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
                                 VALUES (%s, %s, %s, %s, %s, %s, %s);
-                            """, (data_saida.strftime("%d/%m/%Y"), "Saída", cod_p, nome_p, qtd_saida, resp_saida.strip(), coord_saida))
+                            """, (data_saida.strftime("%d/%m/%Y"), "Saída", cod_p, nome_p, qtd_saida, resp_saida.strip(), coord_dest))
                             conn.commit()
-                            st.success(f"Saída de {qtd_saida} unidade(s) de '{nome_p}' concluída!")
+                            st.success(f"Saída de {qtd_saida} unidade(s) de '{nome_p}' cadastrada com sucesso!")
                             st.rerun()
 
-        # 3. ABA DE HISTÓRICO
+        # 3. ABA HISTÓRICO
         with aba_historico:
             if df_movimentacoes.empty:
-                st.info("Nenhuma movimentação registrada até o momento.")
+                st.info("Nenhuma movimentação registrada no histórico.")
             else:
-                st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
+                st.dataframe(df_movimentacoes.sort_index(ascending=False), use_container_width=True, hide_index=True)
