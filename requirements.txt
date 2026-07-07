@@ -2,3 +2,4 @@ streamlit
 pandas
 numpy
 streamlit-option-menu
+psycopg2-binary
