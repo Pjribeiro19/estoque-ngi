@@ -4,22 +4,17 @@ from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import psycopg2  # Alterado de sqlite3 para psycopg2 (Neon)
+import sqlite3
 from streamlit_option_menu import option_menu
 
 # =============================================================================
-# INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (Neon - PostgreSQL)
+# INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (SQLite)
 # =============================================================================
-def conectar_banco():
-    # Puxa automaticamente a URL que salvamos nos Secrets do Streamlit
-    conn_url = st.secrets["postgres"]["url"]
-    return psycopg2.connect(conn_url)
-
 def inicializar_banco_automatico():
-    conn = conectar_banco()
+    conn = sqlite3.connect("almoxarifado.db", check_same_thread=False)
     cursor = conn.cursor()
     
-    # 1. Tabela de usuários (Modificado AUTOINCREMENT para SERIAL)
+    # 1. Tabela de usuários
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             nome TEXT,
@@ -55,8 +50,7 @@ def inicializar_banco_automatico():
             ("002", "Resma Papel A4", 0, "Material de Escritório", 28.50),
             ("003", "Luva de Raspa", 50, "EPI", 12.00)
         ]
-        # Modificado de ? para %s para compatibilidade com PostgreSQL
-        cursor.executemany("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s)", produtos_iniciais)
+        cursor.executemany("INSERT INTO produtos VALUES (?, ?, ?, ?, ?)", produtos_iniciais)
         conn.commit()
 
     # 3. Tabela de coordenações
@@ -69,7 +63,7 @@ def inicializar_banco_automatico():
     
     cursor.execute("SELECT COUNT(*) FROM coordenacoes")
     if cursor.fetchone()[0] == 0:
-        cursor.executemany("INSERT INTO coordenacoes VALUES (%s, %s)", [
+        cursor.executemany("INSERT INTO coordenacoes VALUES (?, ?)", [
             ("COTEC", "Coordenação Técnica"),
             ("COLOG", "Coordenação de Logística")
         ])
@@ -84,13 +78,13 @@ def inicializar_banco_automatico():
     cursor.execute("SELECT COUNT(*) FROM categorias")
     if cursor.fetchone()[0] == 0:
         cat_iniciais = [("EPI",), ("Material de Escritório",), ("Informática",), ("Limpeza",), ("Copa",)]
-        cursor.executemany("INSERT INTO categorias VALUES (%s)", cat_iniciais)
+        cursor.executemany("INSERT INTO categorias VALUES (?)", cat_iniciais)
         conn.commit()
 
-    # 5. Tabela de movimentações (Modificado AUTOINCREMENT para SERIAL)
+    # 5. Tabela de movimentações
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS movimentacoes (
-            id SERIAL PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             data TEXT,
             tipo TEXT,
             codigo TEXT,
@@ -102,25 +96,23 @@ def inicializar_banco_automatico():
     """)
     
     conn.commit()
-    cursor.close()
     return conn
 
-# Ativa o banco de dados na nuvem
-conn_inicial = inicializar_banco_automatico()
-conn_inicial.close()
+# Ativa o banco de dados
+conn = inicializar_banco_automatico()
 
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS DE E-MAIL (Secrets do Streamlit)
 # =============================================================================
 try:
     EMAIL_REMETENTE = st.secrets["gmail"]["email"]
-    SENHA_REMETENTE = st.secrets["gmail"]["senha"]  # Ajustado para usar sua chave "senha" mapeada
+    SENHA_REMETENTE = st.secrets["gmail"]["senha_app"]
 except:
     EMAIL_REMETENTE = "configurar_no_secrets@email.com"
     SENHA_REMETENTE = "configurar_no_secrets"
 
 SMTP_HOST = "smtp.gmail.com"
-SMTP_PORTA = 465  # Alterado para 465 (SSL seguro para o Gmail)
+SMTP_PORTA = 587
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
@@ -129,12 +121,14 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- ESTILIZAÇÃO CSS COMPATÍVEL ---
+# --- ESTILIZAÇÃO CSS COMPATÍVEL (Limpeza de Layout e Suporte) ---
 st.markdown("""
     <style>
+    /* Remove menus padrões poluídos e a navegação nativa por rádio */
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
     
+    /* Botões Padrão Primários */
     div.stButton > button:first-child[kind="primary"] {
         background-color: #4CAF50 !important;
         border-color: #4CAF50 !important;
@@ -145,6 +139,7 @@ st.markdown("""
         border-color: #43a047 !important;
     }
     
+    /* Container para a Logotipo */
     .img-container {
         display: flex;
         justify-content: center;
@@ -189,9 +184,8 @@ if not st.session_state.autenticado:
             
             if st.button("Entrar no Sistema", type="primary", use_container_width=True):
                 if usuario_input and senha_input:
-                    conn = conectar_banco()
                     cursor = conn.cursor()
-                    cursor.execute("SELECT nome, senha FROM usuarios WHERE LOWER(email) = %s", (usuario_input.strip().lower(),))
+                    cursor.execute("SELECT nome, senha FROM usuarios WHERE LOWER(email) = ?", (usuario_input.strip().lower(),))
                     resultado = cursor.fetchone()
                     
                     if resultado:
@@ -199,15 +193,11 @@ if not st.session_state.autenticado:
                         if str(senha_banco) == str(senha_input).strip():
                             st.session_state.autenticado = True
                             st.session_state.NOME_USUARIO_LOGADO = nome_banco
-                            cursor.close()
-                            conn.close()
                             st.rerun()
                         else:
                             st.error("❌ Senha incorreta!")
                     else:
                         st.error("❌ Usuário ou E-mail não cadastrado!")
-                    cursor.close()
-                    conn.close()
                 else:
                     st.error("Por favor, preencha todos os campos!")
                     
@@ -224,9 +214,8 @@ if not st.session_state.autenticado:
 
             if st.button("Enviar Instruções", type="primary", use_container_width=True):
                 if email_recuperar.strip():
-                    conn = conectar_banco()
                     cursor = conn.cursor()
-                    cursor.execute("SELECT COUNT(*) FROM usuarios WHERE LOWER(email) = %s", (email_recuperar.strip().lower(),))
+                    cursor.execute("SELECT COUNT(*) FROM usuarios WHERE LOWER(email) = ?", (email_recuperar.strip().lower(),))
                     if cursor.fetchone()[0] > 0:
                         if EMAIL_REMETENTE == "configurar_no_secrets@email.com":
                             st.error("Erro de configuração nos Secrets do Streamlit.")
@@ -238,9 +227,8 @@ if not st.session_state.autenticado:
                                 msg['Subject'] = "Recuperação de Senha - Sistema de Almoxarifado NGI Carajás"
                                 corpo_email = f"Sua senha provisória de contingência é: 123"
                                 msg.attach(MIMEText(corpo_email, 'plain'))
-                                
-                                # Conexão SSL Direta para estabilidade com o Gmail
-                                server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORTA)
+                                server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
+                                server.starttls()
                                 server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
                                 server.sendmail(EMAIL_REMETENTE, email_recuperar.strip(), msg.as_string())
                                 server.quit()
@@ -249,8 +237,6 @@ if not st.session_state.autenticado:
                                 st.error(f"Erro ao tentar enviar o e-mail: {e}")
                     else:
                         st.error("Este e-mail não foi encontrado no sistema.")
-                    cursor.close()
-                    conn.close()
                 else:
                     st.warning("Por favor, digite um e-mail válido.")
             if st.button("Voltar para o Login", use_container_width=True):
@@ -261,8 +247,6 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (PÓS-AUTENTICAÇÃO)
 # =============================================================================
 else:
-    conn = conectar_banco()
-    
     df_produtos = pd.read_sql_query("SELECT codigo AS Código, item AS Item, quantidade AS Quantidade, categoria AS Categoria, valor_unitario AS [Valor Unitário] FROM produtos", conn)
     df_movimentacoes = pd.read_sql_query("SELECT data AS Data, tipo AS Tipo, codigo AS Código, item AS Item, quantidade AS Quantidade, responsavel AS [Responsável], coordenacao AS [Coordenação] FROM movimentacoes", conn)
     df_coordenacoes = pd.read_sql_query("SELECT sigla AS Sigla, nome AS Nome FROM coordenacoes", conn)
@@ -270,6 +254,7 @@ else:
     df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
     lista_categorias = df_cat_bruto["nome"].tolist()
 
+    # --- MENU LATERAL ATUALIZADO COM OS ÍCONES MODERNOS ---
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("---")
@@ -285,7 +270,16 @@ else:
                 "Movimentação de Estoque",
                 "Sair do Sistema"
             ],
-            icons=["grid", "box", "folder", "person-plus", "building", "arrow-left-right", "box-arrow-right"],
+            # Classes de ícones planos e limpos (idêntico à sua imagem de referência)
+            icons=[
+                "grid",             # Painel Geral
+                "box",              # Cadastrar Produto
+                "folder",           # Cadastrar Categoria
+                "person-plus",      # Cadastrar Usuário
+                "building",         # Cadastrar Coordenação
+                "arrow-left-right", # Movimentação
+                "box-arrow-right"   # Sair do Sistema
+            ],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -309,9 +303,9 @@ else:
     if escolha == "Sair do Sistema":
         st.session_state.autenticado = False
         st.session_state.NOME_USUARIO_LOGADO = ""
-        conn.close()
         st.rerun()
 
+    # --- TELA: PAINEL GERAL ---
     elif escolha == "Painel Geral":
         st.markdown("""
             <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
@@ -383,6 +377,7 @@ else:
                 
             st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
 
+    # --- TELA: CADASTRAR PRODUTO ---
     elif escolha == "Cadastrar Produto":
         st.title("Gerenciamento de Produtos")
         aba_cad_prod, aba_gerenciar_prod = st.tabs(["Novo Material", "Editar / Excluir Produtos"])
@@ -400,12 +395,11 @@ else:
                     if cod and nome_it:
                         try:
                             cursor = conn.cursor()
-                            cursor.execute("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s)", (cod.strip(), nome_it.strip(), 0, cat_it, float(val_unit)))
+                            cursor.execute("INSERT INTO produtos VALUES (?, ?, ?, ?, ?)", (cod.strip(), nome_it.strip(), 0, cat_it, float(val_unit)))
                             conn.commit()
-                            cursor.close()
                             st.success(f"Sucesso! {nome_it} adicionado.")
                             st.rerun()
-                        except:
+                        except sqlite3.IntegrityError:
                             st.error(f"Erro! Código {cod} já existe.")
                     else:
                         st.error("Preencha todos os campos!")
@@ -433,22 +427,21 @@ else:
                         cursor = conn.cursor()
                         cursor.execute("""
                             UPDATE produtos 
-                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
-                            WHERE codigo = %s
+                            SET codigo = ?, item = ?, quantidade = ?, categoria = ?, valor_unitario = ? 
+                            WHERE codigo = ?
                         """, (edit_cod.strip(), edit_item.strip(), edit_qtd, edit_cat, float(edit_val), cod_atual))
                         conn.commit()
-                        cursor.close()
                         st.success("Modificado com sucesso!")
                         st.rerun()
                 with col_b_prod2:
                     if st.button("Excluir Produto"):
                         cursor = conn.cursor()
-                        cursor.execute("DELETE FROM produtos WHERE codigo = %s", (cod_atual,))
+                        cursor.execute("DELETE FROM produtos WHERE codigo = ?", (cod_atual,))
                         conn.commit()
-                        cursor.close()
                         st.warning("Removido com sucesso.")
                         st.rerun()
 
+    # --- TELA: CADASTRAR CATEGORIA ---
     elif escolha == "Cadastrar Categoria":
         st.title("Gerenciamento de Categorias")
         aba_nova_cat, aba_gerenciar_cat = st.tabs(["Nova Categoria", "Editar / Excluir Categorias"])
@@ -461,12 +454,11 @@ else:
                     if nova_cat and nova_cat.strip():
                         try:
                             cursor = conn.cursor()
-                            cursor.execute("INSERT INTO categorias VALUES (%s)", (nova_cat.strip(),))
+                            cursor.execute("INSERT INTO categorias VALUES (?)", (nova_cat.strip(),))
                             conn.commit()
-                            cursor.close()
                             st.success("Adicionada!")
                             st.rerun()
-                        except:
+                        except sqlite3.IntegrityError:
                             st.error("Esta categoria já existe.")
             with col_cat2:
                 st.dataframe(pd.DataFrame(lista_categorias, columns=["Categorias Ativas"]), use_container_width=True, hide_index=True)
@@ -480,20 +472,19 @@ else:
                 with c_btn_cat1:
                     if st.button("Salvar Edição", type="primary"):
                         cursor = conn.cursor()
-                        cursor.execute("UPDATE categorias SET nome = %s WHERE nome = %s", (edit_nome_cat.strip(), cat_selecionada))
+                        cursor.execute("UPDATE categorias SET nome = ? WHERE nome = ?", (edit_nome_cat.strip(), cat_selecionada))
                         conn.commit()
-                        cursor.close()
                         st.success("Atualizado!")
                         st.rerun()
                 with c_btn_cat2:
                     if st.button("Excluir Categoria"):
                         cursor = conn.cursor()
-                        cursor.execute("DELETE FROM categorias WHERE nome = %s", (cat_selecionada,))
+                        cursor.execute("DELETE FROM categorias WHERE nome = ?", (cat_selecionada,))
                         conn.commit()
-                        cursor.close()
                         st.warning("Removida.")
                         st.rerun()
 
+    # --- TELA: CADASTRAR USUÁRIO ---
     elif escolha == "Cadastrar Usuário":
         st.title("Cadastrar Usuário")
         aba_cad, aba_edit = st.tabs(["Novo Usuário", "Editar / Excluir Usuários"])
@@ -511,13 +502,12 @@ else:
                             cursor = conn.cursor()
                             cursor.execute("""
                                 INSERT INTO usuarios (nome, email, senha, perfil) 
-                                VALUES (%s, %s, %s, %s)
+                                VALUES (?, ?, ?, ?)
                             """, (n.strip(), e.strip().lower(), s if s else "123", p))
                             conn.commit()
-                            cursor.close()
                             st.success("Usuário registrado com sucesso!")
                             st.rerun()
-                        except:
+                        except sqlite3.IntegrityError:
                             st.error("Este e-mail já está cadastrado.")
                     else:
                         st.error("Preencha o Nome e o E-mail!")
@@ -539,21 +529,20 @@ else:
                     if st.button("Atualizar Dados", type="primary"):
                         cursor = conn.cursor()
                         cursor.execute("""
-                            UPDATE usuarios SET nome = %s, email = %s, senha = %s, perfil = %s WHERE email = %s
+                            UPDATE usuarios SET nome = ?, email = ?, senha = ?, perfil = ? WHERE email = ?
                         """, (edit_n.strip(), edit_e.strip().lower(), edit_s, edit_p, email_chave))
                         conn.commit()
-                        cursor.close()
                         st.success("Atualizado!")
                         st.rerun()
                 with c_btn_u2:
                     if st.button("Excluir Usuário"):
                         cursor = conn.cursor()
-                        cursor.execute("DELETE FROM usuarios WHERE email = %s", (email_chave,))
+                        cursor.execute("DELETE FROM usuarios WHERE email = ?", (email_chave,))
                         conn.commit()
-                        cursor.close()
                         st.warning("Removido.")
                         st.rerun()
 
+    # --- TELA: CADASTRAR COORDENAÇÃO ---
     elif escolha == "Cadastrar Coordenação":
         st.title("Cadastrar Coordenação")
         aba_c1, aba_c2 = st.tabs(["Nova Coordenação", "Editar / Excluir Coordenação"])
@@ -566,12 +555,11 @@ else:
                     if s_coord and nc:
                         try:
                             cursor = conn.cursor()
-                            cursor.execute("INSERT INTO coordenacoes VALUES (%s, %s)", (s_coord.strip().upper(), nc.strip()))
+                            cursor.execute("INSERT INTO coordenacoes VALUES (?, ?)", (s_coord.strip().upper(), nc.strip()))
                             conn.commit()
-                            cursor.close()
                             st.success("Cadastrada!")
                             st.rerun()
-                        except:
+                        except sqlite3.IntegrityError:
                             st.error("Esta sigla já está registrada.")
                     else:
                         st.error("Preencha todos os campos!")
@@ -580,9 +568,8 @@ else:
                 st.dataframe(df_coordenacoes, use_container_width=True, hide_index=True)
                 sigla_selecionada = st.selectbox("Selecione para modificar:", df_coordenacoes["Sigla"].tolist())
                 cursor = conn.cursor()
-                cursor.execute("SELECT nome FROM coordenacoes WHERE sigla = %s", (sigla_selecionada,))
+                cursor.execute("SELECT nome FROM coordenacoes WHERE sigla = ?", (sigla_selecionada,))
                 nome_atual_c = cursor.fetchone()[0]
-                cursor.close()
                 
                 edit_sigla = st.text_input("Sigla:", value=sigla_selecionada)
                 edit_nc = st.text_input("Nome:", value=nome_atual_c)
@@ -591,20 +578,19 @@ else:
                 with c_btn_co1:
                     if st.button("Salvar Edição", type="primary"):
                         cursor = conn.cursor()
-                        cursor.execute("UPDATE coordenacoes SET sigla = %s, nome = %s WHERE sigla = %s", (edit_sigla.strip().upper(), edit_nc.strip(), sigla_selecionada))
+                        cursor.execute("UPDATE coordenacoes SET sigla = ?, nome = ? WHERE sigla = ?", (edit_sigla.strip().upper(), edit_nc.strip(), sigla_selecionada))
                         conn.commit()
-                        cursor.close()
                         st.success("Salvo!")
                         st.rerun()
                 with c_btn_co2:
                     if st.button("Excluir Coordenação"):
                         cursor = conn.cursor()
-                        cursor.execute("DELETE FROM coordenacoes WHERE sigla = %s", (sigla_selecionada,))
+                        cursor.execute("DELETE FROM coordenacoes WHERE sigla = ?", (sigla_selecionada,))
                         conn.commit()
-                        cursor.close()
                         st.warning("Removida.")
                         st.rerun()
 
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE ---
     elif escolha == "Movimentação de Estoque":
         st.title("🔄 Movimentação de Entrada e Saída")
         aba_entrada, aba_saida, aba_historico = st.tabs(["📥 Registrar Entrada", "📤 Registrar Saída", "📋 Histórico de Entradas/Saídas"])
@@ -612,6 +598,7 @@ else:
         df_raw_prod = pd.read_sql_query("SELECT * FROM produtos", conn)
         lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["-"]
         
+        # 1. ABA DE ENTRADA
         with aba_entrada:
             if df_raw_prod.empty:
                 st.info("Nenhum material cadastrado para movimentação.")
@@ -621,3 +608,60 @@ else:
                     data_entrada = col_e1.date_input("Data da Entrada:", value=datetime.today(), format="DD/MM/YYYY")
                     idx_prod_ent = col_e2.selectbox("Material para Entrada:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})")
                     qtd_entrada = st.number_input("Quantidade de Entrada:", min_value=1, step=1)
+                    
+                    if st.form_submit_button("Confirmar Entrada", type="primary"):
+                        cod_p = df_raw_prod.loc[idx_prod_ent, "codigo"]
+                        nome_p = df_raw_prod.loc[idx_prod_ent, "item"]
+                        novo_saldo = int(df_raw_prod.loc[idx_prod_ent, "quantidade"]) + qtd_entrada
+                        
+                        cursor = conn.cursor()
+                        cursor.execute("UPDATE produtos SET quantidade = ? WHERE codigo = ?", (novo_saldo, cod_p))
+                        cursor.execute("""
+                            INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """, (data_entrada.strftime("%d/%m/%Y"), "Entrada", cod_p, nome_p, qtd_entrada, "Almoxarifado", "-"))
+                        conn.commit()
+                        st.success(f"Entrada de {qtd_entrada} unidade(s) de '{nome_p}' processada com sucesso!")
+                        st.rerun()
+
+        # 2. ABA DE SAÍDA
+        with aba_saida:
+            if df_raw_prod.empty:
+                st.info("Nenhum material cadastrado para movimentação.")
+            else:
+                with st.form("form_registrar_saida", clear_on_submit=True):
+                    col_s1, col_s2 = st.columns(2)
+                    data_saida = col_s1.date_input("Data da Saída:", value=datetime.today(), format="DD/MM/YYYY")
+                    idx_prod_sai = col_s2.selectbox("Material para Saída:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})")
+                    
+                    qtd_saida = col_s1.number_input("Quantidade de Saída:", min_value=1, step=1)
+                    resp_saida = col_s2.text_input("Responsável pela Retirada:", placeholder="Ex: Nome do Servidor")
+                    coord_saida = st.selectbox("Coordenação / Setor:", lista_siglas_coord)
+                    
+                    if st.form_submit_button("Confirmar Saída", type="primary"):
+                        saldo_disponivel = int(df_raw_prod.loc[idx_prod_sai, "quantidade"])
+                        cod_p = df_raw_prod.loc[idx_prod_sai, "codigo"]
+                        nome_p = df_raw_prod.loc[idx_prod_sai, "item"]
+                        
+                        if qtd_saida > saldo_disponivel:
+                            st.error(f"❌ Saldo Insuficiente! O saldo atual de '{nome_p}' é {saldo_disponivel} unidade(s).")
+                        elif not resp_saida.strip():
+                            st.error("⚠️ Por favor, informe o responsável pela retirada.")
+                        else:
+                            novo_saldo = saldo_disponivel - qtd_saida
+                            cursor = conn.cursor()
+                            cursor.execute("UPDATE produtos SET quantidade = ? WHERE codigo = ?", (novo_saldo, cod_p))
+                            cursor.execute("""
+                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
+                                VALUES (?, ?, ?, ?, ?, ?, ?)
+                            """, (data_saida.strftime("%d/%m/%Y"), "Saída", cod_p, nome_p, qtd_saida, resp_saida.strip(), coord_saida))
+                            conn.commit()
+                            st.success(f"Saída de {qtd_saida} unidade(s) de '{nome_p}' processada com sucesso!")
+                            st.rerun()
+
+        # 3. HISTÓRICO
+        with aba_historico:
+            if df_movimentacoes.empty:
+                st.info("Nenhuma movimentação registrada no histórico.")
+            else:
+                st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
