@@ -369,7 +369,7 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
-        cor_esgotados = "#c62828" if produtos_esgotados > 0 else #4CAF50
+        cor_esgotados = "#c62828" if produtos_esgotados > 0 else "#4CAF50"
         bg_esgotados = "rgba(198, 40, 40, 0.08)" if produtos_esgotados > 0 else "rgba(76, 175, 80, 0.08)"
         
         c2.markdown(f"""
@@ -657,28 +657,3 @@ else:
                         conn.commit()
                         st.success("Salvo!")
                         st.rerun()
-                with c_btn_co2:
-                    if st.button("Excluir Coordenação"):
-                        cursor = conn.cursor()
-                        cursor.execute("DELETE FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
-                        conn.commit()
-                        st.warning("Removida.")
-                        st.rerun()
-
-    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE ---
-    elif escolha == "Movimentação de Estoque":
-        st.title("🔄 Movimentação de Entrada e Saída")
-        
-        modo_movimento = option_menu(
-            menu_title=None,
-            options=["📥 Registrar Entrada", "📤 Registrar Saída", "📜 Histórico de Movimentações"],
-            icons=["arrow-down-circle", "arrow-up-circle", "clock-history"],
-            orientation="horizontal",
-            styles=ESTILO_MENU_HORIZONTAL
-        )
-        
-        if modo_movimento == "📥 Registrar Entrada":
-            if not df_produtos.empty:
-                with st.form("form_entrada", clear_on_submit=True):
-                    col_e1, col_e2 = st.columns(2)
-                    st.write("Formulário de Entrada carregado.")
