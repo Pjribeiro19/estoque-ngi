@@ -426,9 +426,10 @@ else:
                 with col_b_prod1:
                     if st.button("Salvar Alterações", type="primary"):
                         cursor = conn.cursor()
+                        # CORRIGIDO: mudado de quantity para quantidade para refletir o banco de dados
                         cursor.execute("""
                             UPDATE produtos 
-                            SET codigo = %s, item = %s, quantity = %s, categoria = %s, valor_unitario = %s 
+                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
                             WHERE codigo = %s;
                         """, (edit_cod.strip(), edit_item.strip(), edit_qtd, edit_cat, float(edit_val), cod_atual))
                         conn.commit()
@@ -641,17 +642,15 @@ else:
                     )
                     qtd_entrada = st.number_input("Quantidade de Entrada:", min_value=1, step=1)
                     
-                    if st.form_submit_button("Confirmar Entrada", type="primary"):
-                        cod_p = df_raw_prod.loc[idx_prod_ent, "codigo"]
-                        nome_p = df_raw_prod.loc[idx_prod_ent, "item"]
-                        novo_saldo = int(df_raw_prod.loc[idx_prod_ent, "quantidade"]) + int(qtd_entrada)
+                    if st.form_submit_button("Registrar Entrada", type="primary"):
+                        cod_p = df_raw_prod.loc[idx_prod_ent, 'codigo']
+                        item_p = df_raw_prod.loc[idx_prod_ent, 'item']
+                        qtd_atual_p = df_raw_prod.loc[idx_prod_ent, 'quantidade']
                         
                         cursor = conn.cursor()
-                        cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (novo_saldo, cod_p))
-                        cursor.execute("""
-                            INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
-                            VALUES (%s, %s, %s, %s, %s, %s, %s);
-                        """, (data_entrada.strftime("%d/%m/%Y"), "Entrada", cod_p, nome_p, int(qtd_entrada), st.session_state.NOME_USUARIO_LOGADO, "Almoxarifado"))
+                        cursor.execute("INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) VALUES (%s, %s, %s, %s, %s, %s, %s);",
+                                       (data_entrada.strftime("%d/%m/%Y"), "Entrada", cod_p, item_p, qtd_entrada, st.session_state.NOME_USUARIO_LOGADO, "ALMOXARIFADO"))
+                        cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (qtd_atual_p + qtd_entrada, cod_p))
                         conn.commit()
-                        st.success(f"Entrada de {qtd_entrada} unidades de '{nome_p}' registrada!")
+                        st.success("Entrada registrada com sucesso!")
                         st.rerun()
