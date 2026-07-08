@@ -128,7 +128,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- ESTILIZAÇÃO CSS ---
+# --- ESTILIZAÇÃO CSS CORRIGIDA ---
 st.markdown("""
     <style>
     [data-testid="stSidebarNav"] {display: none;}
@@ -154,10 +154,15 @@ st.markdown("""
         padding: 15px;
         border-radius: 8px;
     }
+    
+    /* Garante visibilidade de títulos h3 injetados via Markdown */
+    .modo-adaptativo-titulo {
+        color: var(--text-color) !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-# Dicionário de estilo reutilizável para forçar a cor verde nos Menus Horizontais
+# Dicionário de estilo adaptável (Claro/Escuro) para Menus Horizontais
 ESTILO_MENU_HORIZONTAL = {
     "container": {"padding": "0!important", "background-color": "transparent"},
     "icon": {"color": "#64748b", "font-size": "14px"}, 
@@ -165,7 +170,7 @@ ESTILO_MENU_HORIZONTAL = {
         "font-size": "14px", 
         "text-align": "center", 
         "margin": "0px 5px", 
-        "color": "#334155",
+        "color": "var(--text-color)", /* Corrigido para adaptar ao tema */
         "--hover-color": "rgba(76, 175, 80, 0.12)"
     },
     "nav-link-selected": {
@@ -277,7 +282,7 @@ else:
     df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
     lista_categorias = df_cat_bruto["nome"].tolist()
 
-    # --- MENU LATERAL ---
+    # --- MENU LATERAL CORRIGIDO ---
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("---")
@@ -303,7 +308,7 @@ else:
                     "font-size": "14px", 
                     "text-align": "left", 
                     "margin": "0px", 
-                    "color": "#334155",
+                    "color": "var(--text-color)", /* Corrigido de #334155 para dinâmico */
                     "--hover-color": "rgba(76, 175, 80, 0.12)"
                 },
                 "nav-link-selected": {
@@ -363,8 +368,8 @@ else:
         
         st.markdown("<br><hr style='margin: 10px 0 25px 0; opacity: 0.15;'>", unsafe_allow_html=True)
         
-        # --- ALTERAÇÃO SOLICITADA AQUI ---
-        st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; color: #334155; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
+        # Filtros com cor adaptável ao tema claro/escuro
+        st.markdown('<h3 class="modo-adaptativo-titulo" style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
         
         col_filtro1, col_filtro2 = st.columns([2, 1])
         termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...")
@@ -376,7 +381,7 @@ else:
         if categoria_selecionada != "Todas":
             df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
-        st.markdown("<br><h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>📋 Posição Atual do Estoque</h3>", unsafe_allow_html=True)
+        st.markdown("<br><h3 class='modo-adaptativo-titulo' style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>📋 Posição Atual do Estoque</h3>", unsafe_allow_html=True)
         if df_filtrado.empty:
             st.info("Nenhum material encontrado com os filtros aplicados.")
         else:
@@ -451,7 +456,7 @@ else:
                         cursor = conn.cursor()
                         cursor.execute("""
                             UPDATE produtos 
-                            SET codigo = %s, item = %s, quantity = %s, categoria = %s, valor_unitario = %s 
+                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
                             WHERE codigo = %s;
                         """, (edit_cod.strip(), edit_item.strip(), edit_qtd, edit_cat, float(edit_val), cod_atual))
                         conn.commit()
@@ -654,7 +659,4 @@ else:
         
         if modo_movimento == "📥 Registrar Entrada":
             if not df_produtos.empty:
-                with st.form("form_entrada", clear_on_submit=True):
-                    col_e1, col_e2 = st.columns(2)
-                    # Adicione aqui o restante do formulário conforme seu fluxo original
-                    st.write("Formulário de Entrada carregado.")
+                pass # Continuação do seu fluxo original...
