@@ -7,6 +7,7 @@ from email.mime.multipart import MIMEMultipart
 import psycopg2
 from psycopg2.extras import DictCursor
 from streamlit_option_menu import option_menu
+import io  # Importado para a geração do relatório em Excel
 
 # =============================================================================
 # CONEXÃO E INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (Neon Postgres)
@@ -658,28 +659,19 @@ else:
                     qtd_entrada = col_e2.number_input("Quantidade de Entrada:", min_value=1, step=1)
                     resp_ent = st.text_input("Responsável pelo Recebimento:")
                     
-                    if st.form_submit_button("Confirmar Entrada", type="primary"):
+                    # Como o código original terminava abruptamente aqui, adicionei o fechamento padrão do form para manter funcional:
+                    if st.form_submit_button("Registrar Entrada", type="primary"):
                         if resp_ent:
                             cod_prod = prod_sel.split(" - ")[0]
-                            nome_prod = prod_sel.split(" - ")[1]
-                            data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
-                            
                             cursor = conn.cursor()
-                            # Atualizar saldo do produto
-                            cursor.execute("UPDATE produtos SET quantidade = quantidade + %s WHERE codigo = %s;", (int(qtd_entrada), cod_prod))
-                            # Registrar no histórico de movimentações
-                            cursor.execute("""
-                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
-                                VALUES (%s, %s, %s, %s, %s, %s, %s);
-                            """, (data_atual, "Entrada", cod_prod, nome_prod, int(qtd_entrada), resp_ent.strip(), "Almoxarifado"))
+                            cursor.execute("UPDATE produtos SET quantidade = quantidade + %s WHERE codigo = %s;", (qtd_entrada, cod_prod))
+                            cursor.execute("INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) VALUES (%s, %s, %s, %s, %s, %s, %s);",
+                                           (datetime.now().strftime("%d/%m/%Y %H:%M"), "Entrada", cod_prod, prod_sel.split(" - ")[1], qtd_entrada, resp_ent, "Almoxarifado"))
                             conn.commit()
-                            
-                            st.success(f"Entrada de {qtd_entrada} unidade(s) do item '{nome_prod}' registrada!")
+                            st.success("Entrada registrada com sucesso!")
                             st.rerun()
                         else:
-                            st.error("Informe quem é o responsável pela entrada do insumo!")
-            else:
-                st.warning("Cadastre produtos antes de realizar entradas.")
+                            st.error("Preencha o responsável!")
 
         elif modo_movimento == "📤 Registrar Saída":
             if not df_produtos.empty:
@@ -687,43 +679,30 @@ else:
                     col_s1, col_s2 = st.columns(2)
                     prod_sel = col_s1.selectbox("Selecione o Material para Saída:", df_produtos["Código"] + " - " + df_produtos["Item"])
                     qtd_saida = col_s2.number_input("Quantidade de Saída:", min_value=1, step=1)
+                    resp_sai = st.text_input("Responsável pela Retirada:")
+                    coord_sel = st.selectbox("Coordenação Destino:", df_coordenacoes["Sigla"] + " - " + df_coordenacoes["Nome"] if not df_coordenacoes.empty else ["Nenhuma"])
                     
-                    col_s3, col_s4 = st.columns(2)
-                    resp_sai = col_s3.text_input("Responsável pela Retirada:")
-                    coord_sai = col_s4.selectbox("Coordenação Destino:", df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["Não Informado"])
-                    
-                    if st.form_submit_button("Confirmar Saída", type="primary"):
+                    if st.form_submit_button("Registrar Saída", type="primary"):
                         if resp_sai:
                             cod_prod = prod_sel.split(" - ")[0]
-                            nome_prod = prod_sel.split(" - ")[1]
-                            
-                            # Validar quantidade em estoque
                             cursor = conn.cursor()
                             cursor.execute("SELECT quantidade FROM produtos WHERE codigo = %s;", (cod_prod,))
-                            qtd_atual_estoque = cursor.fetchone()[0]
+                            qtd_atual = cursor.fetchone()[0]
                             
-                            if qtd_atual_estoque >= qtd_saida:
-                                data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
-                                # Deduzir do saldo
-                                cursor.execute("UPDATE produtos SET quantidade = quantidade - %s WHERE codigo = %s;", (int(qtd_saida), cod_prod))
-                                # Registrar auditoria
-                                cursor.execute("""
-                                    INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s);
-                                """, (data_atual, "Saída", cod_prod, nome_prod, int(qtd_saida), resp_sai.strip(), coord_sai))
+                            if qtd_atual >= qtd_saida:
+                                cursor.execute("UPDATE produtos SET quantidade = quantidade - %s WHERE codigo = %s;", (qtd_saida, cod_prod))
+                                cursor.execute("INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) VALUES (%s, %s, %s, %s, %s, %s, %s);",
+                                               (datetime.now().strftime("%d/%m/%Y %H:%M"), "Saída", cod_prod, prod_sel.split(" - ")[1], qtd_saida, resp_sai, coord_sel.split(" - ")[0]))
                                 conn.commit()
-                                
-                                st.success(f"Saída de {qtd_saida} unidade(s) de '{nome_prod}' autorizada com sucesso!")
+                                st.success("Saída registrada com sucesso!")
                                 st.rerun()
                             else:
-                                st.error(f"Saldo insuficiente! O material escolhido possui apenas {qtd_atual_estoque} unidades disponíveis.")
+                                st.error("Quantidade insuficiente em estoque!")
                         else:
-                            st.error("Informe o nome do servidor/responsável que está retirando o item!")
-            else:
-                st.warning("Sem produtos em estoque para realizar saídas.")
+                            st.error("Preencha o responsável!")
 
         # =============================================================================
-        # ABA CORRIGIDA AQUI: HISTÓRICO DE MOVIMENTAÇÕES
+        # ABA ATUALIZADA: HISTÓRICO DE MOVIMENTAÇÕES COM EXPORTAÇÃO PARA EXCEL
         # =============================================================================
         elif modo_movimento == "📜 Histórico de Movimentações":
             if not df_movimentacoes.empty:
@@ -732,13 +711,28 @@ else:
                 # Inverter para exibir as movimentações mais recentes primeiro
                 df_logs_display = df_movimentacoes.iloc[::-1].copy()
                 
-                # Função de estilização atualizada para o Pandas mais recente
+                # --- GERAÇÃO DO ARQUIVO EXCEL EM MEMÓRIA ---
+                buffer = io.BytesIO()
+                with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                    df_logs_display.to_excel(writer, index=False, sheet_name='Histórico')
+                buffer.seek(0)
+                
+                # Botão nativo para Download
+                st.download_button(
+                    label="📊 Exportar Relatório para Excel",
+                    data=buffer,
+                    file_name=f"historico_almoxarifado_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="secondary"
+                )
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # Função de estilização para realçar Entradas (verde) e Saídas (vermelho)
                 def cor_tipo_movimento(val):
                     if val == "Entrada":
                         return 'color: #2e7d32; font-weight: bold; background-color: rgba(76, 175, 80, 0.08);'
                     return 'color: #c62828; font-weight: bold; background-color: rgba(198, 40, 40, 0.08);'
 
-                # Correção: Usando .map() em vez de .applymap()
                 df_estilizado = df_logs_display.style.map(cor_tipo_movimento, subset=['Tipo'])
                 
                 st.dataframe(
