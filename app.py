@@ -135,13 +135,13 @@ st.markdown("""
     [data-testid="stMainMenu"] {display: none;}
     
     div.stButton > button:first-child[kind="primary"] {
-        background-color: #0F52BA !important;
-        border-color: #0F52BA !important;
+        background-color: #4CAF50 !important;
+        border-color: #4CAF50 !important;
         color: white !important;
     }
     div.stButton > button:first-child[kind="primary"]:hover {
-        background-color: #0a3d8f !important;
-        border-color: #0a3d8f !important;
+        background-color: #43a047 !important;
+        border-color: #43a047 !important;
     }
     
     .img-container {
@@ -157,7 +157,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Definição do dicionário de estilos reutilizável com o AZUL correto para as abas/botões de navegação
+# Definição do dicionário de estilos reutilizável com o VERDE correto para as abas/botões de navegação
 ESTILO_MENU_HORIZONTAL = {
     "container": {"padding": "0!important", "background-color": "transparent"},
     "icon": {"color": "#64748b", "font-size": "14px"}, 
@@ -166,10 +166,10 @@ ESTILO_MENU_HORIZONTAL = {
         "text-align": "center", 
         "margin": "0px 5px", 
         "color": "#334155",
-        "--hover-color": "rgba(15, 82, 186, 0.12)"
+        "--hover-color": "rgba(76, 175, 80, 0.12)"
     },
     "nav-link-selected": {
-        "background-color": "#0F52BA",  # <--- Azul aplicado aqui!
+        "background-color": "#4CAF50",  # <--- Verde do seu sistema aplicado aqui!
         "color": "white", 
         "font-weight": "500"
     },
@@ -198,7 +198,7 @@ if not st.session_state.autenticado:
                     <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="320">
                 </div>
             """, unsafe_allow_html=True)
-            st.markdown("<h2 style='text-align: center; color: #0F52BA; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center; color: #4CAF50; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
             
             usuario_input = st.text_input("Usuário / E-mail")
             senha_input = st.text_input("Senha", type="password")
@@ -304,10 +304,10 @@ else:
                     "text-align": "left", 
                     "margin": "0px", 
                     "color": "#334155",
-                    "--hover-color": "rgba(15, 82, 186, 0.12)"
+                    "--hover-color": "rgba(76, 175, 80, 0.12)"
                 },
                 "nav-link-selected": {
-                    "background-color": "#0F52BA", 
+                    "background-color": "#4CAF50", 
                     "color": "white", 
                     "font-weight": "500"
                 },
@@ -322,11 +322,11 @@ else:
     # --- TELA: PAINEL GERAL ---
     elif escolha == "Painel Geral":
         st.markdown("""
-            <div style="background-color: #0F52BA; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+            <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Painel Geral de Controle
                 </h1>
-                <p style="color: #E3F2FD; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                     Visão Geral de Saldos, Alertas de Materiais e Fluxo de Insumos NGI Carajás
                 </p>
             </div>
@@ -338,14 +338,14 @@ else:
         total_movimentacoes = len(df_movimentacoes)
         
         c1.markdown(f"""
-            <div style="background-color: rgba(15, 82, 186, 0.08); border-left: 5px solid #0F52BA; padding: 18px; border-radius: 4px;">
+            <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 5px solid #4CAF50; padding: 18px; border-radius: 4px;">
                 <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase;">Total de Itens Cadastrados</span>
-                <h2 style="color: #0F52BA; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_itens}</h2>
+                <h2 style="color: #4CAF50; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_itens}</h2>
             </div>
         """, unsafe_allow_html=True)
         
-        cor_esgotados = "#c62828" if produtos_esgotados > 0 else "#0F52BA"
-        bg_esgotados = "rgba(198, 40, 40, 0.08)" if produtos_esgotados > 0 else "rgba(15, 82, 186, 0.08)"
+        cor_esgotados = "#c62828" if produtos_esgotados > 0 else #4CAF50
+        bg_esgotados = "rgba(198, 40, 40, 0.08)" if produtos_esgotados > 0 else "rgba(76, 175, 80, 0.08)"
         
         c2.markdown(f"""
             <div style="background-color: {bg_esgotados}; border-left: 5px solid {cor_esgotados}; padding: 18px; border-radius: 4px;">
@@ -449,7 +449,7 @@ else:
                         cursor = conn.cursor()
                         cursor.execute("""
                             UPDATE produtos 
-                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
+                            SET codigo = %s, item = %s, quantity = %s, categoria = %s, valor_unitario = %s 
                             WHERE codigo = %s;
                         """, (edit_cod.strip(), edit_item.strip(), edit_qtd, edit_cat, float(edit_val), cod_atual))
                         conn.commit()
