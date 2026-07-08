@@ -107,6 +107,19 @@ def inicializar_banco_automatico():
 
 conn = inicializar_banco_automatico()
 
+# Carregamento seguro e global dos dados para evitar erros de inicialização de variáveis (NameError)
+try:
+    df_produtos = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
+    df_movimentacoes = pd.read_sql_query('SELECT data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenacao AS "Coordenação" FROM movimentacoes', conn)
+    df_coordenacoes = pd.read_sql_query('SELECT sigla AS "Sigla", nome AS "Nome" FROM coordenacoes', conn)
+    df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
+    lista_categorias = df_cat_bruto["nome"].tolist()
+except Exception as e:
+    df_produtos = pd.DataFrame()
+    df_movimentacoes = pd.DataFrame()
+    df_coordenacoes = pd.DataFrame()
+    lista_categorias = []
+
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS DE E-MAIL (Secrets do Streamlit)
 # =============================================================================
@@ -128,23 +141,23 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- ESTILIZAÇÃO CSS CORRIGIDA TOTALMENTE PARA SUPORTAR MODO ESCURO ---
+# --- ESTILIZAÇÃO CSS COMPATÍVEL COM MODO ESCURO E MODOS DE NAVEGADOR ---
 st.markdown("""
     <style>
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
     
-    /* Força texto visível em qualquer modo (Claro/Escuro) para labels e markdown */
+    /* Garante legibilidade do texto se adaptando dinamicamente ao tema claro/escuro */
     html, body, [data-testid="stWidgetLabel"] p, .stMarkdown p, label, span {
         color: var(--text-color) !important;
     }
     
-    /* Força especificamente as opções do menu lateral a obedecerem o modo escuro do navegador */
+    /* Força especificamente as opções do menu lateral a funcionarem no tema escuro */
     .nav-link span {
         color: var(--text-color) !important;
     }
     
-    /* Mantém o texto branco na opção selecionada do menu */
+    /* Mantém o destaque contrastante branco na opção ativa do menu */
     .nav-link.active span {
         color: white !important;
     }
@@ -173,7 +186,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Dicionário de estilo adaptativo para os Menus Horizontais (Abas)
+# Dicionário de estilo adaptativo para os menus horizontais
 ESTILO_MENU_HORIZONTAL = {
     "container": {"padding": "0!important", "background-color": "transparent"},
     "icon": {"color": "#64748b", "font-size": "14px"}, 
@@ -181,7 +194,7 @@ ESTILO_MENU_HORIZONTAL = {
         "font-size": "14px", 
         "text-align": "center", 
         "margin": "0px 5px", 
-        "color": "var(--text-color)", /* COR RIGIDA: Dinâmica baseada no tema do navegador */
+        "color": "var(--text-color)",
         "--hover-color": "rgba(76, 175, 80, 0.12)"
     },
     "nav-link-selected": {
@@ -202,7 +215,7 @@ if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = ""
 
 # =============================================================================
-# FLUXO 1: FLUXO DE LOGIN
+# FLUXO 1: TELA DE LOGIN / RECUPERAÇÃO
 # =============================================================================
 if not st.session_state.autenticado:
     if st.session_state.sub_tela_login == "login":
@@ -286,13 +299,6 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (PÓS-AUTENTICAÇÃO)
 # =============================================================================
 else:
-    df_produtos = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
-    df_movimentacoes = pd.read_sql_query('SELECT data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenacao AS "Coordenação" FROM movimentacoes', conn)
-    df_coordenacoes = pd.read_sql_query('SELECT sigla AS "Sigla", nome AS "Nome" FROM coordenacoes', conn)
-    
-    df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
-    lista_categorias = df_cat_bruto["nome"].tolist()
-
     # --- MENU LATERAL ---
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
@@ -319,7 +325,7 @@ else:
                     "font-size": "14px", 
                     "text-align": "left", 
                     "margin": "0px", 
-                    "color": "var(--text-color)", /* COR CORRIGIDA: Muda automaticamente com o tema */
+                    "color": "var(--text-color)",
                     "--hover-color": "rgba(76, 175, 80, 0.12)"
                 },
                 "nav-link-selected": {
@@ -349,9 +355,9 @@ else:
         """, unsafe_allow_html=True)
         
         c1, c2, c3 = st.columns(3)
-        total_itens = len(df_produtos)
+        total_itens = len(df_produtos) if not df_produtos.empty else 0
         produtos_esgotados = len(df_produtos[df_produtos['Quantidade'] == 0]) if not df_produtos.empty else 0
-        total_movimentacoes = len(df_movimentacoes)
+        total_movimentacoes = len(df_movimentacoes) if not df_movimentacoes.empty else 0
         
         c1.markdown(f"""
             <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 5px solid #4CAF50; padding: 18px; border-radius: 4px;">
@@ -385,10 +391,10 @@ else:
         termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...")
         categoria_selecionada = col_filtro2.selectbox("Filtrar por Categoria:", ["Todas"] + lista_categorias)
         
-        df_filtrado = df_produtos.copy()
-        if termo_busca:
+        df_filtrado = df_produtos.copy() if not df_produtos.empty else pd.DataFrame()
+        if not df_filtrado.empty and termo_busca:
             df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
-        if categoria_selecionada != "Todas":
+        if not df_filtrado.empty and categoria_selecionada != "Todas":
             df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
         st.markdown("<br><h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>📋 Posição Atual do Estoque</h3>", unsafe_allow_html=True)
@@ -466,7 +472,7 @@ else:
                         cursor = conn.cursor()
                         cursor.execute("""
                             UPDATE produtos 
-                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
+                            SET codigo = %s, item = %s, quantity = %s, categoria = %s, valor_unitario = %s 
                             WHERE codigo = %s;
                         """, (edit_cod.strip(), edit_item.strip(), edit_qtd, edit_cat, float(edit_val), cod_atual))
                         conn.commit()
