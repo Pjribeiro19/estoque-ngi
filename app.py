@@ -114,14 +114,13 @@ conn = inicializar_banco_automatico()
 # =============================================================================
 try:
     EMAIL_REMETENTE = st.secrets["gmail"]["email"]
-    SENHA_REMETENTE = st.secrets["gmail"]["senha"]
-    SMTP_HOST = st.secrets["gmail"]["smtp_server"]
-    SMTP_PORTA = int(st.secrets["gmail"]["smtp_port"])
-except Exception as e:
+    SENHA_REMETENTE = st.secrets["gmail"]["senha_app"]
+except:
     EMAIL_REMETENTE = "configurar_no_secrets@email.com"
     SENHA_REMETENTE = "configurar_no_secrets"
-    SMTP_HOST = "smtp.gmail.com"
-    SMTP_PORTA = 587
+
+SMTP_HOST = "smtp.gmail.com"
+SMTP_PORTA = 587
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
@@ -170,47 +169,8 @@ if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = ""
 
 # =============================================================================
-# FLUXO 1: FLUXO DE LOGIN & INTERCEPTOR DE LINK DE RECUPERAÇÃO
+# FLUXO 1: FLUXO DE LOGIN
 # =============================================================================
-
-# Intercepta se a pessoa clicou no link enviado por e-mail (?recuperar=sim)
-if "recuperar" in st.query_params and st.query_params["recuperar"] == "sim":
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    col_r1, col_r2, col_r3 = st.columns([1, 1.2, 1])
-    with col_r2:
-        st.markdown("### 🔒 Definir Nova Senha")
-        st.info("Insira seu e-mail cadastrado e defina sua senha definitiva abaixo.")
-        
-        with st.form("form_link_redefinir_senha"):
-            email_recup = st.text_input("Confirme seu E-mail").strip().lower()
-            nova_senha = st.text_input("Nova Senha", type="password")
-            confirma_senha = st.text_input("Confirme a Nova Senha", type="password")
-            
-            if st.form_submit_button("Confirmar Alteração de Senha", type="primary", use_container_width=True):
-                if not email_recup or not nova_senha:
-                    st.error("Todos os campos são obrigatórios.")
-                elif nova_senha != confirma_senha:
-                    st.error("As senhas digitadas não coincidem!")
-                else:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT nome FROM usuarios WHERE LOWER(email) = %s;", (email_recup,))
-                    usuario_existe = cursor.fetchone()
-                    
-                    if usuario_existe:
-                        cursor.execute("UPDATE usuarios SET senha = %s WHERE LOWER(email) = %s;", (nova_senha, email_recup))
-                        conn.commit()
-                        st.success("🎉 Senha alterada com sucesso!")
-                        st.balloons()
-                        st.info("Você já pode voltar para a tela de login para acessar.")
-                    else:
-                        st.error("O e-mail informado não está cadastrado no sistema.")
-        
-        if st.button("Voltar para a Tela de Login", use_container_width=True):
-            st.query_params.clear()
-            st.rerun()
-    st.stop()
-
-# Fluxo tradicional de Autenticação se não for um link de redefinição
 if not st.session_state.autenticado:
     if st.session_state.sub_tela_login == "login":
         st.markdown("<br><br>", unsafe_allow_html=True)
@@ -266,24 +226,18 @@ if not st.session_state.autenticado:
                             st.error("Erro de configuração nos Secrets do Streamlit.")
                         else:
                             try:
-                                # IMPORTANTE: Altere esta URL para a URL oficial onde seu app está publicado!
-                                url_sistema = "https://seu-sistema.streamlit.app" 
-                                link_redefinicao = f"{url_sistema}/?recuperar=sim"
-                                
                                 msg = MIMEMultipart()
                                 msg['From'] = EMAIL_REMETENTE
                                 msg['To'] = email_recuperar.strip()
                                 msg['Subject'] = "Recuperação de Senha - Sistema de Almoxarifado NGI Carajás"
-                                
-                                corpo_email = f"Olá,\n\nPara redefinir sua senha de acesso ao Sistema de Almoxarifado NGI Carajás, clique no link abaixo:\n\n{link_redefinicao}\n\nSe você não realizou esta solicitação, desconsidere este e-mail."
+                                corpo_email = f"Sua senha provisória de contingência é: 123"
                                 msg.attach(MIMEText(corpo_email, 'plain'))
-                                
                                 server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
                                 server.starttls()
                                 server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
                                 server.sendmail(EMAIL_REMETENTE, email_recuperar.strip(), msg.as_string())
                                 server.quit()
-                                st.success(f"Sucesso! Link de redefinição enviado para {email_recuperar}")
+                                st.success(f"Sucesso! Instruções enviadas para {email_recuperar}")
                             except Exception as e:
                                 st.error(f"Erro ao tentar enviar o e-mail: {e}")
                     else:
@@ -637,10 +591,11 @@ else:
                         st.warning("Removida.")
                         st.rerun()
 
-    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE ---
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (CORRIGIDA E ISOLADA VIA IF/ELIF) ---
     elif escolha == "Movimentação de Estoque":
         st.title("🔄 Movimentação de Entrada e Saída")
         
+        # Substituído st.tabs por option_menu horizontal para forçar destruição/criação lógica dos elementos
         modo_movimento = option_menu(
             menu_title=None,
             options=["📥 Registrar Entrada", "📤 Registrar Saída", "📋 Histórico de Entradas/Saídas"],
@@ -668,6 +623,7 @@ else:
         df_raw_prod = pd.read_sql_query("SELECT * FROM produtos", conn)
         lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["-"]
         
+        # 1. BLOCO EXCLUSIVO: ENTRADA
         if modo_movimento == "📥 Registrar Entrada":
             if df_raw_prod.empty:
                 st.info("Nenhum material cadastrado para movimentação.")
@@ -685,66 +641,64 @@ else:
                     
                     if st.form_submit_button("Confirmar Entrada", type="primary"):
                         cod_p = df_raw_prod.loc[idx_prod_ent, "codigo"]
-                        item_p = df_raw_prod.loc[idx_prod_ent, "item"]
-                        qtd_atual_p = int(df_raw_prod.loc[idx_prod_ent, "quantidade"])
+                        nome_p = df_raw_prod.loc[idx_prod_ent, "item"]
+                        novo_saldo = int(df_raw_prod.loc[idx_prod_ent, "quantidade"]) + qtd_entrada
                         
                         cursor = conn.cursor()
-                        # Atualiza Saldo
-                        cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (qtd_atual_p + qtd_entrada, cod_p))
-                        # Insere Histórico
+                        cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (novo_saldo, cod_p))
                         cursor.execute("""
                             INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
                             VALUES (%s, %s, %s, %s, %s, %s, %s);
-                        """, (data_entrada.strftime("%d/%m/%Y"), "Entrada", cod_p, item_p, qtd_entrada, st.session_state.NOME_USUARIO_LOGADO, "Almoxarifado"))
-                        
+                        """, (data_entrada.strftime("%d/%m/%Y"), "Entrada", cod_p, nome_p, qtd_entrada, "Almoxarifado", "-"))
                         conn.commit()
-                        st.success(f"Entrada de {qtd_entrada} unidades de '{item_p}' registrada!")
+                        st.success(f"Entrada de {qtd_entrada} unidade(s) de '{nome_p}' processada com sucesso!")
                         st.rerun()
-                        
+
+        # 2. BLOCO EXCLUSIVO: SAÍDA
         elif modo_movimento == "📤 Registrar Saída":
             if df_raw_prod.empty:
-                st.info("Nenhum material disponível.")
+                st.info("Nenhum material cadastrado para movimentação.")
             else:
                 st.subheader("Registrar Saída de Material")
                 with st.form("form_registrar_saida", clear_on_submit=True):
                     col_s1, col_s2 = st.columns(2)
                     data_saida = col_s1.date_input("Data da Saída:", value=datetime.today(), format="DD/MM/YYYY")
                     idx_prod_sai = col_s2.selectbox(
-                        "Material requisitado:", 
+                        "Material para Saída:", 
                         df_raw_prod.index, 
-                        format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Disponível: {df_raw_prod.loc[x, 'quantidade']})"
+                        format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})"
                     )
                     
-                    qtd_saida = col_s1.number_input("Quantidade Requisitada:", min_value=1, step=1)
-                    coord_dest = col_s2.selectbox("Coordenação Destino:", lista_siglas_coord)
-                    resp_retirada = st.text_input("Servidor Responsável pela Retirada:")
+                    col_s3, col_s4 = st.columns(2)
+                    qtd_saida = col_s3.number_input("Quantidade de Saída:", min_value=1, step=1)
+                    coord_destino = col_s4.selectbox("Coordenação de Destino:", lista_siglas_coord)
+                    responsavel_retirada = st.text_input("Responsável pela Retirada:", placeholder="Nome de quem está retirando")
                     
                     if st.form_submit_button("Confirmar Saída", type="primary"):
+                        saldo_disponivel = int(df_raw_prod.loc[idx_prod_sai, "quantidade"])
+                        nome_p = df_raw_prod.loc[idx_prod_sai, "item"]
                         cod_p = df_raw_prod.loc[idx_prod_sai, "codigo"]
-                        item_p = df_raw_prod.loc[idx_prod_sai, "item"]
-                        qtd_atual_p = int(df_raw_prod.loc[idx_prod_sai, "quantidade"])
                         
-                        if qtd_saida > qtd_atual_p:
-                            st.error(f"Erro! Estoque insuficiente. Saldo disponível: {qtd_atual_p}")
-                        elif not resp_retirada.strip():
-                            st.error("Informe o nome do servidor responsável.")
+                        if responsavel_retirada.strip() == "":
+                            st.error("Por favor, preencha o nome do Responsável pela Retirada!")
+                        elif qtd_saida > saldo_disponivel:
+                            st.error(f"Quantidade indisponível! O saldo atual de '{nome_p}' é de apenas {saldo_disponivel} unidade(s).")
                         else:
+                            novo_saldo = saldo_disponivel - qtd_saida
                             cursor = conn.cursor()
-                            # Atualiza Saldo
-                            cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (qtd_atual_p - qtd_saida, cod_p))
-                            # Insere Histórico
+                            cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (novo_saldo, cod_p))
                             cursor.execute("""
                                 INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
                                 VALUES (%s, %s, %s, %s, %s, %s, %s);
-                            """, (data_saida.strftime("%d/%m/%Y"), "Saída", cod_p, item_p, qtd_saida, resp_retirada.strip(), coord_dest))
-                            
+                            """, (data_saida.strftime("%d/%m/%Y"), "Saída", cod_p, nome_p, qtd_saida, responsavel_retirada.strip(), coord_destino))
                             conn.commit()
-                            st.success(f"Saída de {qtd_saida} unidades de '{item_p}' registrada com sucesso!")
+                            st.success(f"Saída de {qtd_saida} unidade(s) de '{nome_p}' gravada!")
                             st.rerun()
-                            
+
+        # 3. BLOCO EXCLUSIVO: HISTÓRICO
         elif modo_movimento == "📋 Histórico de Entradas/Saídas":
-            st.subheader("Histórico de Movimentações")
+            st.subheader("Histórico Geral de Movimentações")
             if df_movimentacoes.empty:
-                st.info("Nenhuma movimentação registrada até o momento.")
+                st.info("Nenhuma movimentação realizada até o momento.")
             else:
-                st.dataframe(df_movimentacoes.sort_index(ascending=False), use_container_width=True, hide_index=True)
+                st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
