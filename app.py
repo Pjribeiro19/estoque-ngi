@@ -128,34 +128,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- ESTILIZAÇÃO CSS (Forçando Modo Claro e corrigindo visibilidade) ---
+# --- ESTILIZAÇÃO CSS ---
 st.markdown("""
     <style>
-    /* Forçar variáveis globais do Streamlit para Modo Claro */
-    :root {
-        --primary-color: #4CAF50;
-        --background-color: #FFFFFF;
-        --secondary-background-color: #F8F9FA;
-        --text-color: #31333F;
-        --font: sans-serif;
-    }
-    
-    /* Forçar fundos principais e barras laterais */
-    .stApp, [data-testid="stSidebar"] {
-        background-color: #FFFFFF !important;
-        color: #31333F !important;
-    }
-    
-    /* Garantir cor preta/escura para inputs, labels e textos normais */
-    .stTextInput label, .stSelectbox label, .stNumberInput label, p, span, h1, h2, h3, h4, h5, h6 {
-        color: #31333F !important;
-    }
-    
-    /* Exceção para textos explicitamente brancos dentro de caixas verdes */
-    .header-box h1, .header-box p {
-        color: #FFFFFF !important;
-    }
-    
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
     
@@ -347,11 +322,11 @@ else:
     # --- TELA: PAINEL GERAL ---
     elif escolha == "Painel Geral":
         st.markdown("""
-            <div class="header-box" style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
-                <h1 style="color: white !important; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+            <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+                <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Painel Geral de Controle
                 </h1>
-                <p style="color: #E8F5E9 !important; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                     Visão Geral de Saldos, Alertas de Materiais e Fluxo de Insumos NGI Carajás
                 </p>
             </div>
@@ -364,7 +339,7 @@ else:
         
         c1.markdown(f"""
             <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 5px solid #4CAF50; padding: 18px; border-radius: 4px;">
-                <span style="color: #31333F; font-size: 13px; font-weight: 600; text-transform: uppercase;">Total de Itens Cadastrados</span>
+                <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase;">Total de Itens Cadastrados</span>
                 <h2 style="color: #4CAF50; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_itens}</h2>
             </div>
         """, unsafe_allow_html=True)
@@ -374,23 +349,21 @@ else:
         
         c2.markdown(f"""
             <div style="background-color: {bg_esgotados}; border-left: 5px solid {cor_esgotados}; padding: 18px; border-radius: 4px;">
-                <span style="color: #31333F; font-size: 13px; font-weight: 600; text-transform: uppercase;">Produtos Esgotados</span>
+                <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase;">Produtos Esgotados</span>
                 <h2 style="color: {cor_esgotados}; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{produtos_esgotados}</h2>
             </div>
         """, unsafe_allow_html=True)
         
         c3.markdown(f"""
             <div style="background-color: rgba(33, 150, 243, 0.08); border-left: 5px solid #2196F3; padding: 18px; border-radius: 4px;">
-                <span style="color: #31333F; font-size: 13px; font-weight: 600; text-transform: uppercase;">Movimentações Realizadas</span>
+                <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase;">Movimentações Realizadas</span>
                 <h2 style="color: #2196F3; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_movimentacoes}</h2>
             </div>
         """, unsafe_allow_html=True)
         
         st.markdown("<br><hr style='margin: 10px 0 25px 0; opacity: 0.15;'>", unsafe_allow_html=True)
         
-        # Filtros de consulta com marcador neutro
-        st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; color: #334155; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
-        
+        st.markdown("<h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>🔍 Filtros de Consulta</h3>", unsafe_allow_html=True)
         col_filtro1, col_filtro2 = st.columns([2, 1])
         termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...")
         categoria_selecionada = col_filtro2.selectbox("Filtrar por Categoria:", ["Todas"] + lista_categorias)
@@ -413,7 +386,7 @@ else:
 
             def destacar_zerados(row):
                 if row['Quantidade'] == 0:
-                    return ['background-color: rgba(198, 40, 40, 0.15); color: #c62828; font-weight: bold;'] * len(row)
+                    return ['background-color: rgba(198, 40, 40, 0.12); color: #c62828; font-weight: bold;'] * len(row)
                 return [''] * len(row)
                 
             st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
@@ -657,3 +630,121 @@ else:
                         conn.commit()
                         st.success("Salvo!")
                         st.rerun()
+                with c_btn_co2:
+                    if st.button("Excluir Coordenação"):
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
+                        conn.commit()
+                        st.warning("Removida.")
+                        st.rerun()
+
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE ---
+    elif escolha == "Movimentação de Estoque":
+        st.title("🔄 Movimentação de Entrada e Saída")
+        
+        modo_movimento = option_menu(
+            menu_title=None,
+            options=["📥 Registrar Entrada", "📤 Registrar Saída", "📜 Histórico de Movimentações"],
+            icons=["arrow-down-circle", "arrow-up-circle", "clock-history"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+        
+        if modo_movimento == "📥 Registrar Entrada":
+            if not df_produtos.empty:
+                with st.form("form_entrada", clear_on_submit=True):
+                    col_e1, col_e2 = st.columns(2)
+                    prod_sel = col_e1.selectbox("Selecione o Material para Entrada:", df_produtos["Código"] + " - " + df_produtos["Item"])
+                    qtd_entrada = col_e2.number_input("Quantidade de Entrada:", min_value=1, step=1)
+                    resp_ent = st.text_input("Responsável pelo Recebimento:")
+                    
+                    if st.form_submit_button("Confirmar Entrada", type="primary"):
+                        if resp_ent:
+                            cod_prod = prod_sel.split(" - ")[0]
+                            nome_prod = prod_sel.split(" - ")[1]
+                            data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
+                            
+                            cursor = conn.cursor()
+                            # Atualizar saldo do produto
+                            cursor.execute("UPDATE produtos SET quantidade = quantidade + %s WHERE codigo = %s;", (int(qtd_entrada), cod_prod))
+                            # Registrar no histórico de movimentações
+                            cursor.execute("""
+                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
+                                VALUES (%s, %s, %s, %s, %s, %s, %s);
+                            """, (data_atual, "Entrada", cod_prod, nome_prod, int(qtd_entrada), resp_ent.strip(), "Almoxarifado"))
+                            conn.commit()
+                            
+                            st.success(f"Entrada de {qtd_entrada} unidade(s) do item '{nome_prod}' registrada!")
+                            st.rerun()
+                        else:
+                            st.error("Informe quem é o responsável pela entrada do insumo!")
+            else:
+                st.warning("Cadastre produtos antes de realizar entradas.")
+
+        elif modo_movimento == "📤 Registrar Saída":
+            if not df_produtos.empty:
+                with st.form("form_saida", clear_on_submit=True):
+                    col_s1, col_s2 = st.columns(2)
+                    prod_sel = col_s1.selectbox("Selecione o Material para Saída:", df_produtos["Código"] + " - " + df_produtos["Item"])
+                    qtd_saida = col_s2.number_input("Quantidade de Saída:", min_value=1, step=1)
+                    
+                    col_s3, col_s4 = st.columns(2)
+                    resp_sai = col_s3.text_input("Responsável pela Retirada:")
+                    coord_sai = col_s4.selectbox("Coordenação Destino:", df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["Não Informado"])
+                    
+                    if st.form_submit_button("Confirmar Saída", type="primary"):
+                        if resp_sai:
+                            cod_prod = prod_sel.split(" - ")[0]
+                            nome_prod = prod_sel.split(" - ")[1]
+                            
+                            # Validar quantidade em estoque
+                            cursor = conn.cursor()
+                            cursor.execute("SELECT quantidade FROM produtos WHERE codigo = %s;", (cod_prod,))
+                            qtd_atual_estoque = cursor.fetchone()[0]
+                            
+                            if qtd_atual_estoque >= qtd_saida:
+                                data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
+                                # Deduzir do saldo
+                                cursor.execute("UPDATE produtos SET quantidade = quantidade - %s WHERE codigo = %s;", (int(qtd_saida), cod_prod))
+                                # Registrar auditoria
+                                cursor.execute("""
+                                    INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s);
+                                """, (data_atual, "Saída", cod_prod, nome_prod, int(qtd_saida), resp_sai.strip(), coord_sai))
+                                conn.commit()
+                                
+                                st.success(f"Saída de {qtd_saida} unidade(s) de '{nome_prod}' autorizada com sucesso!")
+                                st.rerun()
+                            else:
+                                st.error(f"Saldo insuficiente! O material escolhido possui apenas {qtd_atual_estoque} unidades disponíveis.")
+                        else:
+                            st.error("Informe o nome do servidor/responsável que está retirando o item!")
+            else:
+                st.warning("Sem produtos em estoque para realizar saídas.")
+
+        # =============================================================================
+        # ABA CORRIGIDA AQUI: HISTÓRICO DE MOVIMENTAÇÕES
+        # =============================================================================
+        elif modo_movimento == "📜 Histórico de Movimentações":
+            if not df_movimentacoes.empty:
+                st.markdown("### Histórico Completo de Auditoria")
+                
+                # Inverter para exibir as movimentações mais recentes primeiro
+                df_logs_display = df_movimentacoes.iloc[::-1].copy()
+                
+                # Função de estilização atualizada para o Pandas mais recente
+                def cor_tipo_movimento(val):
+                    if val == "Entrada":
+                        return 'color: #2e7d32; font-weight: bold; background-color: rgba(76, 175, 80, 0.08);'
+                    return 'color: #c62828; font-weight: bold; background-color: rgba(198, 40, 40, 0.08);'
+
+                # Correção: Usando .map() em vez de .applymap()
+                df_estilizado = df_logs_display.style.map(cor_tipo_movimento, subset=['Tipo'])
+                
+                st.dataframe(
+                    df_estilizado, 
+                    use_container_width=True, 
+                    hide_index=True
+                )
+            else:
+                st.info("Nenhuma movimentação de entrada ou saída foi registrada até o momento.")
