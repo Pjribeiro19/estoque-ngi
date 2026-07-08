@@ -1,4 +1,4 @@
-import streamlit as st
+útimo link utilizado:import streamlit as st
 import pandas as pd
 from datetime import datetime
 import smtplib
@@ -83,7 +83,7 @@ def inicializar_banco_automatico():
             nome TEXT PRIMARY KEY
         );
     """)
-    cursor.execute("SELECT COUNT(*) FROM categories;")
+    cursor.execute("SELECT COUNT(*) FROM categorias;")
     if cursor.fetchone()[0] == 0:
         cat_iniciais = [("EPI",), ("Material de Escritório",), ("Informática",), ("Limpeza",), ("Copa",)]
         cursor.executemany("INSERT INTO categorias VALUES (%s);", cat_iniciais)
@@ -426,10 +426,9 @@ else:
                 with col_b_prod1:
                     if st.button("Salvar Alterações", type="primary"):
                         cursor = conn.cursor()
-                        # CORRIGIDO: quantidade em vez de quantity para bater com a criação do banco Postgres
                         cursor.execute("""
                             UPDATE produtos 
-                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
+                            SET codigo = %s, item = %s, quantity = %s, categoria = %s, valor_unitario = %s 
                             WHERE codigo = %s;
                         """, (edit_cod.strip(), edit_item.strip(), edit_qtd, edit_cat, float(edit_val), cod_atual))
                         conn.commit()
@@ -641,69 +640,18 @@ else:
                         format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})"
                     )
                     qtd_entrada = st.number_input("Quantidade de Entrada:", min_value=1, step=1)
-                    responsavel = st.text_input("Responsável pela Entrada:", value=st.session_state.NOME_USUARIO_LOGADO)
                     
                     if st.form_submit_button("Confirmar Entrada", type="primary"):
                         cod_p = df_raw_prod.loc[idx_prod_ent, "codigo"]
                         nome_p = df_raw_prod.loc[idx_prod_ent, "item"]
-                        qtd_atual = int(df_raw_prod.loc[idx_prod_ent, "quantidade"])
+                        novo_saldo = int(df_raw_prod.loc[idx_prod_ent, "quantidade"]) + int(qtd_entrada)
                         
                         cursor = conn.cursor()
-                        # Atualiza estoque
-                        cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (qtd_atual + qtd_entrada, cod_p))
-                        # Registra histórico
+                        cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (novo_saldo, cod_p))
                         cursor.execute("""
-                            INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                            INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
                             VALUES (%s, %s, %s, %s, %s, %s, %s);
-                        """, (data_entrada.strftime("%d/%m/%Y"), "Entrada", cod_p, nome_p, qtd_entrada, responsavel.strip(), "Almoxarifado"))
-                        
+                        """, (data_entrada.strftime("%d/%m/%Y"), "Entrada", cod_p, nome_p, int(qtd_entrada), st.session_state.NOME_USUARIO_LOGADO, "Almoxarifado"))
                         conn.commit()
-                        st.success(f"Entrada de {qtd_entrada} unidades de '{nome_p}' registrada com sucesso!")
+                        st.success(f"Entrada de {qtd_entrada} unidades de '{nome_p}' registrada!")
                         st.rerun()
-                        
-        elif modo_movimento == "📤 Registrar Saída":
-            if df_raw_prod.empty:
-                st.info("Nenhum material cadastrado para movimentação.")
-            else:
-                st.subheader("Registrar Saída de Material")
-                with st.form("form_registrar_saida", clear_on_submit=True):
-                    col_s1, col_s2 = st.columns(2)
-                    data_saida = col_s1.date_input("Data da Saída:", value=datetime.today(), format="DD/MM/YYYY")
-                    idx_prod_sai = col_s2.selectbox(
-                        "Material para Saída:", 
-                        df_raw_prod.index, 
-                        format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})"
-                    )
-                    qtd_saida = st.number_input("Quantidade de Saída:", min_value=1, step=1)
-                    resp_saida = st.text_input("Responsável pela Retirada:")
-                    coord_saida = st.selectbox("Coordenação Destino:", lista_siglas_coord)
-                    
-                    if st.form_submit_button("Confirmar Saída", type="primary"):
-                        cod_p = df_raw_prod.loc[idx_prod_sai, "codigo"]
-                        nome_p = df_raw_prod.loc[idx_prod_sai, "item"]
-                        qtd_atual = int(df_raw_prod.loc[idx_prod_sai, "quantidade"])
-                        
-                        if resp_saida.strip() == "":
-                            st.error("Informe o responsável pela retirada.")
-                        elif qtd_saida > qtd_atual:
-                            st.error(f"Quantidade insuficiente em estoque! Saldo atual: {qtd_atual}.")
-                        else:
-                            cursor = conn.cursor()
-                            # Atualiza estoque
-                            cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (qtd_atual - qtd_saida, cod_p))
-                            # Registra histórico
-                            cursor.execute("""
-                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s);
-                            """, (data_saida.strftime("%d/%m/%Y"), "Saída", cod_p, nome_p, qtd_saida, resp_saida.strip(), coord_saida))
-                            
-                            conn.commit()
-                            st.success(f"Saída de {qtd_saida} unidades de '{nome_p}' concluída!")
-                            st.rerun()
-                            
-        elif modo_movimento == "📋 Histórico de Entradas/Saídas":
-            st.subheader("Histórico Completo de Movimentações")
-            if df_movimentacoes.empty:
-                st.info("Nenhuma movimentação registrada até o momento.")
-            else:
-                st.dataframe(df_movimentacoes.sort_index(ascending=False), use_container_width=True, hide_index=True)
