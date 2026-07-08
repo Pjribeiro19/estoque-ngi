@@ -128,15 +128,25 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- ESTILIZAÇÃO CSS CORRIGIDA PARA MODO ESCURO ---
+# --- ESTILIZAÇÃO CSS CORRIGIDA TOTALMENTE PARA SUPORTAR MODO ESCURO ---
 st.markdown("""
     <style>
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
     
-    /* Garante cor visível para textos padrão e rótulos de campos de formulário */
-    html, body, [data-testid="stWidgetLabel"] p, .stMarkdown p, label {
+    /* Força texto visível em qualquer modo (Claro/Escuro) para labels e markdown */
+    html, body, [data-testid="stWidgetLabel"] p, .stMarkdown p, label, span {
         color: var(--text-color) !important;
+    }
+    
+    /* Força especificamente as opções do menu lateral a obedecerem o modo escuro do navegador */
+    .nav-link span {
+        color: var(--text-color) !important;
+    }
+    
+    /* Mantém o texto branco na opção selecionada do menu */
+    .nav-link.active span {
+        color: white !important;
     }
     
     /* Botão Primário Verde */
@@ -163,7 +173,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Dicionário de estilo reutilizável para forçar a cor verde nos Menus Horizontais
+# Dicionário de estilo adaptativo para os Menus Horizontais (Abas)
 ESTILO_MENU_HORIZONTAL = {
     "container": {"padding": "0!important", "background-color": "transparent"},
     "icon": {"color": "#64748b", "font-size": "14px"}, 
@@ -171,7 +181,7 @@ ESTILO_MENU_HORIZONTAL = {
         "font-size": "14px", 
         "text-align": "center", 
         "margin": "0px 5px", 
-        "color": "#334155",
+        "color": "var(--text-color)", /* COR RIGIDA: Dinâmica baseada no tema do navegador */
         "--hover-color": "rgba(76, 175, 80, 0.12)"
     },
     "nav-link-selected": {
@@ -309,7 +319,7 @@ else:
                     "font-size": "14px", 
                     "text-align": "left", 
                     "margin": "0px", 
-                    "color": "#334155",
+                    "color": "var(--text-color)", /* COR CORRIGIDA: Muda automaticamente com o tema */
                     "--hover-color": "rgba(76, 175, 80, 0.12)"
                 },
                 "nav-link-selected": {
