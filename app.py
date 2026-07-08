@@ -128,12 +128,18 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- ESTILIZAÇÃO CSS ---
+# --- ESTILIZAÇÃO CSS CORRIGIDA PARA MODO ESCURO ---
 st.markdown("""
     <style>
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
     
+    /* Garante cor visível para textos padrão e rótulos de campos de formulário */
+    html, body, [data-testid="stWidgetLabel"] p, .stMarkdown p, label {
+        color: var(--text-color) !important;
+    }
+    
+    /* Botão Primário Verde */
     div.stButton > button:first-child[kind="primary"] {
         background-color: #4CAF50 !important;
         border-color: #4CAF50 !important;
@@ -274,7 +280,7 @@ else:
     df_movimentacoes = pd.read_sql_query('SELECT data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenacao AS "Coordenação" FROM movimentacoes', conn)
     df_coordenacoes = pd.read_sql_query('SELECT sigla AS "Sigla", nome AS "Nome" FROM coordenacoes', conn)
     
-    df_cat_bruto = pd.read_sql_query("SELECT nome FROM categories" if 'categories' in pd.read_sql_query("SELECT table_name FROM information_schema.tables WHERE table_schema='public'", conn)['table_name'].tolist() else "SELECT nome FROM categorias", conn)
+    df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
     lista_categorias = df_cat_bruto["nome"].tolist()
 
     # --- MENU LATERAL ---
@@ -339,7 +345,7 @@ else:
         
         c1.markdown(f"""
             <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 5px solid #4CAF50; padding: 18px; border-radius: 4px;">
-                <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase;">Total de Itens Cadastrados</span>
+                <span style="font-size: 13px; font-weight: 600; text-transform: uppercase;">Total de Itens Cadastrados</span>
                 <h2 style="color: #4CAF50; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_itens}</h2>
             </div>
         """, unsafe_allow_html=True)
@@ -349,21 +355,21 @@ else:
         
         c2.markdown(f"""
             <div style="background-color: {bg_esgotados}; border-left: 5px solid {cor_esgotados}; padding: 18px; border-radius: 4px;">
-                <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase;">Produtos Esgotados</span>
+                <span style="font-size: 13px; font-weight: 600; text-transform: uppercase;">Produtos Esgotados</span>
                 <h2 style="color: {cor_esgotados}; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{produtos_esgotados}</h2>
             </div>
         """, unsafe_allow_html=True)
         
         c3.markdown(f"""
             <div style="background-color: rgba(33, 150, 243, 0.08); border-left: 5px solid #2196F3; padding: 18px; border-radius: 4px;">
-                <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase;">Movimentações Realizadas</span>
+                <span style="font-size: 13px; font-weight: 600; text-transform: uppercase;">Movimentações Realizadas</span>
                 <h2 style="color: #2196F3; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_movimentacoes}</h2>
             </div>
         """, unsafe_allow_html=True)
         
         st.markdown("<br><hr style='margin: 10px 0 25px 0; opacity: 0.15;'>", unsafe_allow_html=True)
         
-        st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; color: #334155; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
+        st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
         
         col_filtro1, col_filtro2 = st.columns([2, 1])
         termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...")
@@ -448,7 +454,6 @@ else:
                 with col_b_prod1:
                     if st.button("Salvar Alterações", type="primary"):
                         cursor = conn.cursor()
-                        # CORREÇÃO DO ERRO AQUI: Alterado 'quantity' para 'quantidade'
                         cursor.execute("""
                             UPDATE produtos 
                             SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
@@ -652,7 +657,6 @@ else:
             styles=ESTILO_MENU_HORIZONTAL
         )
         
-        # Carrega dados atualizados para movimentação
         df_produtos_raw = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos", conn)
         lista_opcoes_produtos = [f"{row['codigo']} - {row['item']} (Saldo: {row['quantidade']})" for _, row in df_produtos_raw.iterrows()]
         lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["Geral"]
@@ -672,9 +676,7 @@ else:
                             data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
                             
                             cursor = conn.cursor()
-                            # 1. Atualiza estoque somando
                             cursor.execute("UPDATE produtos SET quantidade = quantidade + %s WHERE codigo = %s", (qtd_entrada, cod_p))
-                            # 2. Registra histórico
                             cursor.execute("""
                                 INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
                                 VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -700,7 +702,6 @@ else:
                         cod_p = prod_selecionado.split(" - ")[0]
                         item_p = prod_selecionado.split(" - ")[1].split(" (Saldo:")[0]
                         
-                        # Verifica saldo atual
                         cursor = conn.cursor()
                         cursor.execute("SELECT quantidade FROM produtos WHERE codigo = %s", (cod_p,))
                         saldo_atual = cursor.fetchone()[0]
@@ -711,9 +712,7 @@ else:
                             st.error(f"Saldo insuficiente! Quantidade disponível em estoque: {saldo_atual}")
                         else:
                             data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
-                            # 1. Atualiza estoque subtraindo
                             cursor.execute("UPDATE produtos SET quantidade = quantidade - %s WHERE codigo = %s", (qtd_saida, cod_p))
-                            # 2. Registra histórico
                             cursor.execute("""
                                 INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
                                 VALUES (%s, %s, %s, %s, %s, %s, %s)
