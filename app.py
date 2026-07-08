@@ -113,7 +113,6 @@ conn = inicializar_banco_automatico()
 # CONFIGURAÇÕES SEGURAS DE E-MAIL (Secrets do Streamlit)
 # =============================================================================
 try:
-    # Corrigido para ler "senha", "smtp_server" e "smtp_port" diretamente do arquivo de segredos
     EMAIL_REMETENTE = st.secrets["gmail"]["email"]
     SENHA_REMETENTE = st.secrets["gmail"]["senha"]
     SMTP_HOST = st.secrets["gmail"]["smtp_server"]
@@ -235,7 +234,6 @@ if not st.session_state.autenticado:
                                 corpo_email = f"Sua senha provisória de contingência é: 123"
                                 msg.attach(MIMEText(corpo_email, 'plain'))
                                 
-                                # Conexão TLS explícita para porta 587
                                 server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
                                 server.starttls()
                                 server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
@@ -380,9 +378,16 @@ else:
     # --- TELA: CADASTRAR PRODUTO ---
     elif escolha == "Cadastrar Produto":
         st.title("Gerenciamento de Produtos")
-        aba_cad_prod, aba_gerenciar_prod = st.tabs(["Novo Material", "Editar / Excluir Produtos"])
         
-        with aba_cad_prod:
+        # Correção do Bug: Usando aba_selecionada para isolar a renderização dos conteúdos de cada Aba
+        aba_selecionada = option_menu(
+            menu_title=None,
+            options=["Novo Material", "Editar / Excluir Produtos"],
+            icons=["plus-circle", "pencil-square"],
+            orientation="horizontal"
+        )
+        
+        if aba_selecionada == "Novo Material":
             with st.form("form_novo_produto", clear_on_submit=True):
                 col_a, col_b = st.columns(2)
                 cod = col_a.text_input("Código")
@@ -405,7 +410,7 @@ else:
                     else:
                         st.error("Preencha todos os campos!")
                         
-        with aba_gerenciar_prod:
+        elif aba_selecionada == "Editar / Excluir Produtos":
             if not df_produtos.empty:
                 st.dataframe(df_produtos, use_container_width=True, hide_index=True)
                 df_raw_prod = pd.read_sql_query("SELECT * FROM produtos", conn)
@@ -426,7 +431,6 @@ else:
                 with col_b_prod1:
                     if st.button("Salvar Alterações", type="primary"):
                         cursor = conn.cursor()
-                        # CORRIGIDO: mudado de quantity para quantidade para refletir o banco de dados
                         cursor.execute("""
                             UPDATE produtos 
                             SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
@@ -446,9 +450,16 @@ else:
     # --- TELA: CADASTRAR CATEGORIA ---
     elif escolha == "Cadastrar Categoria":
         st.title("Gerenciamento de Categorias")
-        aba_nova_cat, aba_gerenciar_cat = st.tabs(["Nova Categoria", "Editar / Excluir Categorias"])
         
-        with aba_nova_cat:
+        # Correção do Bug: Usando aba_selecionada para isolar a renderização dos conteúdos de cada Aba
+        aba_selecionada = option_menu(
+            menu_title=None,
+            options=["Nova Categoria", "Editar / Excluir Categorias"],
+            icons=["plus-circle", "pencil-square"],
+            orientation="horizontal"
+        )
+        
+        if aba_selecionada == "Nova Categoria":
             col_cat1, col_cat2 = st.columns([1, 2])
             with col_cat1:
                 nova_cat = st.text_input("Nome da Nova Categoria:")
@@ -466,7 +477,7 @@ else:
             with col_cat2:
                 st.dataframe(pd.DataFrame(lista_categorias, columns=["Categorias Ativas"]), use_container_width=True, hide_index=True)
                 
-        with aba_gerenciar_cat:
+        elif aba_selecionada == "Editar / Excluir Categorias":
             if lista_categorias:
                 cat_selecionada = st.selectbox("Selecione a categoria:", lista_categorias)
                 edit_nome_cat = st.text_input("Editar Nome:", value=cat_selecionada)
@@ -490,9 +501,16 @@ else:
     # --- TELA: CADASTRAR USUÁRIO ---
     elif escolha == "Cadastrar Usuário":
         st.title("Cadastrar Usuário")
-        aba_cad, aba_edit = st.tabs(["Novo Usuário", "Editar / Excluir Usuários"])
         
-        with aba_cad:
+        # Correção do Bug: Usando aba_selecionada para isolar a renderização dos conteúdos de cada Aba
+        aba_selecionada = option_menu(
+            menu_title=None,
+            options=["Novo Usuário", "Editar / Excluir Usuários"],
+            icons=["person-plus", "pencil-square"],
+            orientation="horizontal"
+        )
+        
+        if aba_selecionada == "Novo Usuário":
             with st.form("cad_user", clear_on_submit=True):
                 n = st.text_input("Nome")
                 e = st.text_input("E-mail")
@@ -516,7 +534,7 @@ else:
                     else:
                         st.error("Preencha o Nome e o E-mail!")
                         
-        with aba_edit:
+        elif aba_selecionada == "Editar / Excluir Usuários":
             df_raw_users = pd.read_sql_query("SELECT nome, email, perfil, senha FROM usuarios ORDER BY nome ASC", conn)
             
             if not df_raw_users.empty:
@@ -550,9 +568,16 @@ else:
     # --- TELA: CADASTRAR COORDENAÇÃO ---
     elif escolha == "Cadastrar Coordenação":
         st.title("Cadastrar Coordenação")
-        aba_c1, aba_c2 = st.tabs(["Nova Coordenação", "Editar / Excluir Coordenação"])
         
-        with aba_c1:
+        # Correção do Bug: Usando aba_selecionada para isolar a renderização dos conteúdos de cada Aba
+        aba_selecionada = option_menu(
+            menu_title=None,
+            options=["Nova Coordenação", "Editar / Excluir Coordenação"],
+            icons=["building-add", "pencil-square"],
+            orientation="horizontal"
+        )
+        
+        if aba_selecionada == "Nova Coordenação":
             with st.form("cad_coord", clear_on_submit=True):
                 s_coord = st.text_input("Sigla")
                 nc = st.text_input("Nome da Coordenação")
@@ -569,7 +594,8 @@ else:
                             st.error("Esta sigla já está registrada.")
                     else:
                         st.error("Preencha todos os campos!")
-        with aba_c2:
+                        
+        elif aba_selecionada == "Editar / Excluir Coordenação":
             if not df_coordenacoes.empty:
                 st.dataframe(df_coordenacoes, use_container_width=True, hide_index=True)
                 sigla_selecionada = st.selectbox("Selecione para modificar:", df_coordenacoes["Sigla"].tolist())
@@ -602,55 +628,71 @@ else:
         
         modo_movimento = option_menu(
             menu_title=None,
-            options=["📥 Registrar Entrada", "📤 Registrar Saída", "📋 Histórico de Entradas/Saídas"],
+            options=["📥 Registrar Entrada", "📤 Registrar Saída", "📜 Histórico de Movimentações"],
             icons=["arrow-down-circle", "arrow-up-circle", "clock-history"],
-            menu_icon="cast",
-            default_index=0,
-            orientation="horizontal",
-            styles={
-                "container": {"padding": "0!important", "background-color": "#f8fafc", "margin-bottom": "25px"},
-                "icon": {"color": "#64748b", "font-size": "14px"}, 
-                "nav-link": {
-                    "font-size": "14px", 
-                    "text-align": "center", 
-                    "margin": "0px", 
-                    "color": "#334155",
-                },
-                "nav-link-selected": {
-                    "background-color": "#4CAF50", 
-                    "color": "white", 
-                    "font-weight": "bold"
-                },
-            }
+            orientation="horizontal"
         )
         
-        df_raw_prod = pd.read_sql_query("SELECT * FROM produtos", conn)
-        lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["-"]
-        
         if modo_movimento == "📥 Registrar Entrada":
-            if df_raw_prod.empty:
-                st.info("Nenhum material cadastrado para movimentação.")
-            else:
-                st.subheader("Registrar Entrada de Material")
-                with st.form("form_registrar_entrada", clear_on_submit=True):
+            if not df_produtos.empty:
+                with st.form("form_entrada"):
                     col_e1, col_e2 = st.columns(2)
-                    data_entrada = col_e1.date_input("Data da Entrada:", value=datetime.today(), format="DD/MM/YYYY")
-                    idx_prod_ent = col_e2.selectbox(
-                        "Material para Entrada:", 
-                        df_raw_prod.index, 
-                        format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo Atual: {df_raw_prod.loc[x, 'quantidade']})"
-                    )
-                    qtd_entrada = st.number_input("Quantidade de Entrada:", min_value=1, step=1)
+                    prod_sel = col_e1.selectbox("Selecione o Material para Entrada:", df_produtos["Código"] + " - " + df_produtos["Item"])
+                    qtd_entrada = col_e2.number_input("Quantidade de Entrada:", min_value=1, step=1)
+                    resp_entrada = col_e1.text_input("Responsável pelo Recebimento:", value=st.session_state.NOME_USUARIO_LOGADO)
                     
-                    if st.form_submit_button("Registrar Entrada", type="primary"):
-                        cod_p = df_raw_prod.loc[idx_prod_ent, 'codigo']
-                        item_p = df_raw_prod.loc[idx_prod_ent, 'item']
-                        qtd_atual_p = df_raw_prod.loc[idx_prod_ent, 'quantidade']
+                    if st.form_submit_button("Confirmar Entrada de Material", type="primary"):
+                        cod_p = prod_sel.split(" - ")[0]
+                        item_p = prod_sel.split(" - ")[1]
+                        data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
                         
                         cursor = conn.cursor()
+                        cursor.execute("UPDATE produtos SET quantidade = quantidade + %s WHERE codigo = %s;", (int(qtd_entrada), cod_p))
                         cursor.execute("INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) VALUES (%s, %s, %s, %s, %s, %s, %s);",
-                                       (data_entrada.strftime("%d/%m/%Y"), "Entrada", cod_p, item_p, qtd_entrada, st.session_state.NOME_USUARIO_LOGADO, "ALMOXARIFADO"))
-                        cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (qtd_atual_p + qtd_entrada, cod_p))
+                                       (data_atual, "Entrada", cod_p, item_p, int(qtd_entrada), resp_entrada.strip(), "Almoxarifado Geral"))
                         conn.commit()
                         st.success("Entrada registrada com sucesso!")
                         st.rerun()
+            else:
+                st.warning("Nenhum produto cadastrado para realizar movimentação.")
+                
+        elif modo_movimento == "📤 Registrar Saída":
+            if not df_produtos.empty:
+                if not df_coordenacoes.empty:
+                    with st.form("form_saida"):
+                        col_s1, col_s2 = st.columns(2)
+                        prod_sel = col_s1.selectbox("Selecione o Material para Saída:", df_produtos["Código"] + " - " + df_produtos["Item"])
+                        qtd_saida = col_s2.number_input("Quantidade de Saída:", min_value=1, step=1)
+                        resp_saida = col_s1.text_input("Servidor Responsável pela Retirada:")
+                        coord_destino = col_s2.selectbox("Coordenação / Setor de Destino:", df_coordenacoes["Sigla"] + " - " + df_coordenacoes["Nome"])
+                        
+                        if st.form_submit_button("Confirmar Saída de Material", type="primary"):
+                            cod_p = prod_sel.split(" - ")[0]
+                            item_p = prod_sel.split(" - ")[1]
+                            sigla_c = coord_destino.split(" - ")[0]
+                            
+                            cursor = conn.cursor()
+                            cursor.execute("SELECT quantidade FROM produtos WHERE codigo = %s;", (cod_p,))
+                            qtd_atual = cursor.fetchone()[0]
+                            
+                            if int(qtd_saida) <= int(qtd_atual):
+                                data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
+                                cursor.execute("UPDATE produtos SET quantidade = quantidade - %s WHERE codigo = %s;", (int(qtd_saida), cod_p))
+                                cursor.execute("INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) VALUES (%s, %s, %s, %s, %s, %s, %s);",
+                                               (data_atual, "Saída", cod_p, item_p, int(qtd_saida), resp_saida.strip(), sigla_c))
+                                conn.commit()
+                                st.success("Saída registrada com sucesso!")
+                                st.rerun()
+                            else:
+                                st.error(f"Erro! Saldo insuficiente. Quantidade atual disponível: {qtd_atual}")
+                else:
+                    st.warning("Cadastre ao menos uma coordenação para registrar saídas.")
+            else:
+                st.warning("Nenhum produto cadastrado para realizar movimentação.")
+                
+        elif modo_movimento == "📜 Histórico de Movimentações":
+            st.markdown("<h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>📋 Registro Histórico de Fluxo</h3>", unsafe_allow_html=True)
+            if df_movimentacoes.empty:
+                st.info("Nenhuma movimentação de entrada ou saída registrada até o momento.")
+            else:
+                st.dataframe(df_movimentacoes.sort_index(ascending=False), use_container_width=True, hide_index=True)
