@@ -135,13 +135,13 @@ st.markdown("""
     [data-testid="stMainMenu"] {display: none;}
     
     div.stButton > button:first-child[kind="primary"] {
-        background-color: #4CAF50 !important;
-        border-color: #4CAF50 !important;
+        background-color: #0F52BA !important;
+        border-color: #0F52BA !important;
         color: white !important;
     }
     div.stButton > button:first-child[kind="primary"]:hover {
-        background-color: #43a047 !important;
-        border-color: #43a047 !important;
+        background-color: #0a3d8f !important;
+        border-color: #0a3d8f !important;
     }
     
     .img-container {
@@ -157,7 +157,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Definição do dicionário de estilos reutilizável com o VERDE correto para as abas/botões de navegação
+# Definição do dicionário de estilos reutilizável com o AZUL correto para as abas/botões de navegação
 ESTILO_MENU_HORIZONTAL = {
     "container": {"padding": "0!important", "background-color": "transparent"},
     "icon": {"color": "#64748b", "font-size": "14px"}, 
@@ -166,10 +166,10 @@ ESTILO_MENU_HORIZONTAL = {
         "text-align": "center", 
         "margin": "0px 5px", 
         "color": "#334155",
-        "--hover-color": "rgba(76, 175, 80, 0.12)"
+        "--hover-color": "rgba(15, 82, 186, 0.12)"
     },
     "nav-link-selected": {
-        "background-color": #4CAF50,  # <--- Verde do seu sistema aplicado aqui!
+        "background-color": "#0F52BA",  # <--- Azul aplicado aqui!
         "color": "white", 
         "font-weight": "500"
     },
@@ -198,7 +198,7 @@ if not st.session_state.autenticado:
                     <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="320">
                 </div>
             """, unsafe_allow_html=True)
-            st.markdown("<h2 style='text-align: center; color: #4CAF50; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center; color: #0F52BA; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
             
             usuario_input = st.text_input("Usuário / E-mail")
             senha_input = st.text_input("Senha", type="password")
@@ -304,10 +304,10 @@ else:
                     "text-align": "left", 
                     "margin": "0px", 
                     "color": "#334155",
-                    "--hover-color": "rgba(76, 175, 80, 0.12)"
+                    "--hover-color": "rgba(15, 82, 186, 0.12)"
                 },
                 "nav-link-selected": {
-                    "background-color": "#4CAF50", 
+                    "background-color": "#0F52BA", 
                     "color": "white", 
                     "font-weight": "500"
                 },
@@ -322,11 +322,11 @@ else:
     # --- TELA: PAINEL GERAL ---
     elif escolha == "Painel Geral":
         st.markdown("""
-            <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+            <div style="background-color: #0F52BA; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Painel Geral de Controle
                 </h1>
-                <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                <p style="color: #E3F2FD; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                     Visão Geral de Saldos, Alertas de Materiais e Fluxo de Insumos NGI Carajás
                 </p>
             </div>
@@ -338,14 +338,14 @@ else:
         total_movimentacoes = len(df_movimentacoes)
         
         c1.markdown(f"""
-            <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 5px solid #4CAF50; padding: 18px; border-radius: 4px;">
+            <div style="background-color: rgba(15, 82, 186, 0.08); border-left: 5px solid #0F52BA; padding: 18px; border-radius: 4px;">
                 <span style="color: var(--text-color); font-size: 13px; font-weight: 600; text-transform: uppercase;">Total de Itens Cadastrados</span>
-                <h2 style="color: #4CAF50; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_itens}</h2>
+                <h2 style="color: #0F52BA; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_itens}</h2>
             </div>
         """, unsafe_allow_html=True)
         
-        cor_esgotados = "#c62828" if produtos_esgotados > 0 else "#4CAF50"
-        bg_esgotados = "rgba(198, 40, 40, 0.08)" if produtos_esgotados > 0 else "rgba(76, 175, 80, 0.08)"
+        cor_esgotados = "#c62828" if produtos_esgotados > 0 else "#0F52BA"
+        bg_esgotados = "rgba(198, 40, 40, 0.08)" if produtos_esgotados > 0 else "rgba(15, 82, 186, 0.08)"
         
         c2.markdown(f"""
             <div style="background-color: {bg_esgotados}; border-left: 5px solid {cor_esgotados}; padding: 18px; border-radius: 4px;">
@@ -654,70 +654,4 @@ else:
             if not df_produtos.empty:
                 with st.form("form_entrada"):
                     col_e1, col_e2 = st.columns(2)
-                    prod_sel = col_e1.selectbox("Selecione o Material para Entrada:", df_produtos["Código"] + " - " + df_produtos["Item"])
-                    qtd_entrada = col_e2.number_input("Quantidade de Entrada:", min_value=1, step=1)
-                    resp_entrada = col_e1.text_input("Responsável pelo Recebimento:", value=st.session_state.NOME_USUARIO_LOGADO)
-                    
-                    if st.form_submit_button("Confirmar Entrada de Material", type="primary"):
-                        cod_p = prod_sel.split(" - ")[0]
-                        item_p = prod_sel.split(" - ")[1]
-                        
-                        cursor = conn.cursor()
-                        # Atualiza quantidade
-                        cursor.execute("UPDATE produtos SET quantidade = quantidade + %s WHERE codigo = %s;", (qtd_entrada, cod_p))
-                        # Registra movimentação
-                        data_hoje = datetime.now().strftime("%d/%m/%Y %H:%M")
-                        cursor.execute("""
-                            INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
-                            VALUES (%s, %s, %s, %s, %s, %s, %s);
-                        """, (data_hoje, "Entrada", cod_p, item_p, qtd_entrada, resp_entrada, "ALMOXARIFADO"))
-                        
-                        conn.commit()
-                        st.success(f"Entrada de {qtd_entrada} unidades de '{item_p}' registrada com sucesso!")
-                        st.rerun()
-            else:
-                st.warning("Nenhum produto cadastrado para dar entrada.")
-
-        elif modo_movimento == "📤 Registrar Saída":
-            if not df_produtos.empty:
-                with st.form("form_saida"):
-                    col_s1, col_s2 = st.columns(2)
-                    prod_sel = col_s1.selectbox("Selecione o Material para Saída:", df_produtos["Código"] + " - " + df_produtos["Item"])
-                    qtd_saida = col_s2.number_input("Quantidade de Saída:", min_value=1, step=1)
-                    resp_saida = col_s1.text_input("Responsável pela Retirada:")
-                    coord_saida = col_s2.selectbox("Coordenação Destino:", df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["Não Cadastrada"])
-                    
-                    if st.form_submit_button("Confirmar Saída de Material", type="primary"):
-                        cod_p = prod_sel.split(" - ")[0]
-                        item_p = prod_sel.split(" - ")[1]
-                        
-                        # Verifica se há saldo
-                        cursor = conn.cursor()
-                        cursor.execute("SELECT quantidade FROM produtos WHERE codigo = %s;", (cod_p,))
-                        saldo_atual = cursor.fetchone()[0]
-                        
-                        if resp_saida.strip() == "":
-                            st.error("Informe o responsável pela retirada!")
-                        elif saldo_atual < qtd_saida:
-                            st.error(f"Saldo insuficiente! Saldo atual: {saldo_atual} unidades.")
-                        else:
-                            # Deduz a quantidade
-                            cursor.execute("UPDATE produtos SET quantidade = quantidade - %s WHERE codigo = %s;", (qtd_saida, cod_p))
-                            # Registra movimentação
-                            data_hoje = datetime.now().strftime("%d/%m/%Y %H:%M")
-                            cursor.execute("""
-                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
-                                VALUES (%s, %s, %s, %s, %s, %s, %s);
-                            """, (data_hoje, "Saída", cod_p, item_p, qtd_saida, resp_saida.strip(), coord_saida))
-                            
-                            conn.commit()
-                            st.success(f"Saída de {qtd_saida} unidades de '{item_p}' registrada!")
-                            st.rerun()
-            else:
-                st.warning("Nenhum produto cadastrado para dar saída.")
-
-        elif modo_movimento == "📜 Histórico de Movimentações":
-            if not df_movimentacoes.empty:
-                st.dataframe(df_movimentacoes.sort_index(ascending=False), use_container_width=True, hide_index=True)
-            else:
-                st.info("Nenhuma movimentação registrada até o momento.")
+                    prod_sel = col_e1.selectbox("Selecione o Produto:", df_produtos["Item"].tolist())
