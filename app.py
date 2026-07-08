@@ -12,7 +12,6 @@ from streamlit_option_menu import option_menu
 # CONEXÃO E INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (Neon Postgres)
 # =============================================================================
 def inicializar_banco_automatico():
-    # Obtém a string de conexão dos secrets do Streamlit
     try:
         conn_string = st.secrets["postgres"]["url"]
         conn = psycopg2.connect(conn_string)
@@ -106,7 +105,6 @@ def inicializar_banco_automatico():
     conn.commit()
     return conn
 
-# Conecta e garante a estrutura no Neon
 conn = inicializar_banco_automatico()
 
 # =============================================================================
@@ -158,6 +156,24 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+# Dicionário de estilo reutilizável para forçar a cor verde nos Menus Horizontais
+ESTILO_MENU_HORIZONTAL = {
+    "container": {"padding": "0!important", "background-color": "transparent"},
+    "icon": {"color": "#64748b", "font-size": "14px"}, 
+    "nav-link": {
+        "font-size": "14px", 
+        "text-align": "center", 
+        "margin": "0px 5px", 
+        "color": "#334155",
+        "--hover-color": "rgba(76, 175, 80, 0.12)"
+    },
+    "nav-link-selected": {
+        "background-color": "#4CAF50", 
+        "color": "white", 
+        "font-weight": "500"
+    },
+}
 
 # --- GERENCIAMENTO DE SESSÃO ---
 if "autenticado" not in st.session_state:
@@ -379,12 +395,12 @@ else:
     elif escolha == "Cadastrar Produto":
         st.title("Gerenciamento de Produtos")
         
-        # Correção do Bug: Usando aba_selecionada para isolar a renderização dos conteúdos de cada Aba
         aba_selecionada = option_menu(
             menu_title=None,
             options=["Novo Material", "Editar / Excluir Produtos"],
             icons=["plus-circle", "pencil-square"],
-            orientation="horizontal"
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
         )
         
         if aba_selecionada == "Novo Material":
@@ -451,12 +467,12 @@ else:
     elif escolha == "Cadastrar Categoria":
         st.title("Gerenciamento de Categorias")
         
-        # Correção do Bug: Usando aba_selecionada para isolar a renderização dos conteúdos de cada Aba
         aba_selecionada = option_menu(
             menu_title=None,
             options=["Nova Categoria", "Editar / Excluir Categorias"],
             icons=["plus-circle", "pencil-square"],
-            orientation="horizontal"
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
         )
         
         if aba_selecionada == "Nova Categoria":
@@ -502,12 +518,12 @@ else:
     elif escolha == "Cadastrar Usuário":
         st.title("Cadastrar Usuário")
         
-        # Correção do Bug: Usando aba_selecionada para isolar a renderização dos conteúdos de cada Aba
         aba_selecionada = option_menu(
             menu_title=None,
             options=["Novo Usuário", "Editar / Excluir Usuários"],
             icons=["person-plus", "pencil-square"],
-            orientation="horizontal"
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
         )
         
         if aba_selecionada == "Novo Usuário":
@@ -569,12 +585,12 @@ else:
     elif escolha == "Cadastrar Coordenação":
         st.title("Cadastrar Coordenação")
         
-        # Correção do Bug: Usando aba_selecionada para isolar a renderização dos conteúdos de cada Aba
         aba_selecionada = option_menu(
             menu_title=None,
             options=["Nova Coordenação", "Editar / Excluir Coordenação"],
             icons=["building-add", "pencil-square"],
-            orientation="horizontal"
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
         )
         
         if aba_selecionada == "Nova Coordenação":
@@ -630,12 +646,13 @@ else:
             menu_title=None,
             options=["📥 Registrar Entrada", "📤 Registrar Saída", "📜 Histórico de Movimentações"],
             icons=["arrow-down-circle", "arrow-up-circle", "clock-history"],
-            orientation="horizontal"
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
         )
         
         if modo_movimento == "📥 Registrar Entrada":
             if not df_produtos.empty:
-                with st.form("form_entrada"):
+                with st.form("form_entrada", clear_on_submit=True):
                     col_e1, col_e2 = st.columns(2)
                     prod_sel = col_e1.selectbox("Selecione o Material para Entrada:", df_produtos["Código"] + " - " + df_produtos["Item"])
                     qtd_entrada = col_e2.number_input("Quantidade de Entrada:", min_value=1, step=1)
@@ -647,52 +664,73 @@ else:
                         data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
                         
                         cursor = conn.cursor()
+                        # Atualiza Saldo
                         cursor.execute("UPDATE produtos SET quantidade = quantidade + %s WHERE codigo = %s;", (int(qtd_entrada), cod_p))
-                        cursor.execute("INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) VALUES (%s, %s, %s, %s, %s, %s, %s);",
-                                       (data_atual, "Entrada", cod_p, item_p, int(qtd_entrada), resp_entrada.strip(), "Almoxarifado Geral"))
+                        # Registra Histórico
+                        cursor.execute("""
+                            INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
+                            VALUES (%s, %s, %s, %s, %s, %s, %s);
+                        """, (data_atual, "Entrada", cod_p, item_p, int(qtd_entrada), resp_entrada.strip(), "Almoxarifado Geral"))
                         conn.commit()
-                        st.success("Entrada registrada com sucesso!")
+                        st.success(f"Entrada de {qtd_entrada} unidade(s) de '{item_p}' registrada com sucesso!")
                         st.rerun()
             else:
-                st.warning("Nenhum produto cadastrado para realizar movimentação.")
-                
+                st.warning("Nenhum produto cadastrado para realizar entradas.")
+
         elif modo_movimento == "📤 Registrar Saída":
             if not df_produtos.empty:
-                if not df_coordenacoes.empty:
-                    with st.form("form_saida"):
-                        col_s1, col_s2 = st.columns(2)
-                        prod_sel = col_s1.selectbox("Selecione o Material para Saída:", df_produtos["Código"] + " - " + df_produtos["Item"])
-                        qtd_saida = col_s2.number_input("Quantidade de Saída:", min_value=1, step=1)
-                        resp_saida = col_s1.text_input("Servidor Responsável pela Retirada:")
-                        coord_destino = col_s2.selectbox("Coordenação / Setor de Destino:", df_coordenacoes["Sigla"] + " - " + df_coordenacoes["Nome"])
+                with st.form("form_saida", clear_on_submit=True):
+                    col_s1, col_s2 = st.columns(2)
+                    prod_sel = col_s1.selectbox("Selecione o Material para Retirada:", df_produtos["Código"] + " - " + df_produtos["Item"])
+                    qtd_saida = col_s2.number_input("Quantidade de Saída:", min_value=1, step=1)
+                    resp_saida = col_s1.text_input("Responsável pela Retirada:")
+                    
+                    lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["Geral"]
+                    coord_saida = col_s2.selectbox("Coordenação Destinatária:", lista_siglas_coord)
+                    
+                    if st.form_submit_button("Confirmar Saída de Material", type="primary"):
+                        cod_p = prod_sel.split(" - ")[0]
+                        item_p = prod_sel.split(" - ")[1]
                         
-                        if st.form_submit_button("Confirmar Saída de Material", type="primary"):
-                            cod_p = prod_sel.split(" - ")[0]
-                            item_p = prod_sel.split(" - ")[1]
-                            sigla_c = coord_destino.split(" - ")[0]
-                            
-                            cursor = conn.cursor()
-                            cursor.execute("SELECT quantidade FROM produtos WHERE codigo = %s;", (cod_p,))
-                            qtd_atual = cursor.fetchone()[0]
-                            
-                            if int(qtd_saida) <= int(qtd_atual):
-                                data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
-                                cursor.execute("UPDATE produtos SET quantidade = quantidade - %s WHERE codigo = %s;", (int(qtd_saida), cod_p))
-                                cursor.execute("INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) VALUES (%s, %s, %s, %s, %s, %s, %s);",
-                                               (data_atual, "Saída", cod_p, item_p, int(qtd_saida), resp_saida.strip(), sigla_c))
-                                conn.commit()
-                                st.success("Saída registrada com sucesso!")
-                                st.rerun()
-                            else:
-                                st.error(f"Erro! Saldo insuficiente. Quantidade atual disponível: {qtd_atual}")
-                else:
-                    st.warning("Cadastre ao menos uma coordenação para registrar saídas.")
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT quantidade FROM produtos WHERE codigo = %s;", (cod_p,))
+                        saldo_atual = cursor.fetchone()[0]
+                        
+                        if resp_saida.strip() == "":
+                            st.error("Por favor, preencha o campo do Responsável pela Retirada.")
+                        elif saldo_atual < qtd_saida:
+                            st.error(f"Saldo insuficiente! O material possui apenas {saldo_atual} unidade(s) em estoque.")
+                        else:
+                            data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
+                            # Deduz Saldo
+                            cursor.execute("UPDATE produtos SET quantidade = quantidade - %s WHERE codigo = %s;", (int(qtd_saida), cod_p))
+                            # Registra Histórico
+                            cursor.execute("""
+                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
+                                VALUES (%s, %s, %s, %s, %s, %s, %s);
+                            """, (data_atual, "Saída", cod_p, item_p, int(qtd_saida), resp_saida.strip(), coord_saida))
+                            conn.commit()
+                            st.success(f"Saída de {qtd_saida} unidade(s) de '{item_p}' registrada com sucesso!")
+                            st.rerun()
             else:
-                st.warning("Nenhum produto cadastrado para realizar movimentação.")
-                
+                st.warning("Nenhum produto cadastrado para realizar saídas.")
+
         elif modo_movimento == "📜 Histórico de Movimentações":
-            st.markdown("<h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>📋 Registro Histórico de Fluxo</h3>", unsafe_allow_html=True)
-            if df_movimentacoes.empty:
-                st.info("Nenhuma movimentação de entrada ou saída registrada até o momento.")
+            if not df_movimentacoes.empty:
+                st.markdown("### Histórico Completo de Auditoria")
+                
+                # Inverter para exibir as movimentações mais recentes primeiro
+                df_logs_display = df_movimentacoes.iloc[::-1].copy()
+                
+                def cor_tipo_movimento(val):
+                    if val == "Entrada":
+                        return 'color: #2e7d32; font-weight: bold; background-color: rgba(76, 175, 80, 0.08);'
+                    return 'color: #c62828; font-weight: bold; background-color: rgba(198, 40, 40, 0.08);'
+
+                st.dataframe(
+                    df_logs_display.style.applymap(cor_tipo_movimento, subset=['Tipo']), 
+                    use_container_width=True, 
+                    hide_index=True
+                )
             else:
-                st.dataframe(df_movimentacoes.sort_index(ascending=False), use_container_width=True, hide_index=True)
+                st.info("Nenhuma movimentação de entrada ou saída foi registrada até o momento.")
