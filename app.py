@@ -107,7 +107,7 @@ def inicializar_banco_automatico():
 
 conn = inicializar_banco_automatico()
 
-# Carregamento seguro dos dados para evitar NameError
+# Carregamento seguro e global dos dados para evitar erros de inicialização de variáveis (NameError)
 try:
     df_produtos = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
     df_movimentacoes = pd.read_sql_query('SELECT data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenacao AS "Coordenação" FROM movimentacoes', conn)
@@ -141,24 +141,28 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- ESTILIZAÇÃO CSS ADAPTATIVA ---
+# --- ESTILIZAÇÃO CSS COMPATÍVEL COM MODO ESCURO E MODOS DE NAVEGADOR ---
 st.markdown("""
     <style>
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
     
+    /* Garante legibilidade do texto se adaptando dinamicamente ao tema claro/escuro */
     html, body, [data-testid="stWidgetLabel"] p, .stMarkdown p, label, span {
         color: var(--text-color) !important;
     }
     
+    /* Força especificamente as opções do menu lateral a funcionarem no tema escuro */
     .nav-link span {
         color: var(--text-color) !important;
     }
     
+    /* Mantém o destaque contrastante branco na opção ativa do menu */
     .nav-link.active span {
         color: white !important;
     }
     
+    /* Botão Primário Verde */
     div.stButton > button:first-child[kind="primary"] {
         background-color: #4CAF50 !important;
         border-color: #4CAF50 !important;
@@ -182,6 +186,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Dicionário de estilo adaptativo para os menus horizontais
 ESTILO_MENU_HORIZONTAL = {
     "container": {"padding": "0!important", "background-color": "transparent"},
     "icon": {"color": "#64748b", "font-size": "14px"}, 
@@ -199,6 +204,7 @@ ESTILO_MENU_HORIZONTAL = {
     },
 }
 
+# --- GERENCIAMENTO DE SESSÃO ---
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 
@@ -293,6 +299,7 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (PÓS-AUTENTICAÇÃO)
 # =============================================================================
 else:
+    # --- MENU LATERAL ---
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("---")
@@ -334,6 +341,7 @@ else:
         st.session_state.NOME_USUARIO_LOGADO = ""
         st.rerun()
 
+    # --- TELA: PAINEL GERAL ---
     elif escolha == "Painel Geral":
         st.markdown("""
             <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
@@ -376,6 +384,7 @@ else:
         """, unsafe_allow_html=True)
         
         st.markdown("<br><hr style='margin: 10px 0 25px 0; opacity: 0.15;'>", unsafe_allow_html=True)
+        
         st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
         
         col_filtro1, col_filtro2 = st.columns([2, 1])
@@ -405,8 +414,10 @@ else:
                 
             st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
 
+    # --- TELA: CADASTRAR PRODUTO ---
     elif escolha == "Cadastrar Produto":
         st.title("Gerenciamento de Produtos")
+        
         aba_selecionada = option_menu(
             menu_title=None,
             options=["Novo Material", "Editar / Excluir Produtos"],
@@ -459,7 +470,7 @@ else:
                 with col_b_prod1:
                     if st.button("Salvar Alterações", type="primary"):
                         cursor = conn.cursor()
-                        # CORREÇÃO DA COLUNA AQUI: 'quantidade' ao invés de 'quantity'
+                        # Correção da coluna quantity para quantidade
                         cursor.execute("""
                             UPDATE produtos 
                             SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
@@ -476,8 +487,10 @@ else:
                         st.warning("Removido com sucesso.")
                         st.rerun()
 
+    # --- TELA: CADASTRAR CATEGORIA ---
     elif escolha == "Cadastrar Categoria":
         st.title("Gerenciamento de Categorias")
+        
         aba_selecionada = option_menu(
             menu_title=None,
             options=["Nova Categoria", "Editar / Excluir Categorias"],
@@ -525,8 +538,10 @@ else:
                         st.warning("Removida.")
                         st.rerun()
 
+    # --- TELA: CADASTRAR USUÁRIO ---
     elif escolha == "Cadastrar Usuário":
         st.title("Cadastrar Usuário")
+        
         aba_selecionada = option_menu(
             menu_title=None,
             options=["Novo Usuário", "Editar / Excluir Usuários"],
@@ -561,6 +576,7 @@ else:
                         
         elif aba_selecionada == "Editar / Excluir Usuários":
             df_raw_users = pd.read_sql_query("SELECT nome, email, perfil, senha FROM usuarios ORDER BY nome ASC", conn)
+            
             if not df_raw_users.empty:
                 st.dataframe(df_raw_users[["nome", "email", "perfil"]], use_container_width=True, hide_index=True)
                 idx_user = st.selectbox("Selecione para editar:", df_raw_users.index, format_func=lambda x: f"{df_raw_users.loc[x, 'nome']} ({df_raw_users.loc[x, 'email']})")
@@ -589,8 +605,10 @@ else:
                         st.warning("Removido.")
                         st.rerun()
 
+    # --- TELA: CADASTRAR COORDENAÇÃO ---
     elif escolha == "Cadastrar Coordenação":
         st.title("Cadastrar Coordenação")
+        
         aba_selecionada = option_menu(
             menu_title=None,
             options=["Nova Coordenação", "Editar / Excluir Coordenação"],
@@ -644,35 +662,68 @@ else:
                         st.warning("Excluída!")
                         st.rerun()
 
-    # --- ABA COMPLETA DE MOVIMENTAÇÃO DE ESTOQUE (Fechando o Escopo) ---
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE ---
     elif escolha == "Movimentação de Estoque":
         st.title("Movimentação de Estoque")
         
         if df_produtos.empty:
-            st.warning("Cadastre produtos antes de realizar movimentações.")
+            st.warning("Nenhum produto cadastrado para movimentar.")
         else:
-            with st.form("form_movimentacao", clear_on_submit=True):
+            df_raw_prod = pd.read_sql_query("SELECT * FROM produtos", conn)
+            lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["Geral"]
+            
+            with st.form("form_movimentacao"):
                 col_m1, col_m2 = st.columns(2)
-                tipo_mov = col_m1.selectbox("Tipo de Movimentação:", ["Entrada", "Saída"])
                 
-                prod_selecionado = col_m2.selectbox(
-                    "Selecione o Produto:", 
-                    df_produtos["Código"].tolist(), 
-                    format_func=lambda x: f"{x} - {df_produtos[df_produtos['Código'] == x]['Item'].values[0]}"
+                opcao_prod = col_m1.selectbox(
+                    "Selecione o Material:", 
+                    df_raw_prod.index, 
+                    format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})"
                 )
                 
-                qtd_mov = col_m1.number_input("Quantidade:", min_value=1, step=1)
-                responsavel_mov = col_m2.text_input("Responsável pela Retirada/Entrega:")
+                tipo_mov = col_m2.selectbox("Tipo de Movimentação:", ["Entrada", "Saída"])
+                qtd_mov = col_m1.number_input("Quantidade:", min_value=1, step=1, value=1)
+                coord_mov = col_m2.selectbox("Coordenação Destino/Origem:", lista_siglas_coord)
+                responsavel_mov = st.text_input("Responsável pela Retirada/Entrega:", placeholder="Nome do servidor")
                 
-                lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["Geral"]
-                coord_mov = col_m1.selectbox("Coordenação Destino/Origem:", lista_siglas_coord)
-                
-                if st.form_submit_button("Registrar Movimentação", type="primary"):
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT item, quantidade FROM produtos WHERE codigo = %s;", (prod_selecionado,))
-                    nome_prod_banco, qtd_atual_banco = cursor.fetchone()
+                if st.form_submit_button("Confirmar Movimentação", type="primary"):
+                    prod_id = df_raw_prod.loc[opcao_prod, "codigo"]
+                    prod_nome = df_raw_prod.loc[opcao_prod, "item"]
+                    qtd_atual = int(df_raw_prod.loc[opcao_prod, "quantidade"])
                     
-                    pode_gravar = True
-                    nova_qtd = qtd_atual_banco + qtd_mov if tipo_mov == "Entrada" else qtd_atual_banco - qtd_mov
-                    
-                    if tipo_mov == "Saída" and nova
+                    if tipo_mov == "Saída":
+                        nova_qtd = qtd_atual - qtd_mov
+                    else:
+                        nova_qtd = qtd_atual + qtd_mov
+                        
+                    # CORREÇÃO DA LINHA 678 APLICADA AQUI:
+                    if tipo_mov == "Saída" and nova_qtd < 0:
+                        st.error(f"Saldo insuficiente! O estoque atual deste produto é de apenas {qtd_atual} unidades.")
+                    elif not responsavel_mov.strip():
+                        st.error("Por favor, informe o nome do responsável.")
+                    else:
+                        try:
+                            cursor = conn.cursor()
+                            # Atualiza saldo do produto
+                            cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (nova_qtd, prod_id))
+                            
+                            # Registra histórico
+                            data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
+                            cursor.execute("""
+                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
+                                VALUES (%s, %s, %s, %s, %s, %s, %s);
+                            """, (data_atual, tipo_mov, prod_id, prod_nome, qtd_mov, responsavel_mov.strip(), coord_mov))
+                            
+                            conn.commit()
+                            st.success(f"Movimentação de {tipo_mov} concluída com sucesso!")
+                            st.rerun()
+                        except Exception as e:
+                            conn.rollback()
+                            st.error(f"Erro ao salvar movimentação: {e}")
+            
+            # Tabela de histórico recente
+            st.markdown("<br>### 🕒 Histórico Recente de Movimentações", unsafe_allow_html=True)
+            if not df_movimentacoes.empty:
+                st.dataframe(df_movimentacoes.tail(10), use_container_width=True, hide_index=True)
+            else:
+                st.info("Nenhuma movimentação registrada até o momento.")
