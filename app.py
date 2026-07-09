@@ -12,8 +12,6 @@ from streamlit_option_menu import option_menu
 # CONEXÃO E INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (Neon Postgres)
 # =============================================================================
 def inicializar_banco_automatico():
-    # Inicializamos a variável como None fora do bloco try para evitar o UnboundLocalError nos logs
-    conn = None
     try:
         conn_string = st.secrets["postgres"]["url"]
         conn = psycopg2.connect(conn_string)
@@ -474,7 +472,7 @@ else:
                         cursor = conn.cursor()
                         cursor.execute("""
                             UPDATE produtos 
-                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
+                            SET codigo = %s, item = %s, quantity = %s, categoria = %s, valor_unitario = %s 
                             WHERE codigo = %s;
                         """, (edit_cod.strip(), edit_item.strip(), edit_qtd, edit_cat, float(edit_val), cod_atual))
                         conn.commit()
@@ -622,4 +620,130 @@ else:
             with st.form("cad_coord", clear_on_submit=True):
                 s_coord = st.text_input("Sigla")
                 nc = st.text_input("Nome da Coordenação")
-                if st.form_submit_button("Cadastrar", type
+                if st.form_submit_button("Cadastrar", type="primary"):
+                    if s_coord and nc:
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("INSERT INTO coordenacoes VALUES (%s, %s);", (s_coord.strip().upper(), nc.strip()))
+                            conn.commit()
+                            st.success("Cadastrada!")
+                            st.rerun()
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
+                            st.error("Esta sigla já está registrada.")
+                    else:
+                        st.error("Preencha todos os campos!")
+                        
+        elif aba_selecionada == "Editar / Excluir Coordenação":
+            if not df_coordenacoes.empty:
+                st.dataframe(df_coordenacoes, use_container_width=True, hide_index=True)
+                sigla_selecionada = st.selectbox("Selecione para modificar:", df_coordenacoes["Sigla"].tolist())
+                cursor = conn.cursor()
+                cursor.execute("SELECT nome FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
+                nome_atual_c = cursor.fetchone()[0]
+                
+                edit_sigla = st.text_input("Sigla:", value=sigla_selecionada)
+                edit_nc = st.text_input("Nome:", value=nome_atual_c)
+                
+                c_btn_co1, c_btn_co2 = st.columns([1, 4])
+                with c_btn_co1:
+                    if st.button("Salvar Edição", type="primary"):
+                        cursor = conn.cursor()
+                        cursor.execute("UPDATE coordenacoes SET sigla = %s, nome = %s WHERE sigla = %s;", (edit_sigla.strip().upper(), edit_nc.strip(), sigla_selecionada))
+                        conn.commit()
+                        st.success("Salvo!")
+                        st.rerun()
+                with c_btn_co2:
+                    if st.button("Excluir Coordenação"):
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
+                        conn.commit()
+                        st.warning("Removida.")
+                        st.rerun()
+
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE ---
+    elif escolha == "Movimentação de Estoque":
+        st.title("🔄 Movimentação de Entrada e Saída")
+        
+        modo_movimento = option_menu(
+            menu_title=None,
+            options=["📥 Registrar Entrada", "📤 Registrar Saída", "📜 Histórico de Movimentações"],
+            icons=["arrow-down-circle", "arrow-up-circle", "clock-history"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+        
+        df_produtos_raw = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos", conn)
+        lista_opcoes_produtos = [f"{row['codigo']} - {row['item']} (Saldo: {row['quantidade']})" for _, row in df_produtos_raw.iterrows()]
+        lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["Geral"]
+
+        if modo_movimento == "📥 Registrar Entrada":
+            if lista_opcoes_produtos:
+                with st.form("form_entrada", clear_on_submit=True):
+                    prod_selecionado = st.selectbox("Selecione o Material:", lista_opcoes_produtos)
+                    qtd_entrada = st.number_input("Quantidade de Entrada:", min_value=1, step=1)
+                    resp_entrada = st.text_input("Responsável pelo Recebimento:")
+                    coord_entrada = st.selectbox("Coordenação Destino:", lista_siglas_coord)
+                    
+                    if st.form_submit_button("Confirmar Entrada", type="primary"):
+                        if resp_entrada:
+                            cod_p = prod_selecionado.split(" - ")[0]
+                            item_p = prod_selecionado.split(" - ")[1].split(" (Saldo:")[0]
+                            data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
+                            
+                            cursor = conn.cursor()
+                            cursor.execute("UPDATE produtos SET quantidade = quantidade + %s WHERE codigo = %s", (qtd_entrada, cod_p))
+                            cursor.execute("""
+                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
+                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            """, (data_atual, "Entrada", cod_p, item_p, qtd_entrada, resp_entrada.strip(), coord_entrada))
+                            
+                            conn.commit()
+                            st.success(f"Entrada de {qtd_entrada} unidades de '{item_p}' registrada!")
+                            st.rerun()
+                        else:
+                            st.error("Por favor, preencha o nome do responsável.")
+            else:
+                st.warning("Cadastre um produto antes de realizar movimentações.")
+
+        elif modo_movimento == "📤 Registrar Saída":
+            if lista_opcoes_produtos:
+                with st.form("form_saida", clear_on_submit=True):
+                    prod_selecionado = st.selectbox("Selecione o Material:", lista_opcoes_produtos)
+                    qtd_saida = st.number_input("Quantidade de Saída:", min_value=1, step=1)
+                    resp_saida = st.text_input("Responsável pela Retirada:")
+                    coord_saida = st.selectbox("Coordenação Solicitante:", lista_siglas_coord)
+                    
+                    if st.form_submit_button("Confirmar Saída", type="primary"):
+                        cod_p = prod_selecionado.split(" - ")[0]
+                        item_p = prod_selecionado.split(" - ")[1].split(" (Saldo:")[0]
+                        
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT quantidade FROM produtos WHERE codigo = %s", (cod_p,))
+                        saldo_atual = cursor.fetchone()[0]
+                        
+                        if not resp_saida:
+                            st.error("Por favor, preencha o nome do responsável.")
+                        elif qtd_saida > saldo_atual:
+                            st.error(f"Saldo insuficiente! Quantidade disponível em estoque: {saldo_atual}")
+                        else:
+                            data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
+                            cursor.execute("UPDATE produtos SET quantidade = quantidade - %s WHERE codigo = %s", (qtd_saida, cod_p))
+                            cursor.execute("""
+                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
+                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            """, (data_atual, "Saída", cod_p, item_p, qtd_saida, resp_saida.strip(), coord_saida))
+                            
+                            conn.commit()
+                            st.success(f"Saída de {qtd_saida} unidades de '{item_p}' realizada!")
+                            st.rerun()
+            else:
+                st.warning("Cadastre um produto antes de realizar movimentações.")
+
+        elif modo_movimento == "📜 Histórico de Movimentações":
+            st.markdown("### Histórico de Entradas e Saídas")
+            if not df_movimentacoes.empty:
+                st.dataframe(df_movimentacoes.sort_index(ascending=False), use_container_width=True, hide_index=True)
+            else:
+                st.info("Nenhuma movimentação foi registrada ainda.")
+                
