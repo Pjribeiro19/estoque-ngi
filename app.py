@@ -261,36 +261,40 @@ if not st.session_state.autenticado:
         with col_r2:
             st.write("<br><br>", unsafe_allow_html=True)
             st.markdown("### 🔑 Recuperar Acesso")
-            email_recuperar = st.text_input("E-mail corporativo", placeholder="exemplo@icmbio.gov.br")
-
-            if st.button("Enviar Instruções", type="primary", use_container_width=True):
-                if email_recuperar.strip():
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT COUNT(*) FROM usuarios WHERE LOWER(email) = %s;", (email_recuperar.strip().lower(),))
-                    if cursor.fetchone()[0] > 0:
-                        if EMAIL_REMETENTE == "configurar_no_secrets@email.com":
-                            st.error("Erro de configuração nos Secrets do Streamlit / Railway Variables.")
+            
+            with st.form("form_recuperar_senha"):
+                email_recuperar = st.text_input("E-mail corporativo", placeholder="exemplo@icmbio.gov.br")
+                botao_enviar = st.form_submit_button("Enviar Instruções", type="primary", use_container_width=True)
+                
+                if botao_enviar:
+                    if email_recuperar.strip():
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT COUNT(*) FROM usuarios WHERE LOWER(email) = %s;", (email_recuperar.strip().lower(),))
+                        if cursor.fetchone()[0] > 0:
+                            if EMAIL_REMETENTE == "configurar_no_secrets@email.com":
+                                st.error("Erro de configuração nos Secrets do Streamlit / Railway Variables.")
+                            else:
+                                try:
+                                    msg = MIMEMultipart()
+                                    msg['From'] = EMAIL_REMETENTE
+                                    msg['To'] = email_recuperar.strip()
+                                    msg['Subject'] = "Recuperação de Senha - Sistema de Almoxarifado NGI Carajás"
+                                    corpo_email = f"Sua senha provisória de contingência é: 123"
+                                    msg.attach(MIMEText(corpo_email, 'plain'))
+                                    
+                                    server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
+                                    server.starttls()
+                                    server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
+                                    server.sendmail(EMAIL_REMETENTE, email_recuperar.strip(), msg.as_string())
+                                    server.quit()
+                                    st.success(f"Sucesso! Instruções enviadas para {email_recuperar}")
+                                except Exception as e:
+                                    st.error(f"Erro ao tentar enviar o e-mail: {e}")
                         else:
-                            try:
-                                msg = MIMEMultipart()
-                                msg['From'] = EMAIL_REMETENTE
-                                msg['To'] = email_recuperar.strip()
-                                msg['Subject'] = "Recuperação de Senha - Sistema de Almoxarifado NGI Carajás"
-                                corpo_email = f"Sua senha provisória de contingência é: 123"
-                                msg.attach(MIMEText(corpo_email, 'plain'))
-                                
-                                server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
-                                server.starttls()
-                                server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
-                                server.sendmail(EMAIL_REMETENTE, email_recuperar.strip(), msg.as_string())
-                                server.quit()
-                                st.success(f"Sucesso! Instruções enviadas para {email_recuperar}")
-                            except Exception as e:
-                                st.error(f"Erro ao tentar enviar o e-mail: {e}")
+                            st.error("Este e-mail não foi encontrado no sistema.")
                     else:
-                        st.error("Este e-mail não foi encontrado no sistema.")
-                else:
-                    st.warning("Por favor, digite um e-mail válido.")
+                        st.warning("Por favor, digite um e-mail válido.")
+                        
             if st.button("Voltar para o Login", use_container_width=True):
                 st.session_state.sub_tela_login = "login"
                 st.rerun()
@@ -469,7 +473,6 @@ else:
                 with col_b_prod1:
                     if st.button("Salvar Alterações", type="primary"):
                         cursor = conn.cursor()
-                        # Correção feita aqui: Alterado 'quantity' para 'quantidade' para bater com o banco de dados
                         cursor.execute("""
                             UPDATE produtos 
                             SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
@@ -656,98 +659,118 @@ else:
 
     # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (3 ABAS CONFORME SOLICITADO) ---
     elif escolha == "Movimentação de Estoque":
-        st.title("Movimentação de Estoque")
+        st.title("📦 Movimentação de Estoque")
         
-        aba_movimentacao = option_menu(
+        aba_mov = option_menu(
             menu_title=None,
-            options=["Registro de Entrada", "Registro de Saída", "Histórico de Movimentação"],
-            icons=["arrow-down-circle", "arrow-up-circle", ""], # Ícone de histórico removido completamente para não parecer IA
+            options=["Registrar Entrada", "Registrar Saída", "Histórico de Fluxo"],
+            icons=["arrow-down-circle", "arrow-up-circle", "clock-history"],
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
         
-        if df_produtos.empty:
-            st.warning("Nenhum produto cadastrado para movimentar.")
-        else:
-            df_raw_prod = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos ORDER BY item ASC", conn)
-            lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["N/A"]
-            
-            # 1. ABA: REGISTRO DE ENTRADA
-            if aba_movimentacao == "Registro de Entrada":
-                with st.form("form_entrada", clear_on_submit=True):
-                    col_e1, col_e2 = st.columns(2)
-                    data_mov = col_e1.date_input("Data da Movimentação:", value=datetime.today()).strftime("%Y-%m-%d")
-                    opcao_prod = col_e2.selectbox(
-                        "Selecione o Material:", 
-                        df_raw_prod.index, 
-                        format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})"
-                    )
-                    qtd_mov = col_e1.number_input("Quantidade:", min_value=1, step=1, value=1)
+        data_atual_str = datetime.now().strftime("%d/%m/%Y %H:%M")
+        
+        if aba_mov == "Registrar Entrada":
+            if not df_produtos.empty:
+                df_raw_p = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos ORDER BY item ASC", conn)
+                
+                with st.form("form_entrada"):
+                    idx_p = st.selectbox("Selecione o Material para Entrada:", df_raw_p.index, format_func=lambda x: f"{df_raw_p.loc[x, 'codigo']} - {df_raw_p.loc[x, 'item']} (Saldo: {df_raw_p.loc[x, 'quantidade']})")
+                    qtd_entrada = st.number_input("Quantidade de Entrada:", min_value=1, step=1)
+                    responsavel_mov = st.text_input("Responsável pelo Recebimento:", value=st.session_state.NOME_USUARIO_LOGADO)
                     
-                    if st.form_submit_button("Registrar Entrada", type="primary"):
-                        prod_codigo = df_raw_prod.loc[opcao_prod, "codigo"]
-                        prod_nome = df_raw_prod.loc[opcao_prod, "item"]
-                        prod_qtd_atual = int(df_raw_prod.loc[opcao_prod, "quantidade"])
-                        nova_qtd = prod_qtd_atual + qtd_mov
+                    lista_siglas_c = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["ALMOXARIFADO"]
+                    coord_mov = st.selectbox("Coordenação Destinatária / Armazenamento:", lista_siglas_c)
+                    
+                    if st.form_submit_button("Confirmar Entrada de Insumo", type="primary"):
+                        p_cod = df_raw_p.loc[idx_p, "codigo"]
+                        p_name = df_raw_p.loc[idx_p, "item"]
+                        novo_saldo = int(df_raw_p.loc[idx_p, "quantidade"]) + int(qtd_entrada)
                         
                         try:
                             cursor = conn.cursor()
-                            cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (nova_qtd, prod_codigo))
+                            # Atualiza Saldo do Produto
+                            cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (novo_saldo, p_cod))
+                            # Registra Histórico
                             cursor.execute("""
                                 INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
                                 VALUES (%s, %s, %s, %s, %s, %s, %s);
-                            """, (data_mov, "Entrada", prod_codigo, prod_nome, qtd_mov, st.session_state.NOME_USUARIO_LOGADO, "Almoxarifado"))
-                            conn.commit()
-                            st.success(f"📦 Entrada de {qtd_mov} un. de '{prod_nome}' registrada! Novo saldo: {nova_qtd}.")
-                            st.rerun()
-                        except Exception as ex:
-                            conn.rollback()
-                            st.error(f"Erro ao salvar entrada: {ex}")
-            
-            # 2. ABA: REGISTRO DE SAÍDA
-            elif aba_movimentacao == "Registro de Saída":
-                with st.form("form_saida", clear_on_submit=True):
-                    col_s1, col_s2 = st.columns(2)
-                    data_mov = col_s1.date_input("Data da Movimentação:", value=datetime.today()).strftime("%Y-%m-%d")
-                    opcao_prod = col_s2.selectbox(
-                        "Selecione o Material:", 
-                        df_raw_prod.index, 
-                        format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})"
-                    )
-                    qtd_mov = col_s1.number_input("Quantidade da Movimentação:", min_value=1, step=1, value=1)
-                    resp_mov = col_s2.text_input("Nome da Pessoa Responsável pela Retirada:")
-                    coord_mov = col_s1.selectbox("Coordenação Destino:", lista_siglas_coord)
-                    
-                    if st.form_submit_button("Registrar Saída", type="primary"):
-                        if not resp_mov.strip():
-                            st.error("❌ Por favor, digite o nome da pessoa responsável pela retirada.")
-                        else:
-                            prod_codigo = df_raw_prod.loc[opcao_prod, "codigo"]
-                            prod_nome = df_raw_prod.loc[opcao_prod, "item"]
-                            prod_qtd_atual = int(df_raw_prod.loc[opcao_prod, "quantidade"])
+                            """, (data_atual_str, "Entrada", p_cod, p_name, int(qtd_entrada), responsavel_mov.strip(), coord_mov))
                             
-                            if prod_qtd_atual >= qtd_mov:
-                                nova_qtd = prod_qtd_atual - qtd_mov
-                                try:
-                                    cursor = conn.cursor()
-                                    cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (nova_qtd, prod_codigo))
-                                    cursor.execute("""
-                                        INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
-                                        VALUES (%s, %s, %s, %s, %s, %s, %s);
-                                    """, (data_mov, "Saída", prod_codigo, prod_nome, qtd_mov, resp_mov.strip(), coord_mov))
-                                    conn.commit()
-                                    st.success(f"📦 Saída de {qtd_mov} un. de '{prod_nome}' registrada! Novo saldo: {nova_qtd}.")
-                                    st.rerun()
-                                except Exception as ex:
-                                    conn.rollback()
-                                    st.error(f"Erro ao salvar saída: {ex}")
-                            else:
-                                st.error(f"❌ Saldo Insuficiente! O material possui apenas {prod_qtd_atual} unidades no estoque.")
-            
-            # 3. ABA: HISTÓRICO DE MOVIMENTAÇÃO
-            elif aba_movimentacao == "Histórico de Movimentação":
-                st.markdown("### Histórico de Movimentação")
-                if not df_movimentacoes.empty:
-                    st.dataframe(df_movimentacoes.sort_index(ascending=False), use_container_width=True, hide_index=True)
-                else:
-                    st.info("Nenhuma movimentação registrada até o momento.")
+                            conn.commit()
+                            st.success(f"Entrada de {qtd_entrada} unidades de '{p_name}' processada!")
+                            st.rerun()
+                        except Exception as e:
+                            conn.rollback()
+                            st.error(f"Erro ao processar entrada: {e}")
+            else:
+                st.warning("Cadastre um produto antes de realizar movimentações.")
+                
+        elif aba_mov == "Registrar Saída":
+            if not df_produtos.empty:
+                df_raw_p = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos ORDER BY item ASC", conn)
+                
+                with st.form("form_saida"):
+                    idx_p = st.selectbox("Selecione o Material para Retirada:", df_raw_p.index, format_func=lambda x: f"{df_raw_p.loc[x, 'codigo']} - {df_raw_p.loc[x, 'item']} (Saldo: {df_raw_p.loc[x, 'quantidade']})")
+                    qtd_saida = st.number_input("Quantidade de Saída / Retirada:", min_value=1, step=1)
+                    responsavel_mov = st.text_input("Responsável pela Retirada (Servidor/Colaborador):")
+                    
+                    lista_siglas_c = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
+                    coord_mov = st.selectbox("Coordenação Requisitante:", lista_siglas_c)
+                    
+                    if st.form_submit_button("Confirmar Baixa de Estoque", type="primary"):
+                        saldo_disponivel = int(df_raw_p.loc[idx_p, "quantidade"])
+                        p_cod = df_raw_p.loc[idx_p, "codigo"]
+                        p_name = df_raw_p.loc[idx_p, "item"]
+                        
+                        if responsavel_mov.strip() == "":
+                            st.error("Por favor, preencha o nome do responsável pela retirada.")
+                        elif qtd_saida > saldo_disponivel:
+                            st.error(f"Erro! Saldo insuficiente. Você tentou retirar {qtd_saida} unidades, mas existem apenas {saldo_disponivel} em estoque.")
+                        else:
+                            novo_saldo = saldo_disponivel - int(qtd_saida)
+                            try:
+                                cursor = conn.cursor()
+                                # Atualiza Saldo do Produto
+                                cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (novo_saldo, p_cod))
+                                # Registra Histórico
+                                cursor.execute("""
+                                    INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s);
+                                """, (data_atual_str, "Saída", p_cod, p_name, int(qtd_saida), responsavel_mov.strip(), coord_mov))
+                                
+                                conn.commit()
+                                st.success(f"Baixa efetuada! {qtd_saida} unidades de '{p_name}' entregues.")
+                                st.rerun()
+                            except Exception as e:
+                                conn.rollback()
+                                st.error(f"Erro ao processar a saída: {e}")
+            else:
+                st.warning("Nenhum material cadastrado para baixa.")
+                
+        elif aba_mov == "Histórico de Fluxo":
+            st.markdown("### 📋 Registro Geral de Movimentações")
+            if not df_movimentacoes.empty:
+                # Inverte a ordem para que os registros mais novos apareçam no topo
+                df_mov_display = df_movimentacoes.iloc[::-1].reset_index(drop=True)
+                
+                def cor_tipo_fluxo(val):
+                    if val == 'Entrada':
+                        return 'color: #4CAF50; font-weight: bold;'
+                    elif val == 'Saída':
+                        return 'color: #c62828; font-weight: bold;'
+                    return ''
+                
+                st.dataframe(df_mov_display.style.map(cor_tipo_fluxo, subset=['Tipo']), use_container_width=True, hide_index=True)
+                
+                # Exportação CSV prática
+                csv_dados = df_mov_display.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="📥 Exportar Histórico para Excel/CSV",
+                    data=csv_dados,
+                    file_name=f"historico_movimentacoes_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                )
+            else:
+                st.info("Nenhuma movimentação de entrada ou saída registrada no sistema até o momento.")
