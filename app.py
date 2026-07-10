@@ -4,20 +4,138 @@ from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import psycopg2
+from psycopg2.extras import DictCursor
+from streamlit_option_menu import option_menu
+import os
 
 # =============================================================================
-# CONFIGURAÇÕES SEGURAS DE E-MAIL (Puxando dos Secrets do Streamlit)
+# CONEXÃO E INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (Neon Postgres)
+# =============================================================================
+def inicializar_banco_automatico():
+    conn = None
+    try:
+        conn_string = os.environ.get("POSTGRES_URL") or st.secrets["postgres"]["url"]
+        conn = psycopg2.connect(conn_string)
+    except Exception as e:
+        st.error(f"Erro ao conectar ao Neon Postgres: {e}")
+        st.info("Verifique as credenciais na aba 'Variables' do Railway.")
+        st.stop()
+        
+    cursor = conn.cursor()
+    
+    # 1. Tabela de usuários
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            nome TEXT,
+            email TEXT PRIMARY KEY,
+            senha TEXT,
+            perfil TEXT
+        );
+    """)
+    
+    cursor.execute("SELECT COUNT(*) FROM usuarios;")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute("""
+            INSERT INTO usuarios (nome, email, senha, perfil) 
+            VALUES ('Administrador Padrão', 'admin@ngi.com', '123', 'Administrador');
+        """)
+        conn.commit()
+
+    # 2. Tabela de produtos
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS produtos (
+            codigo TEXT PRIMARY KEY,
+            item TEXT,
+            quantidade INTEGER,
+            categoria TEXT,
+            valor_unitario REAL
+        );
+    """)
+    
+    cursor.execute("SELECT COUNT(*) FROM produtos;")
+    if cursor.fetchone()[0] == 0:
+        produtos_iniciais = [
+            ("001", "Capacete de Segurança", 15, "EPI", 45.00),
+            ("002", "Resma Papel A4", 0, "Material de Escritório", 28.50),
+            ("003", "Luva de Raspa", 50, "EPI", 12.00)
+        ]
+        cursor.executemany("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", produtos_iniciais)
+        conn.commit()
+
+    # 3. Tabela de coordenações
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS coordenacoes (
+            sigla TEXT PRIMARY KEY,
+            nome TEXT
+        );
+    """)
+    
+    cursor.execute("SELECT COUNT(*) FROM coordenacoes;")
+    if cursor.fetchone()[0] == 0:
+        cursor.executemany("INSERT INTO coordenacoes VALUES (%s, %s);", [
+            ("COTEC", "Coordenação Técnica"),
+            ("COLOG", "Coordenação de Logística")
+        ])
+        conn.commit()
+
+    # 4. Tabela de categorias
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS categorias (
+            nome TEXT PRIMARY KEY
+        );
+    """)
+    cursor.execute("SELECT COUNT(*) FROM categorias;")
+    if cursor.fetchone()[0] == 0:
+        cat_iniciais = [("EPI",), ("Material de Escritório",), ("Informática",), ("Limpeza",), ("Copa",)]
+        cursor.executemany("INSERT INTO categorias VALUES (%s);", cat_iniciais)
+        conn.commit()
+
+    # 5. Tabela de movimentações
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS movimentacoes (
+            id SERIAL PRIMARY KEY,
+            data TEXT,
+            tipo TEXT,
+            codigo TEXT,
+            item TEXT,
+            quantidade INTEGER,
+            responsavel TEXT,
+            coordenacao TEXT
+        );
+    """)
+    
+    conn.commit()
+    return conn
+
+conn = inicializar_banco_automatico()
+
+# Carregamento seguro e global dos dados
+try:
+    df_produtos = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
+    df_movimentacoes = pd.read_sql_query('SELECT data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenacao AS "Coordenação" FROM movimentacoes', conn)
+    df_coordenacoes = pd.read_sql_query('SELECT sigla AS "Sigla", nome AS "Nome" FROM coordenacoes', conn)
+    df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
+    lista_categorias = df_cat_bruto["nome"].tolist()
+except Exception as e:
+    df_produtos = pd.DataFrame()
+    df_movimentacoes = pd.DataFrame()
+    df_coordenacoes = pd.DataFrame()
+    lista_categorias = []
+
+# =============================================================================
+# CONFIGURAÇÕES SEGURAS DE E-MAIL (Suporte Híbrido Railway / Secrets)
 # =============================================================================
 try:
-    EMAIL_REMETENTE = st.secrets["gmail"]["email"]
-    SENHA_REMETENTE = st.secrets["gmail"]["senha_app"]
-except:
-    # Fallback caso esteja rodando localmente e ainda não tenha configurado o secrets local
+    EMAIL_REMETENTE = os.environ.get("GMAIL_EMAIL") or st.secrets["gmail"]["email"]
+    SENHA_REMETENTE = os.environ.get("GMAIL_SENHA") or st.secrets["gmail"]["senha"]
+    SMTP_HOST = os.environ.get("GMAIL_SMTP_SERVER") or st.secrets["gmail"]["smtp_server"]
+    SMTP_PORTA = int(os.environ.get("GMAIL_SMTP_PORT") or st.secrets["gmail"]["smtp_port"])
+except Exception as e:
     EMAIL_REMETENTE = "configurar_no_secrets@email.com"
     SENHA_REMETENTE = "configurar_no_secrets"
-
-SMTP_HOST = "smtp.gmail.com"
-SMTP_PORTA = 587
+    SMTP_HOST = "smtp.gmail.com"
+    SMTP_PORTA = 587
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
@@ -26,70 +144,24 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- FORÇA A BARRA LATERAL A FICAR SEMPRE ABERTA NO CELULAR ---
+# --- ESTILIZAÇÃO CSS COMPATÍVEL ---
 st.markdown("""
     <style>
-    /* Desativa o fechamento automático da Sidebar em telas menores */
-    @media (max-width: 991px) {
-        [data-testid="stSidebar"] {
-            transform: none !important;
-            position: relative !important;
-            min-width: 250px !important;
-            max-width: 250px !important;
-            display: block !important;
-        }
-        
-        /* Esconde o botão de fechar/setinha */
-        [data-testid="stSidebar"] button {
-            display: none !important;
-        }
-        
-        /* Ajusta o contêiner principal para dividir espaço horizontalmente */
-        .main {
-            flex-direction: row !important;
-        }
-        
-        /* Força o contêiner de conteúdo a ocupar o restante da tela */
-        [data-testid="stAppViewBlockContainer"] {
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
-            min-width: calc(100vw - 250px) !important;
-        }
-    }
-
-    /* Esconde elementos nativos do Streamlit */
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
     
-    /* Customização estética dos botões do menu lateral */
-    [data-testid="stSidebar"] {
-        background-color: #fcfaff !important;
-        border-right: 1px solid #efe9f5;
+    html, body, [data-testid="stWidgetLabel"] p, .stMarkdown p, label, span {
+        color: var(--text-color) !important;
     }
     
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {
-        color: #333333 !important;
-        font-weight: 500;
-        padding: 12px 16px;
-        border-radius: 4px;
-        margin-bottom: 2px;
-        transition: all 0.2s ease;
+    .nav-link span {
+        color: var(--text-color) !important;
     }
     
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {
-        background-color: #e2eed7 !important;
-        color: #1e5934 !important;
-        cursor: pointer;
+    .nav-link.active span {
+        color: white !important;
     }
     
-    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] input:checked + div {
-        background-color: #cce2b4 !important;
-        border-radius: 4px;
-        color: #1e5934 !important;
-        font-weight: bold !important;
-    }
-    
-    /* Botões Padrão Verde */
     div.stButton > button:first-child[kind="primary"] {
         background-color: #4CAF50 !important;
         border-color: #4CAF50 !important;
@@ -100,19 +172,38 @@ st.markdown("""
         border-color: #43a047 !important;
     }
     
-    /* Centralizador dos logotipos */
     .img-container {
         display: flex;
         justify-content: center;
         align-items: center;
         width: 100%;
         margin-bottom: 20px;
+        background-color: white; 
+        padding: 15px;
+        border-radius: 8px;
     }
     </style>
 """, unsafe_allow_html=True)
 
+# Dicionário de estilo adaptativo para os menus horizontais
+ESTILO_MENU_HORIZONTAL = {
+    "container": {"padding": "0!important", "background-color": "transparent"},
+    "icon": {"color": "#64748b", "font-size": "14px"}, 
+    "nav-link": {
+        "font-size": "14px", 
+        "text-align": "center", 
+        "margin": "0px 5px", 
+        "color": "var(--text-color)",
+        "--hover-color": "rgba(76, 175, 80, 0.12)"
+    },
+    "nav-link-selected": {
+        "background-color": "#4CAF50", 
+        "color": "white", 
+        "font-weight": "500"
+    },
+}
 
-# --- INICIALIZAÇÃO DO GERENCIAMENTO DE SESSÃO (LOGIN) ---
+# --- GERENCIAMENTO DE SESSÃO ---
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 
@@ -120,50 +211,14 @@ if "sub_tela_login" not in st.session_state:
     st.session_state.sub_tela_login = "login"
 
 if "NOME_USUARIO_LOGADO" not in st.session_state:
-    st.session_state.NOME_USUARIO_LOGADO = "João Paulo"
-
-
-# =============================================================================
-# ROTEADOR DE PARÂMETROS DE URL (CAPTURAR LINK DO E-MAIL)
-# =============================================================================
-query_params = st.query_params
-
-# Se o link contiver '?page=reset_password', força a tela de nova senha independente de login
-if "page" in query_params and query_params["page"] == "reset_password":
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    col_r1, col_r2, col_r3 = st.columns([1, 1.2, 1])
-    with col_r2:
-        st.markdown("<h2 style='text-align: center; color: #1e5934;'>🔑 Definir Nova Senha</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='font-size: 0.9rem; color: gray; text-align: center;'>Insira e confirme sua nova senha de acesso abaixo.</p>", unsafe_allow_html=True)
-        
-        nova_senha = st.text_input("Nova Senha", type="password", placeholder="Digite a nova senha...")
-        confirmar_senha = st.text_input("Confirme a Nova Senha", type="password", placeholder="Digite a senha novamente...")
-        
-        if st.button("Atualizar Senha", type="primary", use_container_width=True):
-            if nova_senha == "":
-                st.warning("A senha não pode estar em branco.")
-            elif nova_senha == confirmar_senha:
-                # 💡 AQUI ENTRA SUA ATUALIZAÇÃO NO BANCO DE DADOS SE HOUVER
-                st.success("Senha atualizada com sucesso!")
-                st.query_params.clear() # Limpa a URL (?page=reset_password)
-                st.session_state.sub_tela_login = "login"
-                st.button("Ir para o Login")
-            else:
-                st.error("As senhas não coincidem. Tente novamente.")
-                
-        if st.button("Cancelar e Voltar", use_container_width=True):
-            st.query_params.clear()
-            st.session_state.sub_tela_login = "login"
-            st.rerun()
+    st.session_state.NOME_USUARIO_LOGADO = ""
 
 # =============================================================================
-# FLUXO 1: FLUXO DE LOGIN (SE NÃO ESTIVER AUTENTICADO E NÃO ESTIVER REDEFININDO)
+# FLUXO 1: TELA DE LOGIN / RECUPERAÇÃO
 # =============================================================================
-elif not st.session_state.autenticado:
-    
+if not st.session_state.autenticado:
     if st.session_state.sub_tela_login == "login":
         st.markdown("<br><br>", unsafe_allow_html=True)
-        
         col_l1, col_l2, col_l3 = st.columns([1, 1.2, 1])
         with col_l2:
             st.markdown("""
@@ -171,17 +226,28 @@ elif not st.session_state.autenticado:
                     <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="320">
                 </div>
             """, unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center; color: #4CAF50; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
             
-            st.markdown("<h2 style='text-align: center; color: #1e5934; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
-            
-            usuario_input = st.text_input("Usuário / E-mail", placeholder="Digite seu usuário...")
-            senha_input = st.text_input("Senha", type="password", placeholder="Digite sua senha...")
-            
+            usuario_input = st.text_input("Usuário / E-mail")
+            senha_input = st.text_input("Senha", type="password")
             st.markdown("<br>", unsafe_allow_html=True)
+            
             if st.button("Entrar no Sistema", type="primary", use_container_width=True):
                 if usuario_input and senha_input:
-                    st.session_state.autenticado = True
-                    st.rerun()
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT nome, senha FROM usuarios WHERE LOWER(email) = %s;", (usuario_input.strip().lower(),))
+                    resultado = cursor.fetchone()
+                    
+                    if resultado:
+                        nome_banco, senha_banco = resultado
+                        if str(senha_banco) == str(senha_input).strip():
+                            st.session_state.autenticado = True
+                            st.session_state.NOME_USUARIO_LOGADO = nome_banco
+                            st.rerun()
+                        else:
+                            st.error("❌ Senha incorreta!")
+                    else:
+                        st.error("❌ Usuário ou E-mail não cadastrado!")
                 else:
                     st.error("Por favor, preencha todos os campos!")
                     
@@ -194,387 +260,492 @@ elif not st.session_state.autenticado:
         with col_r2:
             st.write("<br><br>", unsafe_allow_html=True)
             st.markdown("### 🔑 Recuperar Acesso")
-            st.markdown("<p style='font-size: 0.9rem; color: gray;'>Insira seu e-mail corporativo cadastrado para recuperar a senha.</p>", unsafe_allow_html=True)
             email_recuperar = st.text_input("E-mail corporativo", placeholder="exemplo@icmbio.gov.br")
 
             if st.button("Enviar Instruções", type="primary", use_container_width=True):
                 if email_recuperar.strip():
-                    if EMAIL_REMETENTE == "configurar_no_secrets@email.com":
-                        st.error("Erro de configuração: As credenciais de e-mail não foram inseridas nos Secrets do Streamlit.")
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) FROM usuarios WHERE LOWER(email) = %s;", (email_recuperar.strip().lower(),))
+                    if cursor.fetchone()[0] > 0:
+                        if EMAIL_REMETENTE == "configurar_no_secrets@email.com":
+                            st.error("Erro de configuração nos Secrets do Streamlit / Railway Variables.")
+                        else:
+                            try:
+                                msg = MIMEMultipart()
+                                msg['From'] = EMAIL_REMETENTE
+                                msg['To'] = email_recuperar.strip()
+                                msg['Subject'] = "Recuperação de Senha - Sistema de Almoxarifado NGI Carajás"
+                                corpo_email = f"Sua senha provisória de contingência é: 123"
+                                msg.attach(MIMEText(corpo_email, 'plain'))
+                                
+                                server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
+                                server.starttls()
+                                server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
+                                server.sendmail(EMAIL_REMETENTE, email_recuperar.strip(), msg.as_string())
+                                server.quit()
+                                st.success(f"Sucesso! Instruções enviadas para {email_recuperar}")
+                            except Exception as e:
+                                st.error(f"Erro ao tentar enviar o e-mail: {e}")
                     else:
-                        try:
-                            msg = MIMEMultipart()
-                            msg['From'] = EMAIL_REMETENTE
-                            msg['To'] = email_recuperar.strip()
-                            msg['Subject'] = "Recuperação de Senha - Sistema de Almoxarifado NGI Carajás"
-                            
-                            # O link agora envia o parâmetro ?page=reset_password para ativar a tela correta
-                            link_redefinicao = "https://almoxarifado-carajas.streamlit.app/?page=reset_password"
-                            
-                            corpo_email = f"""
-                            Olá,
-                            
-                            Recebemos uma solicitação de recuperação de acesso para o seu usuário ({email_recuperar.strip()}).
-                            
-                            Para cadastrar sua nova senha de acesso, clique no link seguro abaixo:
-                            {link_redefinicao}
-                            
-                            Se você não solicitou esta alteração, por favor ignore este e-mail.
-                            
-                            Atenciosamente,
-                            Suporte NGI Carajás / ICMBio
-                            """
-                            msg.attach(MIMEText(corpo_email, 'plain'))
-                            
-                            # Processo de envio via SMTP seguro
-                            server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
-                            server.starttls()
-                            server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
-                            server.sendmail(EMAIL_REMETENTE, email_recuperar.strip(), msg.as_string())
-                            server.quit()
-                            
-                            st.success(f"Sucesso! O link de redefinição foi enviado para {email_recuperar}")
-                        except Exception as e:
-                            st.error(f"Erro ao tentar enviar o e-mail: {e}")
+                        st.error("Este e-mail não foi encontrado no sistema.")
                 else:
                     st.warning("Por favor, digite um e-mail válido.")
-
             if st.button("Voltar para o Login", use_container_width=True):
                 st.session_state.sub_tela_login = "login"
                 st.rerun()
 
-
 # =============================================================================
-# FLUXO 2: SISTEMA PRINCIPAL (APÓS ESTAR AUTENTICADO)
+# FLUXO 2: SISTEMA PRINCIPAL (PÓS-AUTENTICAÇÃO)
 # =============================================================================
 else:
-    # -----------------------------------------------------------------------------
-    # BANCO DE DADOS EM MEMÓRIA
-    # -----------------------------------------------------------------------------
-    if "produtos" not in st.session_state or not isinstance(st.session_state.produtos, pd.DataFrame):
-        st.session_state.produtos = pd.DataFrame([
-            {"Código": "001", "Item": "Capacete de Segurança", "Quantidade": 15, "Categoria": "EPI", "Valor Unitário": 45.00},
-            {"Código": "002", "Item": "Resma Papel A4", "Quantidade": 0, "Categoria": "Material de Escritório", "Valor Unitário": 28.50},
-            {"Código": "003", "Item": "Luva de Raspa", "Quantidade": 50, "Categoria": "EPI", "Valor Unitário": 12.00}
-        ])
-
-    if "usuarios" not in st.session_state or not isinstance(st.session_state.usuarios, pd.DataFrame):
-        st.session_state.usuarios = pd.DataFrame([
-            {"Nome": "Administrador Padrão", "E-mail": "admin@ngi.com", "Senha": "123", "Perfil": "Administrador"}
-        ])
-
-    if "coordenacoes" not in st.session_state or not isinstance(st.session_state.coordenacoes, pd.DataFrame):
-        st.session_state.coordenacoes = pd.DataFrame([
-            {"Sigla": "COTEC", "Nome": "Coordenação Técnica"},
-            {"Sigla": "COLOG", "Nome": "Coordenação de Logística"}
-        ])
-
-    if "categorias" not in st.session_state or not isinstance(st.session_state.categorias, list):
-        st.session_state.categorias = ["EPI", "Material de Escritório", "Informática", "Limpeza", "Copa"]
-
-    if "movimentacoes" not in st.session_state or not isinstance(st.session_state.movimentacoes, pd.DataFrame):
-        st.session_state.movimentacoes = pd.DataFrame(columns=[
-            "Data", "Tipo", "Código", "Item", "Quantidade", "Responsável pela Retirada", "Coordenação"
-        ])
-
-    # -----------------------------------------------------------------------------
-    # BARRA LATERAL (MENU DE NAVEGAÇÃO COMPLETO)
-    # -----------------------------------------------------------------------------
+    # --- MENU LATERAL ---
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("---")
-        menu_opcoes = [
-            "🎛️ Painel Geral",
-            "➕ Cadastrar Produto",
-            "🗂️ Cadastrar Categoria",
-            "👥 Cadastrar Usuário",
-            "🏢 Cadastrar Coordenação",
-            "🔄 Movimentação de Entrada e Saída",
-            "👤 Perfil",
-            "🚪 Sair"
-        ]
-        escolha = st.radio("", menu_opcoes, label_visibility="collapsed")
+        
+        escolha = option_menu(
+            menu_title=None,
+            options=[
+                "Painel Geral", 
+                "Cadastrar Produto", 
+                "Cadastrar Categoria", 
+                "Cadastrar Usuário", 
+                "Cadastrar Coordenação",
+                "Movimentação de Estoque",
+                "Sair do Sistema"
+            ],
+            icons=["grid", "box", "folder", "person-plus", "building", "arrow-left-right", "box-arrow-right"],
+            menu_icon="cast",
+            default_index=0,
+            styles={
+                "container": {"padding": "0!important", "background-color": "transparent"},
+                "icon": {"color": "#64748b", "font-size": "15px"}, 
+                "nav-link": {
+                    "font-size": "14px", 
+                    "text-align": "left", 
+                    "margin": "0px", 
+                    "color": "var(--text-color)",
+                    "--hover-color": "rgba(76, 175, 80, 0.12)"
+                },
+                "nav-link-selected": {
+                    "background-color": "#4CAF50", 
+                    "color": "white", 
+                    "font-weight": "500"
+                },
+            }
+        )
 
-    # -----------------------------------------------------------------------------
-    # LÓGICA DAS TELAS DO PAINEL LOGADO
-    # -----------------------------------------------------------------------------
+    if escolha == "Sair do Sistema":
+        st.session_state.autenticado = False
+        st.session_state.NOME_USUARIO_LOGADO = ""
+        st.rerun()
 
     # --- TELA: PAINEL GERAL ---
-    if escolha == "🎛️ Painel Geral":
-        st.title("🎛️ Painel Geral de Estoque")
+    elif escolha == "Painel Geral":
+        st.markdown("""
+            <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+                <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+                    Painel Geral de Controle
+                </h1>
+                <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                    Visão Geral de Saldos, Alertas de Materiais e Fluxo de Insumos NGI Carajás
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
         
         c1, c2, c3 = st.columns(3)
-        c1.metric("Total de Itens Cadastrados", len(st.session_state.produtos))
-        c2.metric("Produtos Esgotados", len(st.session_state.produtos[st.session_state.produtos['Quantidade'] == 0]))
-        c3.metric("Movimentações Realizadas", len(st.session_state.movimentacoes))
-
-        st.write("---")
-        st.write("### 🔍 Ferramentas de Busca e Filtro")
+        total_itens = len(df_produtos) if not df_produtos.empty else 0
+        produtos_esgotados = len(df_produtos[df_produtos['Quantidade'] == 0]) if not df_produtos.empty else 0
+        total_movimentacoes = len(df_movimentacoes) if not df_movimentacoes.empty else 0
+        
+        c1.markdown(f"""
+            <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 5px solid #4CAF50; padding: 18px; border-radius: 4px;">
+                <span style="font-size: 13px; font-weight: 600; text-transform: uppercase;">Total de Itens Cadastrados</span>
+                <h2 style="color: #4CAF50; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_itens}</h2>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        cor_esgotados = "#c62828" if produtos_esgotados > 0 else "#4CAF50"
+        bg_esgotados = "rgba(198, 40, 40, 0.08)" if produtos_esgotados > 0 else "rgba(76, 175, 80, 0.08)"
+        
+        c2.markdown(f"""
+            <div style="background-color: {bg_esgotados}; border-left: 5px solid {cor_esgotados}; padding: 18px; border-radius: 4px;">
+                <span style="font-size: 13px; font-weight: 600; text-transform: uppercase;">Produtos Esgotados</span>
+                <h2 style="color: {cor_esgotados}; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{produtos_esgotados}</h2>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        c3.markdown(f"""
+            <div style="background-color: rgba(33, 150, 243, 0.08); border-left: 5px solid #2196F3; padding: 18px; border-radius: 4px;">
+                <span style="font-size: 13px; font-weight: 600; text-transform: uppercase;">Movimentações Realizadas</span>
+                <h2 style="color: #2196F3; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_movimentacoes}</h2>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("<br><hr style='margin: 10px 0 25px 0; opacity: 0.15;'>", unsafe_allow_html=True)
+        st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
         
         col_filtro1, col_filtro2 = st.columns([2, 1])
-        termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite para pesquisar...")
-        categoria_selecionada = col_filtro2.selectbox("Filtrar por Categoria:", ["Todas"] + list(st.session_state.categorias))
+        termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...")
+        categoria_selecionada = col_filtro2.selectbox("Filtrar por Categoria:", ["Todas"] + lista_categorias)
         
-        df_filtrado = st.session_state.produtos.copy()
-            
-        if termo_busca:
-            df_filtrado = df_filtrado[
-                df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | 
-                df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)
-            ]
-            
-        if categoria_selecionada != "Todas":
+        df_filtrado = df_produtos.copy() if not df_produtos.empty else pd.DataFrame()
+        if not df_filtrado.empty and termo_busca:
+            df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
+        if not df_filtrado.empty and categoria_selecionada != "Todas":
             df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
-        st.write("### 📋 Estoque Atualizado")
-        
+        st.markdown("<br><h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>📋 Posição Atual do Estoque</h3>", unsafe_allow_html=True)
         if df_filtrado.empty:
             st.info("Nenhum material encontrado com os filtros aplicados.")
         else:
             df_display = df_filtrado.copy()
             df_display["Valor Unitário"] = df_display["Valor Unitário"].astype(float)
             df_display["Valor Total"] = df_display["Quantidade"] * df_display["Valor Unitário"]
-            
             df_display["Valor Unitário"] = df_display["Valor Unitário"].map("R$ {:.2f}".format)
             df_display["Valor Total"] = df_display["Valor Total"].map("R$ {:.2f}".format)
 
             def destacar_zerados(row):
                 if row['Quantidade'] == 0:
-                    return ['background-color: #ffebee; color: #c62828; font-weight: bold'] * len(row)
+                    return ['background-color: rgba(198, 40, 40, 0.12); color: #c62828; font-weight: bold;'] * len(row)
                 return [''] * len(row)
-            
-            df_estilizado = df_display.style.apply(destacar_zerados, axis=1)
-            st.dataframe(df_estilizado, use_container_width=True, hide_index=True)
+                
+            st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
 
     # --- TELA: CADASTRAR PRODUTO ---
-    elif escolha == "➕ Cadastrar Produto":
-        st.title("➕ Gerenciamento de Produtos")
-        aba_cad_prod, aba_gerenciar_prod = st.tabs(["➕ Novo Material", "✏️ Editar / Excluir Produtos"])
+    elif escolha == "Cadastrar Produto":
+        st.title("Gerenciamento de Produtos")
         
-        with aba_cad_prod:
+        aba_selecionada = option_menu(
+            menu_title=None,
+            options=["Novo Material", "Editar / Excluir Produtos"],
+            icons=["plus-circle", "pencil-square"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+        
+        if aba_selecionada == "Novo Material":
             with st.form("form_novo_produto", clear_on_submit=True):
                 col_a, col_b = st.columns(2)
                 cod = col_a.text_input("Código")
                 nome_it = col_b.text_input("Nome do Material")
-                cat_it = col_a.selectbox("Categoria", st.session_state.categorias)
+                cat_it = col_a.selectbox("Categoria", lista_categorias)
                 val_unit = col_b.number_input("Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
-                
-                st.caption("ℹ️ Novos materiais são registrados com saldo inicial 0. Para adicionar quantidades, utilize o menu 'Movimentação de Entrada e Saída'.")
+                st.caption("ℹ️ Novos materiais são registrados com saldo inicial 0.")
                 
                 if st.form_submit_button("Finalizar Cadastro", type="primary"):
                     if cod and nome_it:
-                        if cod in st.session_state.produtos["Código"].values:
-                            st.error(f"Erro! Já existe um produto cadastrado com o código {cod}.")
-                        else:
-                            novo_p = {"Código": cod, "Item": nome_it, "Quantidade": 0, "Categoria": cat_it, "Valor Unitário": float(val_unit)}
-                            st.session_state.produtos = pd.concat([st.session_state.produtos, pd.DataFrame([novo_p])], ignore_index=True)
-                            st.success(f"Sucesso! {nome_it} adicionado ao catálogo com saldo zerado.")
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", (cod.strip(), nome_it.strip(), 0, cat_it, float(val_unit)))
+                            conn.commit()
+                            st.success(f"Sucesso! {nome_it} adicionado.")
                             st.rerun()
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
+                            st.error(f"Erro! Código {cod} já existe.")
                     else:
-                        st.error("Preencha o Código e o Nome do Material!")
+                        st.error("Preencha todos os campos!")
                         
-        with aba_gerenciar_prod:
-            if not st.session_state.produtos.empty:
-                st.dataframe(st.session_state.produtos, use_container_width=True, hide_index=True)
-                st.write("---")
-                idx_p = st.selectbox(
-                    "Selecione o produto que deseja modificar:", 
-                    st.session_state.produtos.index, 
-                    format_func=lambda x: f"{st.session_state.produtos.loc[x, 'Código']} - {st.session_state.produtos.loc[x, 'Item']}"
-                )
-                col_ed1, col_ed2 = st.columns(2)
-                edit_cod = col_ed1.text_input("Código do Produto:", value=st.session_state.produtos.loc[idx_p, "Código"])
-                edit_item = col_ed2.text_input("Nome do Material:", value=st.session_state.produtos.loc[idx_p, "Item"])
-                edit_qtd = col_ed1.number_input("Quantidade em Estoque (Ajuste Manual):", min_value=0, step=1, value=int(st.session_state.produtos.loc[idx_p, "Quantidade"]))
+        elif aba_selecionada == "Editar / Excluir Produtos":
+            if not df_produtos.empty:
+                st.dataframe(df_produtos, use_container_width=True, hide_index=True)
+                df_raw_prod = pd.read_sql_query("SELECT * FROM produtos", conn)
+                opcao_selecionada = st.selectbox("Selecione para modificar:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']}")
                 
-                cat_atual = st.session_state.produtos.loc[idx_p, "Categoria"]
-                default_cat_idx = st.session_state.categorias.index(cat_atual) if cat_atual in st.session_state.categorias else 0
-                edit_cat = col_ed2.selectbox("Categoria do Produto:", st.session_state.categorias, index=default_cat_idx)
-                edit_val = st.number_input("Alterar Valor Unitário (R$):", min_value=0.0, step=0.01, format="%.2f", value=float(st.session_state.produtos.loc[idx_p, "Valor Unitário"]))
+                cod_atual = df_raw_prod.loc[opcao_selecionada, "codigo"]
+                col_ed1, col_ed2 = st.columns(2)
+                edit_cod = col_ed1.text_input("Código:", value=df_raw_prod.loc[opcao_selecionada, "codigo"])
+                edit_item = col_ed2.text_input("Nome:", value=df_raw_prod.loc[opcao_selecionada, "item"])
+                edit_qtd = col_ed1.number_input("Quantidade (Ajuste):", min_value=0, value=int(df_raw_prod.loc[opcao_selecionada, "quantidade"]))
+                
+                cat_atual = df_raw_prod.loc[opcao_selecionada, "categoria"]
+                idx_cat_padrao = lista_categorias.index(cat_atual) if cat_atual in lista_categorias else 0
+                edit_cat = col_ed2.selectbox("Categoria:", lista_categorias, index=idx_cat_padrao)
+                edit_val = st.number_input("Valor Unitário:", min_value=0.0, step=0.01, format="%.2f", value=float(df_raw_prod.loc[opcao_selecionada, "valor_unitario"]))
                 
                 col_b_prod1, col_b_prod2 = st.columns([1, 4])
                 with col_b_prod1:
                     if st.button("Salvar Alterações", type="primary"):
-                        st.session_state.produtos.loc[idx_p, "Código"] = edit_cod
-                        st.session_state.produtos.loc[idx_p, "Item"] = edit_item
-                        st.session_state.produtos.loc[idx_p, "Quantidade"] = edit_qtd
-                        st.session_state.produtos.loc[idx_p, "Categoria"] = edit_cat
-                        st.session_state.produtos.loc[idx_p, "Valor Unitário"] = float(edit_val)
-                        st.success("Produto atualizado!")
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            UPDATE produtos 
+                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
+                            WHERE codigo = %s;
+                        """, (edit_cod.strip(), edit_item.strip(), edit_qtd, edit_cat, float(edit_val), cod_atual))
+                        conn.commit()
+                        st.success("Modificado com sucesso!")
                         st.rerun()
                 with col_b_prod2:
-                    if st.button("❌ Excluir Produto do Sistema"):
-                        st.session_state.produtos = st.session_state.produtos.drop(idx_p).reset_index(drop=True)
-                        st.warning("Produto removido definitivamente.")
+                    if st.button("Excluir Produto"):
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM produtos WHERE codigo = %s;", (cod_atual,))
+                        conn.commit()
+                        st.warning("Removido com sucesso.")
                         st.rerun()
 
     # --- TELA: CADASTRAR CATEGORIA ---
-    elif escolha == "🗂️ Cadastrar Categoria":
-        st.title("🗂️ Gerenciamento de Categorias")
-        aba_nova_cat, aba_gerenciar_cat = st.tabs(["➕ Nova Categoria", "✏️ Editar / Excluir Categorias"])
+    elif escolha == "Cadastrar Categoria":
+        st.title("Gerenciamento de Categorias")
         
-        with aba_nova_cat:
+        aba_selecionada = option_menu(
+            menu_title=None,
+            options=["Nova Categoria", "Editar / Excluir Categorias"],
+            icons=["plus-circle", "pencil-square"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+        
+        if aba_selecionada == "Nova Categoria":
             col_cat1, col_cat2 = st.columns([1, 2])
             with col_cat1:
                 nova_cat = st.text_input("Nome da Nova Categoria:")
                 if st.button("Adicionar Categoria", type="primary"):
-                    if nova_cat and nova_cat.strip() not in st.session_state.categorias:
-                        st.session_state.categorias.append(nova_cat.strip())
-                        st.success("Categoria adicionada!")
-                        st.rerun()
+                    if nova_cat and nova_cat.strip():
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("INSERT INTO categorias VALUES (%s);", (nova_cat.strip(),))
+                            conn.commit()
+                            st.success("Adicionada!")
+                            st.rerun()
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
+                            st.error("Esta categoria já existe.")
             with col_cat2:
-                st.dataframe(pd.DataFrame(st.session_state.categorias, columns=["Categorias Ativas"]), use_container_width=True, hide_index=True)
-
-        with aba_gerenciar_cat:
-            if st.session_state.categorias:
-                cat_selecionada_idx = st.selectbox("Selecione qual deseja modificar/excluir:", range(len(st.session_state.categorias)), format_func=lambda x: st.session_state.categorias[x])
-                nome_antigo_cat = st.session_state.categorias[cat_selecionada_idx]
-                edit_nome_cat = st.text_input("Editar Nome:", value=nome_antigo_cat)
+                st.dataframe(pd.DataFrame(lista_categorias, columns=["Categorias Ativas"]), use_container_width=True, hide_index=True)
+                
+        elif aba_selecionada == "Editar / Excluir Categorias":
+            if lista_categorias:
+                cat_selecionada = st.selectbox("Selecione a categoria:", lista_categorias)
+                edit_nome_cat = st.text_input("Editar Nome:", value=cat_selecionada)
                 
                 c_btn_cat1, c_btn_cat2 = st.columns([1, 4])
                 with c_btn_cat1:
                     if st.button("Salvar Edição", type="primary"):
-                        st.session_state.categorias[cat_selecionada_idx] = edit_nome_cat.strip()
+                        cursor = conn.cursor()
+                        cursor.execute("UPDATE categorias SET nome = %s WHERE nome = %s;", (edit_nome_cat.strip(), cat_selecionada))
+                        conn.commit()
                         st.success("Atualizado!")
                         st.rerun()
                 with c_btn_cat2:
-                    if st.button("❌ Excluir Categoria"):
-                        st.session_state.categorias.pop(cat_selecionada_idx)
-                        st.warning("Categoria removida do sistema.")
+                    if st.button("Excluir Categoria"):
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM categorias WHERE nome = %s;", (cat_selecionada,))
+                        conn.commit()
+                        st.warning("Removida.")
                         st.rerun()
 
     # --- TELA: CADASTRAR USUÁRIO ---
-    elif escolha == "👥 Cadastrar Usuário":
-        st.title("👥 Cadastrar Usuário")
-        aba_cad, aba_edit = st.tabs(["➕ Novo Usuário", "✏️ Editar / Excluir Usuários"])
+    elif escolha == "Cadastrar Usuário":
+        st.title("Cadastrar Usuário")
         
-        with aba_cad:
+        aba_selecionada = option_menu(
+            menu_title=None,
+            options=["Novo Usuário", "Editar / Excluir Usuários"],
+            icons=["person-plus", "pencil-square"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+        
+        if aba_selecionada == "Novo Usuário":
             with st.form("cad_user", clear_on_submit=True):
                 n = st.text_input("Nome")
                 e = st.text_input("E-mail")
-                s = st.text_input("Senha de Acesso", type="password")
+                s = st.text_input("Senha", type="password")
                 p = st.selectbox("Perfil", ["Administrador", "Usuário Comum"])
+                
                 if st.form_submit_button("Salvar", type="primary"):
                     if n and e:
-                        new_u = {"Nome": n, "E-mail": e, "Senha": s if s else "123", "Perfil": p}
-                        st.session_state.usuarios = pd.concat([st.session_state.usuarios, pd.DataFrame([new_u])], ignore_index=True)
-                        st.success("Usuário Criado!")
-                        st.rerun()
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                INSERT INTO usuarios (nome, email, senha, perfil) 
+                                VALUES (%s, %s, %s, %s);
+                            """, (n.strip(), e.strip().lower(), s if s else "123", p))
+                            conn.commit()
+                            st.success("Usuário registrado com sucesso!")
+                            st.rerun()
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
+                            st.error("Este e-mail já está cadastrado.")
                     else:
-                        st.error("Nome e E-mail são obrigatórios.")
-
-        with aba_edit:
-            if not st.session_state.usuarios.empty:
-                st.dataframe(st.session_state.usuarios[["Nome", "E-mail", "Perfil"]], use_container_width=True, hide_index=True)
-                idx = st.selectbox("Selecione para modificar/excluir:", st.session_state.usuarios.index, format_func=lambda x: st.session_state.usuarios.loc[x, "Nome"])
-                edit_n = st.text_input("Nome:", value=st.session_state.usuarios.loc[idx, "Nome"])
-                edit_e = st.text_input("E-mail:", value=st.session_state.usuarios.loc[idx, "E-mail"])
-                edit_s = st.text_input("Alterar Senha:", value=st.session_state.usuarios.loc[idx, "Senha"] if "Senha" in st.session_state.usuarios.columns else "", type="password")
-                edit_p = st.selectbox("Alterar Perfil:", ["Administrador", "Usuário Comum"], index=0 if st.session_state.usuarios.loc[idx, "Perfil"] == "Administrador" else 1)
+                        st.error("Preencha o Nome e o E-mail!")
+                        
+        elif aba_selecionada == "Editar / Excluir Usuários":
+            df_raw_users = pd.read_sql_query("SELECT nome, email, perfil, senha FROM usuarios ORDER BY nome ASC", conn)
+            
+            if not df_raw_users.empty:
+                st.dataframe(df_raw_users[["nome", "email", "perfil"]], use_container_width=True, hide_index=True)
+                idx_user = st.selectbox("Selecione para editar:", df_raw_users.index, format_func=lambda x: f"{df_raw_users.loc[x, 'nome']} ({df_raw_users.loc[x, 'email']})")
+                email_chave = df_raw_users.loc[idx_user, "email"]
+                
+                edit_n = st.text_input("Nome:", value=df_raw_users.loc[idx_user, "nome"])
+                edit_e = st.text_input("E-mail:", value=df_raw_users.loc[idx_user, "email"])
+                edit_s = st.text_input("Senha:", value=df_raw_users.loc[idx_user, "senha"], type="password")
+                edit_p = st.selectbox("Perfil:", ["Administrador", "Usuário Comum"], index=0 if df_raw_users.loc[idx_user, "perfil"] == "Administrador" else 1)
                 
                 c_btn_u1, c_btn_u2 = st.columns([1, 4])
                 with c_btn_u1:
                     if st.button("Atualizar Dados", type="primary"):
-                        st.session_state.usuarios.loc[idx, "Nome"] = edit_n
-                        st.session_state.usuarios.loc[idx, "E-mail"] = edit_e
-                        st.session_state.usuarios.loc[idx, "Senha"] = edit_s
-                        st.session_state.usuarios.loc[idx, "Perfil"] = edit_p
-                        st.success("Usuário Atualizado!")
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            UPDATE usuarios SET nome = %s, email = %s, senha = %s, perfil = %s WHERE email = %s;
+                        """, (edit_n.strip(), edit_e.strip().lower(), edit_s, edit_p, email_chave))
+                        conn.commit()
+                        st.success("Atualizado!")
                         st.rerun()
                 with c_btn_u2:
-                    if st.button("❌ Excluir Usuário"):
-                        st.session_state.usuarios = st.session_state.usuarios.drop(idx).reset_index(drop=True)
-                        st.warning("Usuário removido com sucesso.")
+                    if st.button("Excluir Usuário"):
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM usuarios WHERE email = %s;", (email_chave,))
+                        conn.commit()
+                        st.warning("Removido.")
                         st.rerun()
 
     # --- TELA: CADASTRAR COORDENAÇÃO ---
-    elif escolha == "🏢 Cadastrar Coordenação":
-        st.title("🏢 Cadastrar Coordenação")
-        aba_c1, aba_c2 = st.tabs(["➕ Nova Coordenação", "✏️ Editar / Excluir Coordenação"])
+    elif escolha == "Cadastrar Coordenação":
+        st.title("Cadastrar Coordenação")
         
-        with aba_c1:
+        aba_selecionada = option_menu(
+            menu_title=None,
+            options=["Nova Coordenação", "Editar / Excluir Coordenação"],
+            icons=["building-add", "pencil-square"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+        
+        if aba_selecionada == "Nova Coordenação":
             with st.form("cad_coord", clear_on_submit=True):
-                s_coord = st.text_input("Sigla (Ex: COTEC)")
+                s_coord = st.text_input("Sigla")
                 nc = st.text_input("Nome da Coordenação")
                 if st.form_submit_button("Cadastrar", type="primary"):
                     if s_coord and nc:
-                        nova_coord = {"Sigla": s_coord.upper(), "Nome": nc}
-                        st.session_state.coordenacoes = pd.concat([st.session_state.coordenacoes, pd.DataFrame([nova_coord])], ignore_index=True)
-                        st.success("Coordenação Cadastrada com sucesso!")
-                        st.rerun()
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("INSERT INTO coordenacoes VALUES (%s, %s);", (s_coord.strip().upper(), nc.strip()))
+                            conn.commit()
+                            st.success("Cadastrada!")
+                            st.rerun()
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
+                            st.error("Esta sigla já está registrada.")
                     else:
-                        st.error("Preencha todos os campos da coordenação.")
+                        st.error("Preencha todos os campos!")
                         
-        with aba_c2:
-            if not st.session_state.coordenacoes.empty:
-                st.dataframe(st.session_state.coordenacoes, use_container_width=True, hide_index=True)
-                idx_c = st.selectbox("Selecione para excluir:", st.session_state.coordenacoes.index, format_func=lambda x: st.session_state.coordenacoes.loc[x, "Sigla"])
-                if st.button("❌ Remover Coordenação Selected"):
-                    st.session_state.coordenacoes = st.session_state.coordenacoes.drop(idx_c).reset_index(drop=True)
-                    st.warning("Coordenação removida.")
-                    st.rerun()
-
-    # --- TELA: MOVIMENTAÇÃO DE ENTRADA E SAÍDA ---
-    elif escolha == "🔄 Movimentação de Entrada e Saída":
-        st.title("🔄 Movimentações de Estoque")
-        
-        with st.form("form_movimentacao", clear_on_submit=True):
-            tipo_mov = st.selectbox("Tipo de Operação", ["Entrada (+) Saldo", "Saída (-) Retirada"])
-            
-            prod_selecionado_idx = st.selectbox(
-                "Selecione o Produto", 
-                st.session_state.produtos.index,
-                format_func=lambda x: f"{st.session_state.produtos.loc[x, 'Código']} - {st.session_state.produtos.loc[x, 'Item']} (Saldo atual: {st.session_state.produtos.loc[x, 'Quantidade']})"
-            )
-            
-            qtd_mov = st.number_input("Quantidade da Operação", min_value=1, step=1)
-            responsavel = st.text_input("Responsável / Recebedor")
-            coord_solic = st.selectbox("Coordenação Destino", st.session_state.coordenacoes["Sigla"].values if not st.session_state.coordenacoes.empty else ["Geral"])
-            
-            if st.form_submit_button("Confirmar Lançamento", type="primary"):
-                qtd_atual = st.session_state.produtos.loc[prod_selecionado_idx, "Quantidade"]
-                item_nome = st.session_state.produtos.loc[prod_selecionado_idx, "Item"]
-                item_cod = st.session_state.produtos.loc[prod_selecionado_idx, "Código"]
+        elif aba_selecionada == "Editar / Excluir Coordenação":
+            if not df_coordenacoes.empty:
+                st.dataframe(df_coordenacoes, use_container_width=True, hide_index=True)
+                sigla_selecionada = st.selectbox("Selecione para modificar:", df_coordenacoes["Sigla"].tolist())
+                cursor = conn.cursor()
+                cursor.execute("SELECT nome FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
+                nome_atual_c = cursor.fetchone()[0]
                 
-                if "Saída" in tipo_mov and qtd_mov > qtd_atual:
-                    st.error(f"Erro! Saldo insuficiente. Você tentou retirar {qtd_mov} unidades, mas existem apenas {qtd_atual} em estoque.")
-                else:
-                    # Atualiza o saldo no DataFrame
-                    if "Entrada" in tipo_mov:
-                        st.session_state.produtos.loc[prod_selecionado_idx, "Quantidade"] += qtd_mov
-                    else:
-                        st.session_state.produtos.loc[prod_selecionado_idx, "Quantidade"] -= qtd_mov
-                        
-                    # Registra histórico
-                    nova_mov = {
-                        "Data": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                        "Tipo": "ENTRADA" if "Entrada" in tipo_mov else "SAÍDA",
-                        "Código": item_cod,
-                        "Item": item_nome,
-                        "Quantidade": qtd_mov,
-                        "Responsável pela Retirada": responsavel if responsavel else "Almoxarifado",
-                        "Coordenação": coord_solic
-                    }
-                    st.session_state.movimentacoes = pd.concat([st.session_state.movimentacoes, pd.DataFrame([nova_mov])], ignore_index=True)
-                    st.success("Movimentação registrada com sucesso!")
-                    st.rerun()
+                edit_sigla = st.text_input("Sigla:", value=sigla_selecionada)
+                edit_nc = st.text_input("Nome:", value=nome_atual_c)
+                
+                c_btn_co1, c_btn_co2 = st.columns([1, 4])
+                with c_btn_co1:
+                    if st.button("Salvar Edição", type="primary"):
+                        cursor = conn.cursor()
+                        cursor.execute("UPDATE coordenacoes SET sigla = %s, nome = %s WHERE sigla = %s;", (edit_sigla.strip().upper(), edit_nc.strip(), sigla_selecionada))
+                        conn.commit()
+                        st.success("Salvo com sucesso!")
+                        st.rerun()
+
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (3 ABAS CONFORME SOLICITADO) ---
+    elif escolha == "Movimentação de Estoque":
+        st.title("Movimentação de Estoque")
+        
+        aba_movimentacao = option_menu(
+            menu_title=None,
+            options=["Registro de Entrada", "Registro de Saída", "Histórico de Movimentação"],
+            icons=["arrow-down-circle", "arrow-up-circle", ""], # Ícone de histórico removido completamente para não parecer IA
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+        
+        if df_produtos.empty:
+            st.warning("Nenhum produto cadastrado para movimentar.")
+        else:
+            df_raw_prod = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos ORDER BY item ASC", conn)
+            lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["N/A"]
+            
+            # 1. ABA: REGISTRO DE ENTRADA
+            if aba_movimentacao == "Registro de Entrada":
+                with st.form("form_entrada", clear_on_submit=True):
+                    col_e1, col_e2 = st.columns(2)
+                    data_mov = col_e1.date_input("Data da Movimentação:", value=datetime.today()).strftime("%Y-%m-%d")
+                    opcao_prod = col_e2.selectbox(
+                        "Selecione o Material:", 
+                        df_raw_prod.index, 
+                        format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})"
+                    )
+                    qtd_mov = col_e1.number_input("Quantidade:", min_value=1, step=1, value=1)
                     
-        st.write("### 📜 Histórico de Movimentações Recentes")
-        if not st.session_state.movimentacoes.empty:
-            st.dataframe(st.session_state.movimentacoes.iloc[::-1], use_container_width=True, hide_index=True)
-
-    # --- TELA: PERFIL ---
-    elif escolha == "👤 Perfil":
-        st.title("👤 Configurações de Perfil")
-        st.subheader(f"Usuário ativo: {st.session_state.NOME_USUARIO_LOGADO}")
-        novo_nome_perfil = st.text_input("Alterar Nome de Exibição:", value=st.session_state.NOME_USUARIO_LOGADO)
-        if st.button("Salvar Nome", type="primary"):
-            st.session_state.NOME_USUARIO_LOGADO = novo_nome_perfil
-            st.success("Nome atualizado!")
-            st.rerun()
-
-    # --- TELA: SAIR ---
-    elif escolha == "🚪 Sair":
-        st.session_state.autenticado = False
-        st.session_state.sub_tela_login = "login"
-        st.rerun()
+                    if st.form_submit_button("Registrar Entrada", type="primary"):
+                        prod_codigo = df_raw_prod.loc[opcao_prod, "codigo"]
+                        prod_nome = df_raw_prod.loc[opcao_prod, "item"]
+                        prod_qtd_atual = int(df_raw_prod.loc[opcao_prod, "quantidade"])
+                        nova_qtd = prod_qtd_atual + qtd_mov
+                        
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (nova_qtd, prod_codigo))
+                            cursor.execute("""
+                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s);
+                            """, (data_mov, "Entrada", prod_codigo, prod_nome, qtd_mov, st.session_state.NOME_USUARIO_LOGADO, "Almoxarifado"))
+                            conn.commit()
+                            st.success(f"📦 Entrada de {qtd_mov} un. de '{prod_nome}' registrada! Novo saldo: {nova_qtd}.")
+                            st.rerun()
+                        except Exception as ex:
+                            conn.rollback()
+                            st.error(f"Erro ao salvar entrada: {ex}")
+            
+            # 2. ABA: REGISTRO DE SAÍDA
+            elif aba_movimentacao == "Registro de Saída":
+                with st.form("form_saida", clear_on_submit=True):
+                    col_s1, col_s2 = st.columns(2)
+                    data_mov = col_s1.date_input("Data da Movimentação:", value=datetime.today()).strftime("%Y-%m-%d")
+                    opcao_prod = col_s2.selectbox(
+                        "Selecione o Material:", 
+                        df_raw_prod.index, 
+                        format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})"
+                    )
+                    qtd_mov = col_s1.number_input("Quantidade da Movimentação:", min_value=1, step=1, value=1)
+                    resp_mov = col_s2.text_input("Nome da Pessoa Responsável pela Retirada:")
+                    coord_mov = col_s1.selectbox("Coordenação Destino:", lista_siglas_coord)
+                    
+                    if st.form_submit_button("Registrar Saída", type="primary"):
+                        if not resp_mov.strip():
+                            st.error("❌ Por favor, digite o nome da pessoa responsável pela retirada.")
+                        else:
+                            prod_codigo = df_raw_prod.loc[opcao_prod, "codigo"]
+                            prod_nome = df_raw_prod.loc[opcao_prod, "item"]
+                            prod_qtd_atual = int(df_raw_prod.loc[opcao_prod, "quantidade"])
+                            
+                            if prod_qtd_atual >= qtd_mov:
+                                nova_qtd = prod_qtd_atual - qtd_mov
+                                try:
+                                    cursor = conn.cursor()
+                                    cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (nova_qtd, prod_codigo))
+                                    cursor.execute("""
+                                        INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s);
+                                    """, (data_mov, "Saída", prod_codigo, prod_nome, qtd_mov, resp_mov.strip(), coord_mov))
+                                    conn.commit()
+                                    st.success(f"📦 Saída de {qtd_mov} un. de '{prod_nome}' registrada! Novo saldo: {nova_qtd}.")
+                                    st.rerun()
+                                except Exception as ex:
+                                    conn.rollback()
+                                    st.error(f"Erro ao salvar saída: {ex}")
+                            else:
+                                st.error(f"❌ Saldo Insuficiente! O material possui apenas {prod_qtd_atual} unidades no estoque.")
+            
+            # 3. ABA: HISTÓRICO DE MOVIMENTAÇÃO
+            elif aba_movimentacao == "Histórico de Movimentação":
+                st.markdown("### Histórico de Movimentação")
+                if not df_movimentacoes.empty:
+                    st.dataframe(df_movimentacoes.sort_index(ascending=False), use_container_width=True, hide_index=True)
+                else:
+                    st.info("Nenhuma movimentação registrada até o momento.")
