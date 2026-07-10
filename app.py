@@ -684,7 +684,7 @@ else:
                         cursor = conn.cursor()
                         cursor.execute("UPDATE produtos SET quantidade = quantidade + %s WHERE codigo = %s", (qtd_entrada, cod_p))
                         
-                        # Salva no histórico preenchendo o responsável/coordenação de forma fixa
+                        # Salva no histórico preenchendo o responsável/coordenação de forma automática
                         cursor.execute("""
                             INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
                             VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -743,4 +743,3 @@ else:
             if not df_historico_atual.empty:
                 st.dataframe(df_historico_atual, use_container_width=True, hide_index=True)
             else:
-                st.info("ℹ️ Nenhuma movimentação registrada no sistema.")
