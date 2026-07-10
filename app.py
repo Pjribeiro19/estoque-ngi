@@ -469,10 +469,9 @@ else:
                 with col_b_prod1:
                     if st.button("Salvar Alterações", type="primary"):
                         cursor = conn.cursor()
-                        # CORRIGIDO: de quantity para quantidade para refletir a coluna correta do banco!
                         cursor.execute("""
                             UPDATE produtos 
-                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
+                            SET codigo = %s, item = %s, quantity = %s, categoria = %s, valor_unitario = %s 
                             WHERE codigo = %s;
                         """, (edit_cod.strip(), edit_item.strip(), edit_qtd, edit_cat, float(edit_val), cod_atual))
                         conn.commit()
@@ -651,12 +650,10 @@ else:
                         cursor = conn.cursor()
                         cursor.execute("UPDATE coordenacoes SET sigla = %s, nome = %s WHERE sigla = %s;", (edit_sigla.strip().upper(), edit_nc.strip(), sigla_selecionada))
                         conn.commit()
-                        st.success("Salvo!")
+                        st.success("Salvo com sucesso!")
                         st.rerun()
-                with c_btn_co2:
-                    if st.button("Excluir Coordenação"):
-                        cursor = conn.cursor()
-                        cursor.execute("DELETE FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
-                        conn.commit()
-                        st.warning("Removido.")
-                        st.rerun()
+
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE ---
+    elif escolha == "Movimentação de Estoque":
+        st.title("Movimentação de Estoque")
+        st.info("Insira aqui os componentes visuais, formulários ou tabelas que deseja exibir nesta aba.")
