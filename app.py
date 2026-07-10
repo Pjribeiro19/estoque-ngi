@@ -7,20 +7,16 @@ from email.mime.multipart import MIMEMultipart
 import psycopg2
 from psycopg2.extras import DictCursor
 from streamlit_option_menu import option_menu
-import os
 
 # =============================================================================
 # CONEXÃO E INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (Neon Postgres)
 # =============================================================================
 def inicializar_banco_automatico():
-    conn = None
     try:
-        # Busca primeiro nas variáveis do Railway. Se não achar, busca no st.secrets do Streamlit
-        conn_string = os.environ.get("POSTGRES_URL") or st.secrets["postgres"]["url"]
+        conn_string = st.secrets["postgres"]["url"]
         conn = psycopg2.connect(conn_string)
     except Exception as e:
         st.error(f"Erro ao conectar ao Neon Postgres: {e}")
-        st.info("Verifique as credenciais na aba 'Variables' do Railway.")
         st.stop()
         
     cursor = conn.cursor()
@@ -111,7 +107,7 @@ def inicializar_banco_automatico():
 
 conn = inicializar_banco_automatico()
 
-# Carregamento seguro e global dos dados
+# Carregamento seguro e global dos dados para evitar erros de inicialização de variáveis (NameError)
 try:
     df_produtos = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
     df_movimentacoes = pd.read_sql_query('SELECT data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenacao AS "Coordenação" FROM movimentacoes', conn)
@@ -125,13 +121,13 @@ except Exception as e:
     lista_categorias = []
 
 # =============================================================================
-# CONFIGURAÇÕES SEGURAS DE E-MAIL (Suporte Híbrido Railway / Secrets)
+# CONFIGURAÇÕES SEGURAS DE E-MAIL (Secrets do Streamlit)
 # =============================================================================
 try:
-    EMAIL_REMETENTE = os.environ.get("GMAIL_EMAIL") or st.secrets["gmail"]["email"]
-    SENHA_REMETENTE = os.environ.get("GMAIL_SENHA") or st.secrets["gmail"]["senha"]
-    SMTP_HOST = os.environ.get("GMAIL_SMTP_SERVER") or st.secrets["gmail"]["smtp_server"]
-    SMTP_PORTA = int(os.environ.get("GMAIL_SMTP_PORT") or st.secrets["gmail"]["smtp_port"])
+    EMAIL_REMETENTE = st.secrets["gmail"]["email"]
+    SENHA_REMETENTE = st.secrets["gmail"]["senha"]
+    SMTP_HOST = st.secrets["gmail"]["smtp_server"]
+    SMTP_PORTA = int(st.secrets["gmail"]["smtp_port"])
 except Exception as e:
     EMAIL_REMETENTE = "configurar_no_secrets@email.com"
     SENHA_REMETENTE = "configurar_no_secrets"
@@ -145,24 +141,28 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- ESTILIZAÇÃO CSS COMPATÍVEL ---
+# --- ESTILIZAÇÃO CSS COMPATÍVEL COM MODO ESCURO E MODOS DE NAVEGADOR ---
 st.markdown("""
     <style>
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
     
+    /* Garante legibilidade do texto se adaptando dinamicamente ao tema claro/escuro */
     html, body, [data-testid="stWidgetLabel"] p, .stMarkdown p, label, span {
         color: var(--text-color) !important;
     }
     
+    /* Força especificamente as opções do menu lateral a funcionarem no tema escuro */
     .nav-link span {
         color: var(--text-color) !important;
     }
     
+    /* Mantém o destaque contrastante branco na opção ativa do menu */
     .nav-link.active span {
         color: white !important;
     }
     
+    /* Botão Primário Verde */
     div.stButton > button:first-child[kind="primary"] {
         background-color: #4CAF50 !important;
         border-color: #4CAF50 !important;
@@ -269,7 +269,7 @@ if not st.session_state.autenticado:
                     cursor.execute("SELECT COUNT(*) FROM usuarios WHERE LOWER(email) = %s;", (email_recuperar.strip().lower(),))
                     if cursor.fetchone()[0] > 0:
                         if EMAIL_REMETENTE == "configurar_no_secrets@email.com":
-                            st.error("Erro de configuração nos Secrets do Streamlit / Railway Variables.")
+                            st.error("Erro de configuração nos Secrets do Streamlit.")
                         else:
                             try:
                                 msg = MIMEMultipart()
@@ -384,6 +384,7 @@ else:
         """, unsafe_allow_html=True)
         
         st.markdown("<br><hr style='margin: 10px 0 25px 0; opacity: 0.15;'>", unsafe_allow_html=True)
+        
         st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
         
         col_filtro1, col_filtro2 = st.columns([2, 1])
@@ -471,7 +472,7 @@ else:
                         cursor = conn.cursor()
                         cursor.execute("""
                             UPDATE produtos 
-                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
+                            SET codigo = %s, item = %s, quantity = %s, categoria = %s, valor_unitario = %s 
                             WHERE codigo = %s;
                         """, (edit_cod.strip(), edit_item.strip(), edit_qtd, edit_cat, float(edit_val), cod_atual))
                         conn.commit()
@@ -617,4 +618,131 @@ else:
         
         if aba_selecionada == "Nova Coordenação":
             with st.form("cad_coord", clear_on_submit=True):
-                s_coord = st.text_input
+                s_coord = st.text_input("Sigla")
+                nc = st.text_input("Nome da Coordenação")
+                if st.form_submit_button("Cadastrar", type="primary"):
+                    if s_coord and nc:
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("INSERT INTO coordenacoes VALUES (%s, %s);", (s_coord.strip().upper(), nc.strip()))
+                            conn.commit()
+                            st.success("Cadastrada!")
+                            st.rerun()
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
+                            st.error("Esta sigla já está registrada.")
+                    else:
+                        st.error("Preencha todos os campos!")
+                        
+        elif aba_selecionada == "Editar / Excluir Coordenação":
+            if not df_coordenacoes.empty:
+                st.dataframe(df_coordenacoes, use_container_width=True, hide_index=True)
+                sigla_selecionada = st.selectbox("Selecione para modificar:", df_coordenacoes["Sigla"].tolist())
+                cursor = conn.cursor()
+                cursor.execute("SELECT nome FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
+                nome_atual_c = cursor.fetchone()[0]
+                
+                edit_sigla = st.text_input("Sigla:", value=sigla_selecionada)
+                edit_nc = st.text_input("Nome:", value=nome_atual_c)
+                
+                c_btn_co1, c_btn_co2 = st.columns([1, 4])
+                with c_btn_co1:
+                    if st.button("Salvar Edição", type="primary"):
+                        cursor = conn.cursor()
+                        cursor.execute("UPDATE coordenacoes SET sigla = %s, nome = %s WHERE sigla = %s;", (edit_sigla.strip().upper(), edit_nc.strip(), sigla_selecionada))
+                        conn.commit()
+                        st.success("Salvo!")
+                        st.rerun()
+                with c_btn_co2:
+                    if st.button("Excluir Coordenação"):
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
+                        conn.commit()
+                        st.warning("Removida.")
+                        st.rerun()
+
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE ---
+    elif escolha == "Movimentação de Estoque":
+        st.title("🔄 Movimentação de Entrada e Saída")
+        
+        modo_movimento = option_menu(
+            menu_title=None,
+            options=["📥 Registrar Entrada", "📤 Registrar Saída", "📜 Histórico de Movimentações"],
+            icons=["arrow-down-circle", "arrow-up-circle", "clock-history"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+        
+        df_produtos_raw = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos", conn)
+        lista_opcoes_produtos = [f"{row['codigo']} - {row['item']} (Saldo: {row['quantidade']})" for _, row in df_produtos_raw.iterrows()]
+        lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["Geral"]
+
+        if modo_movimento == "📥 Registrar Entrada":
+            if lista_opcoes_produtos:
+                with st.form("form_entrada", clear_on_submit=True):
+                    prod_selecionado = st.selectbox("Selecione o Material:", lista_opcoes_produtos)
+                    qtd_entrada = st.number_input("Quantidade de Entrada:", min_value=1, step=1)
+                    resp_entrada = st.text_input("Responsável pelo Recebimento:")
+                    coord_entrada = st.selectbox("Coordenação Destino:", lista_siglas_coord)
+                    
+                    if st.form_submit_button("Confirmar Entrada", type="primary"):
+                        if resp_entrada:
+                            cod_p = prod_selecionado.split(" - ")[0]
+                            item_p = prod_selecionado.split(" - ")[1].split(" (Saldo:")[0]
+                            data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
+                            
+                            cursor = conn.cursor()
+                            cursor.execute("UPDATE produtos SET quantidade = quantidade + %s WHERE codigo = %s", (qtd_entrada, cod_p))
+                            cursor.execute("""
+                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
+                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            """, (data_atual, "Entrada", cod_p, item_p, qtd_entrada, resp_entrada.strip(), coord_entrada))
+                            
+                            conn.commit()
+                            st.success(f"Entrada de {qtd_entrada} unidades de '{item_p}' registrada!")
+                            st.rerun()
+                        else:
+                            st.error("Por favor, preencha o nome do responsável.")
+            else:
+                st.warning("Cadastre um produto antes de realizar movimentações.")
+
+        elif modo_movimento == "📤 Registrar Saída":
+            if lista_opcoes_produtos:
+                with st.form("form_saida", clear_on_submit=True):
+                    prod_selecionado = st.selectbox("Selecione o Material:", lista_opcoes_produtos)
+                    qtd_saida = st.number_input("Quantidade de Saída:", min_value=1, step=1)
+                    resp_saida = st.text_input("Responsável pela Retirada:")
+                    coord_saida = st.selectbox("Coordenação Solicitante:", lista_siglas_coord)
+                    
+                    if st.form_submit_button("Confirmar Saída", type="primary"):
+                        cod_p = prod_selecionado.split(" - ")[0]
+                        item_p = prod_selecionado.split(" - ")[1].split(" (Saldo:")[0]
+                        
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT quantidade FROM produtos WHERE codigo = %s", (cod_p,))
+                        saldo_atual = cursor.fetchone()[0]
+                        
+                        if not resp_saida:
+                            st.error("Por favor, preencha o nome do responsável.")
+                        elif qtd_saida > saldo_atual:
+                            st.error(f"Saldo insuficiente! Quantidade disponível em estoque: {saldo_atual}")
+                        else:
+                            data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
+                            cursor.execute("UPDATE produtos SET quantidade = quantidade - %s WHERE codigo = %s", (qtd_saida, cod_p))
+                            cursor.execute("""
+                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
+                                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                            """, (data_atual, "Saída", cod_p, item_p, qtd_saida, resp_saida.strip(), coord_saida))
+                            
+                            conn.commit()
+                            st.success(f"Saída de {qtd_saida} unidades de '{item_p}' realizada!")
+                            st.rerun()
+            else:
+                st.warning("Cadastre um produto antes de realizar movimentações.")
+
+        elif modo_movimento == "📜 Histórico de Movimentações":
+            st.markdown("### Histórico de Entradas e Saídas")
+            if not df_movimentacoes.empty:
+                st.dataframe(df_movimentacoes.sort_index(ascending=False), use_container_width=True, hide_index=True)
+            else:
+                st.info("Nenhuma movimentação foi registrada ainda.")
