@@ -665,6 +665,7 @@ else:
             styles=ESTILO_MENU_HORIZONTAL
         )
         
+        # Recarrega a lista atualizada de produtos direto do banco
         df_produtos_raw = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos ORDER BY item ASC", conn)
         lista_opcoes_produtos = [f"{row['codigo']} - {row['item']} (Saldo: {row['quantidade']})" for _, row in df_produtos_raw.iterrows()]
         lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["Geral"]
@@ -682,16 +683,18 @@ else:
                         
                         cursor = conn.cursor()
                         cursor.execute("UPDATE produtos SET quantidade = quantidade + %s WHERE codigo = %s", (qtd_entrada, cod_p))
+                        
+                        # Salva no histórico preenchendo o responsável/coordenação de forma automática
                         cursor.execute("""
                             INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) 
                             VALUES (%s, %s, %s, %s, %s, %s, %s)
                         """, (data_atual, "Entrada", cod_p, item_p, qtd_entrada, "Almoxarifado", "Geral"))
                         
                         conn.commit()
-                        st.success(f"✅ Entrada de {qtd_entrada} unidades registrada!")
+                        st.success(f"✅ Entrada de {qtd_entrada} unidades registrada com sucesso!")
                         st.rerun()
             else:
-                st.warning("Nenhum produto disponível.")
+                st.warning("⚠️ Cadastre um produto antes de realizar movimentações.")
 
         elif modo_movimento == "📤 Registrar Saída":
             if lista_opcoes_produtos:
@@ -710,9 +713,9 @@ else:
                         saldo_atual = cursor.fetchone()[0]
                         
                         if not resp_saida.strip():
-                            st.error("❌ Informe o responsável.")
+                            st.error("❌ Por favor, informe o responsável.")
                         elif qtd_saida > saldo_atual:
-                            st.error(f"❌ Saldo insuficiente! Estoque atual: {saldo_atual}")
+                            st.error(f"❌ Saldo insuficiente! Quantidade disponível: {saldo_atual}")
                         else:
                             data_atual = datetime.now().strftime("%d/%m/%Y %H:%M")
                             cursor.execute("UPDATE produtos SET quantidade = quantidade - %s WHERE codigo = %s", (qtd_saida, cod_p))
@@ -722,14 +725,22 @@ else:
                             """, (data_atual, "Saída", cod_p, item_p, qtd_saida, resp_saida.strip(), coord_saida))
                             
                             conn.commit()
-                            st.success(f"✅ Saída registrada com sucesso!")
+                            st.success(f"✅ Saída de {qtd_saida} unidades realizada com sucesso!")
                             st.rerun()
             else:
-                st.warning("Nenhum produto disponível.")
+                st.warning("⚠️ Cadastre um produto antes de realizar movimentações.")
 
         elif modo_movimento == "📜 Histórico de Movimentações":
             st.markdown("### Histórico de Entradas e Saídas")
-            if not df_movimentacoes.empty:
-                st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
+            try:
+                df_historico_atual = pd.read_sql_query(
+                    'SELECT data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenacao AS "Coordenação" FROM movimentacoes ORDER BY id DESC', 
+                    conn
+                )
+            except Exception:
+                df_historico_atual = pd.DataFrame()
+
+            if not df_historico_atual.empty:
+                st.dataframe(df_historico_atual, use_container_width=True, hide_index=True)
             else:
-                st.info("Nenhuma movimentação registrada até o momento.")
+                st.info("ℹ️ Nenhuma movimentação registrada no sistema.")
