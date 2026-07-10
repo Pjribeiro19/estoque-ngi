@@ -652,14 +652,14 @@ else:
                         st.success("Salvo com sucesso!")
                         st.rerun()
 
-    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (3 ABAS CONFORME SOLICITADO) ---
+   # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (CORRIGIDO) ---
     elif escolha == "Movimentação de Estoque":
         st.title("Movimentação de Estoque")
         
         aba_movimentacao = option_menu(
             menu_title=None,
             options=["Registro de Entrada", "Registro de Saída", "Histórico de Movimentação"],
-            icons=["arrow-down-circle", "arrow-up-circle", ""], # Ícone de histórico removido completamente para não parecer IA
+            icons=["arrow-down-circle", "arrow-up-circle", ""],
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
