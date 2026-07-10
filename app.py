@@ -10,6 +10,11 @@ from streamlit_option_menu import option_menu
 import os
 
 # =============================================================================
+# CONFIGURAÇÃO CRÍTICA PARA EVITAR CRASH (SEGMENTATION FAULT) NO PYTHON 3.13
+# =============================================================================
+pd.options.mode.dtype_backend = "numpy_nullable"
+
+# =============================================================================
 # CONEXÃO E INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (Neon Postgres)
 # =============================================================================
 def inicializar_banco_automatico():
