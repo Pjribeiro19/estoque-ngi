@@ -23,7 +23,15 @@ def inicializar_banco_automatico():
         st.stop()
         
     cursor = conn.cursor()
-    
+
+    # Tabela de controle de inicialização única (Impede que o seed rode de novo se o banco for zerado)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS config_sistema (
+            chave TEXT PRIMARY KEY,
+            valor TEXT
+        );
+    """)
+
     # 1. Tabela de usuários
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
@@ -33,14 +41,6 @@ def inicializar_banco_automatico():
             perfil TEXT
         );
     """)
-    
-    cursor.execute("SELECT COUNT(*) FROM usuarios;")
-    if cursor.fetchone()[0] == 0:
-        cursor.execute("""
-            INSERT INTO usuarios (nome, email, senha, perfil) 
-            VALUES ('Administrador Padrão', 'admin@ngi.com', '123', 'Administrador');
-        """)
-        conn.commit()
 
     # 2. Tabela de produtos
     cursor.execute("""
@@ -52,16 +52,6 @@ def inicializar_banco_automatico():
             valor_unitario REAL
         );
     """)
-    
-    cursor.execute("SELECT COUNT(*) FROM produtos;")
-    if cursor.fetchone()[0] == 0:
-        produtos_iniciais = [
-            ("001", "Capacete de Segurança", 15, "EPI", 45.00),
-            ("002", "Resma Papel A4", 0, "Material de Escritório", 28.50),
-            ("003", "Luva de Raspa", 50, "EPI", 12.00)
-        ]
-        cursor.executemany("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", produtos_iniciais)
-        conn.commit()
 
     # 3. Tabela de coordenações
     cursor.execute("""
@@ -70,14 +60,6 @@ def inicializar_banco_automatico():
             nome TEXT
         );
     """)
-    
-    cursor.execute("SELECT COUNT(*) FROM coordenacoes;")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("INSERT INTO coordenacoes VALUES (%s, %s);", [
-            ("COTEC", "Coordenação Técnica"),
-            ("COLOG", "Coordenação de Logística")
-        ])
-        conn.commit()
 
     # 4. Tabela de categorias
     cursor.execute("""
@@ -85,11 +67,6 @@ def inicializar_banco_automatico():
             nome TEXT PRIMARY KEY
         );
     """)
-    cursor.execute("SELECT COUNT(*) FROM categorias;")
-    if cursor.fetchone()[0] == 0:
-        cat_iniciais = [("EPI",), ("Material de Escritório",), ("Informática",), ("Limpeza",), ("Copa",)]
-        cursor.executemany("INSERT INTO categorias VALUES (%s);", cat_iniciais)
-        conn.commit()
 
     # 5. Tabela de movimentações
     cursor.execute("""
@@ -104,8 +81,49 @@ def inicializar_banco_automatico():
             coordenacao TEXT
         );
     """)
-    
     conn.commit()
+
+    # Verifica se a carga inicial (seed) já foi realizada no passado
+    cursor.execute("SELECT valor FROM config_sistema WHERE chave = 'seed_inicial';")
+    seed_realizado = cursor.fetchone()
+
+    if not seed_realizado:
+        # Inserção inicial única de Usuários
+        cursor.execute("SELECT COUNT(*) FROM usuarios;")
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("""
+                INSERT INTO usuarios (nome, email, senha, perfil) 
+                VALUES ('Administrador Padrão', 'admin@ngi.com', '123', 'Administrador');
+            """)
+
+        # Inserção inicial única de Produtos
+        cursor.execute("SELECT COUNT(*) FROM produtos;")
+        if cursor.fetchone()[0] == 0:
+            produtos_iniciais = [
+                ("001", "Capacete de Segurança", 15, "EPI", 45.00),
+                ("002", "Resma Papel A4", 0, "Material de Escritório", 28.50),
+                ("003", "Luva de Raspa", 50, "EPI", 12.00)
+            ]
+            cursor.executemany("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", produtos_iniciais)
+
+        # Inserção inicial única de Coordenações
+        cursor.execute("SELECT COUNT(*) FROM coordenacoes;")
+        if cursor.fetchone()[0] == 0:
+            cursor.executemany("INSERT INTO coordenacoes VALUES (%s, %s);", [
+                ("COTEC", "Coordenação Técnica"),
+                ("COLOG", "Coordenação de Logística")
+            ])
+
+        # Inserção inicial única de Categorias
+        cursor.execute("SELECT COUNT(*) FROM categorias;")
+        if cursor.fetchone()[0] == 0:
+            cat_iniciais = [("EPI",), ("Material de Escritório",), ("Informática",), ("Limpeza",), ("Copa",)]
+            cursor.executemany("INSERT INTO categorias VALUES (%s);", cat_iniciais)
+
+        # Marca no banco que o seed inicial já foi finalizado
+        cursor.execute("INSERT INTO config_sistema (chave, valor) VALUES ('seed_inicial', 'true');")
+        conn.commit()
+    
     return conn
 
 conn = inicializar_banco_automatico()
