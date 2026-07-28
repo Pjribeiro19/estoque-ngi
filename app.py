@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -12,137 +12,118 @@ import os
 # =============================================================================
 # CONEXÃO E INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (Neon Postgres)
 # =============================================================================
-def obter_conexao():
+def inicializar_banco_automatico():
+    conn = None
     try:
         conn_string = os.environ.get("POSTGRES_URL") or st.secrets["postgres"]["url"]
         conn = psycopg2.connect(conn_string)
-        return conn
     except Exception as e:
         st.error(f"Erro ao conectar ao Neon Postgres: {e}")
-        st.info("Verifique as credenciais na aba 'Variables' do Railway ou Secrets do Streamlit.")
+        st.info("Verifique as credenciais na aba 'Variables' do Railway.")
         st.stop()
-
-def inicializar_banco_automatico():
-    conn = obter_conexao()
+        
     cursor = conn.cursor()
 
-    try:
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS config_sistema (
-                chave TEXT PRIMARY KEY,
-                valor TEXT
-            );
-        """)
+    # Tabela de controle de inicialização única
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS config_sistema (
+            chave TEXT PRIMARY KEY,
+            valor TEXT
+        );
+    """)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
-                nome TEXT,
-                email TEXT PRIMARY KEY,
-                senha TEXT,
-                perfil TEXT
-            );
-        """)
+    # 1. Tabela de usuários
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            nome TEXT,
+            email TEXT PRIMARY KEY,
+            senha TEXT,
+            perfil TEXT
+        );
+    """)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS produtos (
-                codigo TEXT PRIMARY KEY,
-                item TEXT,
-                quantidade INTEGER,
-                categoria TEXT,
-                valor_unitario REAL
-            );
-        """)
+    # 2. Tabela de produtos
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS produtos (
+            codigo TEXT PRIMARY KEY,
+            item TEXT,
+            quantidade INTEGER,
+            categoria TEXT,
+            valor_unitario REAL
+        );
+    """)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS coordenacoes (
-                sigla TEXT PRIMARY KEY,
-                nome TEXT
-            );
-        """)
+    # 3. Tabela de coordenações
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS coordenacoes (
+            sigla TEXT PRIMARY KEY,
+            nome TEXT
+        );
+    """)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS categorias (
-                nome TEXT PRIMARY KEY
-            );
-        """)
+    # 4. Tabela de categorias
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS categorias (
+            nome TEXT PRIMARY KEY
+        );
+    """)
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS movimentacoes (
-                id SERIAL PRIMARY KEY,
-                data TEXT,
-                tipo TEXT,
-                codigo TEXT,
-                item TEXT,
-                quantidade INTEGER,
-                responsavel TEXT,
-                coordenacao TEXT
-            );
-        """)
+    # 5. Tabela de movimentações
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS movimentacoes (
+            id SERIAL PRIMARY KEY,
+            data TEXT,
+            tipo TEXT,
+            codigo TEXT,
+            item TEXT,
+            quantidade INTEGER,
+            responsavel TEXT,
+            coordenacao TEXT
+        );
+    """)
+    conn.commit()
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS itens_emprestimo (
-                codigo TEXT PRIMARY KEY,
-                nome TEXT,
-                quantidade INTEGER
-            );
-        """)
+    # Verifica se a carga inicial (seed) já foi realizada
+    cursor.execute("SELECT valor FROM config_sistema WHERE chave = 'seed_inicial';")
+    seed_realizado = cursor.fetchone()
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS emprestimos (
-                id SERIAL PRIMARY KEY,
-                codigo TEXT,
-                item TEXT,
-                quantidade INTEGER,
-                solicitante TEXT,
-                coordenacao TEXT,
-                data_saida DATE,
-                data_devolucao_prevista DATE,
-                data_devolucao_real DATE,
-                status TEXT
-            );
-        """)
+    if not seed_realizado:
+        # Inserção inicial única de Usuários
+        cursor.execute("SELECT COUNT(*) FROM usuarios;")
+        if cursor.fetchone()[0] == 0:
+            cursor.execute("""
+                INSERT INTO usuarios (nome, email, senha, perfil) 
+                VALUES ('Administrador Padrão', 'admin@ngi.com', '123', 'Administrador');
+            """)
 
+        # Inserção inicial única de Produtos
+        cursor.execute("SELECT COUNT(*) FROM produtos;")
+        if cursor.fetchone()[0] == 0:
+            produtos_iniciais = [
+                ("001", "Capacete de Segurança", 15, "EPI", 45.00),
+                ("002", "Resma Papel A4", 0, "Material de Escritório", 28.50),
+                ("003", "Luva de Raspa", 50, "EPI", 12.00)
+            ]
+            cursor.executemany("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", produtos_iniciais)
+
+        # Inserção inicial única de Coordenações
+        cursor.execute("SELECT COUNT(*) FROM coordenacoes;")
+        if cursor.fetchone()[0] == 0:
+            cursor.executemany("INSERT INTO coordenacoes VALUES (%s, %s);", [
+                ("COTEC", "Coordenação Técnica"),
+                ("COLOG", "Coordenação de Logística")
+            ])
+
+        # Inserção inicial única de Categorias
+        cursor.execute("SELECT COUNT(*) FROM categorias;")
+        if cursor.fetchone()[0] == 0:
+            cat_iniciais = [("EPI",), ("Material de Escritório",), ("Informática",), ("Limpeza",), ("Copa",)]
+            cursor.executemany("INSERT INTO categorias VALUES (%s);", cat_iniciais)
+
+        # Marca no banco que o seed inicial já foi finalizado
+        cursor.execute("INSERT INTO config_sistema (chave, valor) VALUES ('seed_inicial', 'true');")
         conn.commit()
-
-        cursor.execute("SELECT valor FROM config_sistema WHERE chave = 'seed_inicial';")
-        seed_realizado = cursor.fetchone()
-
-        if not seed_realizado:
-            cursor.execute("SELECT COUNT(*) FROM usuarios;")
-            if cursor.fetchone()[0] == 0:
-                cursor.execute("""
-                    INSERT INTO usuarios (nome, email, senha, perfil) 
-                    VALUES ('Administrador Padrão', 'admin@ngi.com', '123', 'Administrador');
-                """)
-
-            cursor.execute("SELECT COUNT(*) FROM produtos;")
-            if cursor.fetchone()[0] == 0:
-                produtos_iniciais = [
-                    ("001", "Capacete de Segurança", 15, "EPI", 45.00),
-                    ("002", "Resma Papel A4", 0, "Material de Escritório", 28.50),
-                    ("003", "Luva de Raspa", 50, "EPI", 12.00)
-                ]
-                cursor.executemany("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", produtos_iniciais)
-
-            cursor.execute("SELECT COUNT(*) FROM coordenacoes;")
-            if cursor.fetchone()[0] == 0:
-                cursor.executemany("INSERT INTO coordenacoes VALUES (%s, %s);", [
-                    ("COTEC", "Coordenação Técnica"),
-                    ("COLOG", "Coordenação de Logística")
-                ])
-
-            cursor.execute("SELECT COUNT(*) FROM categorias;")
-            if cursor.fetchone()[0] == 0:
-                cat_iniciais = [("EPI",), ("Material de Escritório",), ("Informática",), ("Limpeza",), ("Copa",)]
-                cursor.executemany("INSERT INTO categorias VALUES (%s);", cat_iniciais)
-
-            cursor.execute("INSERT INTO config_sistema (chave, valor) VALUES ('seed_inicial', 'true');")
-            conn.commit()
-
-    except Exception as e:
-        conn.rollback()
-        st.error(f"Erro ao inicializar o banco de dados: {e}")
-
+    
     return conn
 
 conn = inicializar_banco_automatico()
@@ -153,7 +134,7 @@ try:
     df_movimentacoes = pd.read_sql_query('SELECT data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenacao AS "Coordenação" FROM movimentacoes', conn)
     df_coordenacoes = pd.read_sql_query('SELECT sigla AS "Sigla", nome AS "Nome" FROM coordenacoes', conn)
     df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
-    lista_categorias = df_cat_bruto["nome"].tolist() if not df_cat_bruto.empty else []
+    lista_categorias = df_cat_bruto["nome"].tolist()
 except Exception as e:
     df_produtos = pd.DataFrame()
     df_movimentacoes = pd.DataFrame()
@@ -349,10 +330,9 @@ else:
                 "Cadastrar Usuário", 
                 "Cadastrar Coordenação",
                 "Movimentação de Estoque",
-                "Empréstimo de Material",
                 "Sair do Sistema"
             ],
-            icons=["grid", "box", "folder", "person-plus", "building", "arrow-left-right", "handbag", "box-arrow-right"],
+            icons=["grid", "box", "folder", "person-plus", "building", "arrow-left-right", "box-arrow-right"],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -669,28 +649,30 @@ else:
                             st.error("Esta sigla já está registrada.")
                     else:
                         st.error("Preencha todos os campos!")
-
+                        
         elif aba_selecionada == "Editar / Excluir Coordenação":
             if not df_coordenacoes.empty:
                 st.dataframe(df_coordenacoes, use_container_width=True, hide_index=True)
-                sigla_sel = st.selectbox("Selecione para editar:", df_coordenacoes["Sigla"].tolist())
+                sigla_selecionada = st.selectbox("Selecione para modificar:", df_coordenacoes["Sigla"].tolist())
+                cursor = conn.cursor()
+                cursor.execute("SELECT nome FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
+                nome_atual_c = cursor.fetchone()[0]
                 
-                nome_atual = df_coordenacoes[df_coordenacoes["Sigla"] == sigla_sel]["Nome"].values[0]
-                edit_sigla = st.text_input("Sigla:", value=sigla_sel)
-                edit_nome = st.text_input("Nome da Coordenação:", value=nome_atual)
+                edit_sigla = st.text_input("Sigla:", value=sigla_selecionada)
+                edit_nc = st.text_input("Nome:", value=nome_atual_c)
                 
                 c_btn_c1, c_btn_c2 = st.columns([1, 4])
                 with c_btn_c1:
-                    if st.button("Salvar Coordenação", type="primary"):
+                    if st.button("Salvar Modificação", type="primary"):
                         cursor = conn.cursor()
-                        cursor.execute("UPDATE coordenacoes SET sigla = %s, nome = %s WHERE sigla = %s;", (edit_sigla.strip().upper(), edit_nome.strip(), sigla_sel))
+                        cursor.execute("UPDATE coordenacoes SET sigla = %s, nome = %s WHERE sigla = %s;", (edit_sigla.strip().upper(), edit_nc.strip(), sigla_selecionada))
                         conn.commit()
                         st.success("Atualizado!")
                         st.rerun()
                 with c_btn_c2:
                     if st.button("Excluir Coordenação"):
                         cursor = conn.cursor()
-                        cursor.execute("DELETE FROM coordenacoes WHERE sigla = %s;", (sigla_sel,))
+                        cursor.execute("DELETE FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
                         conn.commit()
                         st.warning("Removida.")
                         st.rerun()
@@ -701,7 +683,8 @@ else:
         
         aba_movimentacao = option_menu(
             menu_title=None,
-            options=["Registro de Entrada", "Registro de Saída", "Histórico de Movimentação"],
+            options=["Registro de Entrada", "Registro de Saída", "Empréstimo de Materiais", "Histórico de Movimentação"],
+            icons=None,
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
@@ -737,3 +720,97 @@ else:
                                 INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
                                 VALUES (%s, %s, %s, %s, %s, %s, %s);
                             """, (data_mov, "Entrada", prod_codigo, prod_nome, qtd_mov, st.session_state.NOME_USUARIO_LOGADO, "Almoxarifado"))
+                            conn.commit()
+                            st.success(f"📦 Entrada de {qtd_mov} un. de '{prod_nome}' registrada! Novo saldo: {nova_qtd}.")
+                            st.rerun()
+                        except Exception as ex:
+                            conn.rollback()
+                            st.error(f"Erro ao salvar entrada: {ex}")
+            
+            # 2. ABA: REGISTRO DE SAÍDA
+            elif aba_movimentacao == "Registro de Saída":
+                with st.form("form_saida", clear_on_submit=True):
+                    col_s1, col_s2 = st.columns(2)
+                    data_mov = col_s1.date_input("Data da Movimentação:", value=datetime.today()).strftime("%Y-%m-%d")
+                    opcao_prod = col_s2.selectbox(
+                        "Selecione o Material:", 
+                        df_raw_prod.index, 
+                        format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})"
+                    )
+                    qtd_mov = col_s1.number_input("Quantidade da Movimentação:", min_value=1, step=1, value=1)
+                    resp_mov = col_s2.text_input("Nome da Pessoa Responsável pela Retirada:")
+                    coord_mov = col_s1.selectbox("Coordenação Destino:", lista_siglas_coord)
+                    
+                    if st.form_submit_button("Registrar Saída", type="primary"):
+                        if not resp_mov.strip():
+                            st.error("❌ Por favor, digite o nome da pessoa responsável pela retirada.")
+                        else:
+                            prod_codigo = df_raw_prod.loc[opcao_prod, "codigo"]
+                            prod_nome = df_raw_prod.loc[opcao_prod, "item"]
+                            prod_qtd_atual = int(df_raw_prod.loc[opcao_prod, "quantidade"])
+                            
+                            if prod_qtd_atual >= qtd_mov:
+                                nova_qtd = prod_qtd_atual - qtd_mov
+                                try:
+                                    cursor = conn.cursor()
+                                    cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (nova_qtd, prod_codigo))
+                                    cursor.execute("""
+                                        INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s);
+                                    """, (data_mov, "Saída", prod_codigo, prod_nome, qtd_mov, resp_mov.strip(), coord_mov))
+                                    conn.commit()
+                                    st.success(f"📦 Saída de {qtd_mov} un. de '{prod_nome}' registrada! Novo saldo: {nova_qtd}.")
+                                    st.rerun()
+                                except Exception as ex:
+                                    conn.rollback()
+                                    st.error(f"Erro ao salvar saída: {ex}")
+                            else:
+                                st.error(f"❌ Saldo Insuficiente! O material possui apenas {prod_qtd_atual} unidades no estoque.")
+
+            # 3. ABA: EMPRÉSTIMO DE MATERIAIS
+            elif aba_movimentacao == "Empréstimo de Materiais":
+                with st.form("form_emprestimo", clear_on_submit=True):
+                    col_emp1, col_emp2 = st.columns(2)
+                    data_mov = col_emp1.date_input("Data do Empréstimo:", value=datetime.today()).strftime("%Y-%m-%d")
+                    opcao_prod = col_emp2.selectbox(
+                        "Selecione o Material para Empréstimo:", 
+                        df_raw_prod.index, 
+                        format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})"
+                    )
+                    qtd_mov = col_emp1.number_input("Quantidade Emprestada:", min_value=1, step=1, value=1)
+                    resp_mov = col_emp2.text_input("Nome do Responsável que Retirou:")
+                    coord_mov = col_emp1.selectbox("Coordenação Solicitante:", lista_siglas_coord)
+                    
+                    if st.form_submit_button("Registrar Empréstimo", type="primary"):
+                        if not resp_mov.strip():
+                            st.error("❌ Por favor, informe o nome do responsável pelo empréstimo.")
+                        else:
+                            prod_codigo = df_raw_prod.loc[opcao_prod, "codigo"]
+                            prod_nome = df_raw_prod.loc[opcao_prod, "item"]
+                            prod_qtd_atual = int(df_raw_prod.loc[opcao_prod, "quantidade"])
+                            
+                            if prod_qtd_atual >= qtd_mov:
+                                nova_qtd = prod_qtd_atual - qtd_mov
+                                try:
+                                    cursor = conn.cursor()
+                                    cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (nova_qtd, prod_codigo))
+                                    cursor.execute("""
+                                        INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s);
+                                    """, (data_mov, "Empréstimo", prod_codigo, prod_nome, qtd_mov, resp_mov.strip(), coord_mov))
+                                    conn.commit()
+                                    st.success(f"🔄 Empréstimo de {qtd_mov} un. de '{prod_nome}' registrado com sucesso! Novo saldo: {nova_qtd}.")
+                                    st.rerun()
+                                except Exception as ex:
+                                    conn.rollback()
+                                    st.error(f"Erro ao registrar empréstimo: {ex}")
+                            else:
+                                st.error(f"❌ Saldo Insuficiente! O material possui apenas {prod_qtd_atual} unidades no estoque.")
+
+            # 4. ABA: HISTÓRICO DE MOVIMENTAÇÃO
+            elif aba_movimentacao == "Histórico de Movimentação":
+                st.markdown("### Histórico de Movimentação")
+                if not df_movimentacoes.empty:
+                    st.dataframe(df_movimentacoes.sort_index(ascending=False), use_container_width=True, hide_index=True)
+                else:
+                    st.info("Nenhuma movimentação registrada até o momento.")
