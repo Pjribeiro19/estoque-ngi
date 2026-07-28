@@ -12,21 +12,21 @@ import os
 # =============================================================================
 # CONEXÃO E INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (Neon Postgres)
 # =============================================================================
-def inicializar_banco_automatico():
-    conn = None
+def obter_conexao():
     try:
         conn_string = os.environ.get("POSTGRES_URL") or st.secrets["postgres"]["url"]
         conn = psycopg2.connect(conn_string)
+        return conn
     except Exception as e:
         st.error(f"Erro ao conectar ao Neon Postgres: {e}")
         st.info("Verifique as credenciais na aba 'Variables' do Railway ou Secrets do Streamlit.")
         st.stop()
-        
+
+def inicializar_banco_automatico():
+    conn = obter_conexao()
     cursor = conn.cursor()
 
     try:
-        conn.rollback()
-
         # Tabela de controle de inicialização única
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS config_sistema (
@@ -111,32 +111,25 @@ def inicializar_banco_automatico():
         """)
         conn.commit()
 
-        # =====================================================================
-        # CORREÇÃO DO BUG: migração de colunas para tabelas que já existiam
-        # -------------------------------------------------------------------
-        # "CREATE TABLE IF NOT EXISTS" não faz nada quando a tabela já existe
-        # no banco (ex: criada por uma versão anterior do sistema, com menos
-        # colunas). Isso causava o erro:
-        #   column "nome_item" of relation "emprestimos" does not exist
-        # A solução é garantir, com ALTER TABLE ... ADD COLUMN IF NOT EXISTS,
-        # que todas as colunas necessárias existam mesmo em tabelas antigas.
-        # =====================================================================
-        cursor.execute("""
-            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS codigo_item TEXT;
-            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS nome_item TEXT;
-            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS quantidade INTEGER;
-            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS responsavel TEXT;
-            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS coordenacao TEXT;
-            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS data_emprestimo TEXT;
-            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS data_devolucao TEXT;
-            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS data_retorno_real TEXT;
-            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS status TEXT;
-        """)
-        cursor.execute("""
-            ALTER TABLE itens_emprestimo ADD COLUMN IF NOT EXISTS nome TEXT;
-            ALTER TABLE itens_emprestimo ADD COLUMN IF NOT EXISTS quantidade INTEGER;
-        """)
-        conn.commit()
+        # --- MIGRAÇÃO AUTOMÁTICA: Adiciona colunas ausentes caso a tabela já existisse ---
+        colunas_necessarias = {
+            "codigo_item": "TEXT",
+            "nome_item": "TEXT",
+            "quantidade": "INTEGER",
+            "responsavel": "TEXT",
+            "coordenacao": "TEXT",
+            "data_emprestimo": "TEXT",
+            "data_devolucao": "TEXT",
+            "data_retorno_real": "TEXT",
+            "status": "TEXT"
+        }
+        
+        for col, col_type in colunas_necessarias.items():
+            try:
+                cursor.execute(f"ALTER TABLE emprestimos ADD COLUMN {col} {col_type};")
+                conn.commit()
+            except Exception:
+                conn.rollback() # Ignora caso a coluna já exista
 
         # Carga inicial se for a primeira execução
         cursor.execute("SELECT valor FROM config_sistema WHERE chave = 'seed_inicial';")
@@ -176,7 +169,8 @@ def inicializar_banco_automatico():
             if cursor.fetchone()[0] == 0:
                 cursor.executemany("INSERT INTO coordenacoes VALUES (%s, %s);", [
                     ("COTEC", "Coordenação Técnica"),
-                    ("COLOG", "Coordenação de Logística")
+                    ("COLOG", "Coordenação de Logística"),
+                    ("COPS", "Coordenação de Proteção")
                 ])
 
             # Categorias
@@ -191,25 +185,27 @@ def inicializar_banco_automatico():
     except Exception as e:
         conn.rollback()
         st.error(f"Erro ao inicializar tabelas no banco: {e}")
+    finally:
+        cursor.close()
 
     return conn
 
 conn = inicializar_banco_automatico()
 
 # Carregamento seguro dos dados globais
-try:
-    conn.rollback()
-    df_produtos = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
-    df_movimentacoes = pd.read_sql_query('SELECT id AS "ID", data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenacao AS "Coordenação" FROM movimentacoes ORDER BY id DESC', conn)
-    df_coordenacoes = pd.read_sql_query('SELECT sigla AS "Sigla", nome AS "Nome" FROM coordenacoes', conn)
-    df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
-    lista_categorias = df_cat_bruto["nome"].tolist() if not df_cat_bruto.empty else []
-except Exception as e:
-    conn.rollback()
-    df_produtos = pd.DataFrame()
-    df_movimentacoes = pd.DataFrame()
-    df_coordenacoes = pd.DataFrame()
-    lista_categorias = []
+def carregar_dados_globais(conn):
+    try:
+        df_prod = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
+        df_mov = pd.read_sql_query('SELECT id AS "ID", data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenacao AS "Coordenação" FROM movimentacoes ORDER BY id DESC', conn)
+        df_coord = pd.read_sql_query('SELECT sigla AS "Sigla", nome AS "Nome" FROM coordenacoes', conn)
+        df_cat = pd.read_sql_query("SELECT nome FROM categorias", conn)
+        lista_cat = df_cat["nome"].tolist() if not df_cat.empty else []
+        return df_prod, df_mov, df_coord, lista_cat
+    except Exception:
+        conn.rollback()
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), []
+
+df_produtos, df_movimentacoes, df_coordenacoes, lista_categorias = carregar_dados_globais(conn)
 
 # Configurações de e-mail
 try:
@@ -320,10 +316,11 @@ if not st.session_state.autenticado:
             if st.button("Entrar no Sistema", type="primary", use_container_width=True):
                 if usuario_input and senha_input:
                     try:
-                        conn.rollback()
+                        conn.rollback() # Limpa qualquer transação abortada previamente
                         cursor = conn.cursor()
                         cursor.execute("SELECT nome, senha FROM usuarios WHERE LOWER(email) = %s;", (usuario_input.strip().lower(),))
                         resultado = cursor.fetchone()
+                        cursor.close()
                         
                         if resultado:
                             nome_banco, senha_banco = resultado
@@ -358,7 +355,10 @@ if not st.session_state.autenticado:
                         conn.rollback()
                         cursor = conn.cursor()
                         cursor.execute("SELECT COUNT(*) FROM usuarios WHERE LOWER(email) = %s;", (email_recuperar.strip().lower(),))
-                        if cursor.fetchone()[0] > 0:
+                        existe = cursor.fetchone()[0] > 0
+                        cursor.close()
+                        
+                        if existe:
                             if EMAIL_REMETENTE == "configurar_no_secrets@email.com":
                                 st.error("Erro de configuração nos Secrets do Streamlit / Railway Variables.")
                             else:
@@ -507,7 +507,7 @@ else:
                 
             st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
 
-    # --- TELA: EMPRÉSTIMO DE MATERIAIS (MÓDULO TOTALMENTE INDEPENDENTE) ---
+    # --- TELA: EMPRÉSTIMO DE MATERIAIS (MÓDULO INDEPENDENTE CORRIGIDO) ---
     elif escolha == "Empréstimo de Materiais":
         st.title("Controle de Empréstimo de Materiais")
         
@@ -527,7 +527,7 @@ else:
             with col_cemp1:
                 with st.form("form_cad_item_emp", clear_on_submit=True):
                     cod_emp = st.text_input("Código do Item (ex: EMP-001):*")
-                    nome_emp = st.text_input("Nome do Equipamento (ex: Caixa de Som, Microfone):*")
+                    nome_emp = st.text_input("Nome do Equipamento (ex: TV 43, Caixa de Som):*")
                     qtd_emp = st.number_input("Quantidade Total Disponível:*", min_value=1, value=1, step=1)
                     
                     if st.form_submit_button("Cadastrar Equipamento", type="primary"):
@@ -538,6 +538,7 @@ else:
                                 cursor.execute("INSERT INTO itens_emprestimo (codigo, nome, quantidade) VALUES (%s, %s, %s);", 
                                                (cod_emp.strip().upper(), nome_emp.strip(), int(qtd_emp)))
                                 conn.commit()
+                                cursor.close()
                                 st.success(f"✅ Item '{nome_emp}' cadastrado com sucesso para Empréstimos!")
                                 st.rerun()
                             except psycopg2.IntegrityError:
@@ -566,15 +567,15 @@ else:
         elif aba_emp == "Registrar Empréstimo (Saída)":
             st.markdown("### 📤 Registrar Saída por Empréstimo")
             
-            # Carrega apenas itens do cadastro de empréstimo
             try:
                 conn.rollback()
                 df_itens_emp = pd.read_sql_query("SELECT codigo, nome, quantidade FROM itens_emprestimo ORDER BY nome ASC", conn)
             except Exception:
+                conn.rollback()
                 df_itens_emp = pd.DataFrame()
 
             if df_itens_emp.empty:
-                st.warning("⚠️ Nenhum item cadastrado na aba de Empréstimos. Cadastre um item na aba 'Cadastrar Item para Empréstimo' primeiro.")
+                st.warning("⚠️ Nenhum item cadastrado na aba de Empréstimos. Cadastre um item na sub-aba 'Cadastrar Item para Empréstimo' primeiro.")
             else:
                 with st.form("form_reg_emprestimo", clear_on_submit=True):
                     col_e1, col_e2 = st.columns(2)
@@ -586,14 +587,11 @@ else:
                     )
                     
                     qtd_saida = col_e2.number_input("Quantidade:*", min_value=1, value=1, step=1)
-                    
-                    # Nome do Responsável (Obrigatório)
                     resp_emp = col_e1.text_input("Nome da Pessoa Responsável:*", placeholder="Digite o nome completo da pessoa responsável")
                     
-                    # Coordenação (Obrigatória)
                     lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else []
                     if not lista_siglas_coord:
-                        coord_emp = col_e2.text_input("Nome da Coordenação:*", placeholder="Ex: COTEC, COLOG")
+                        coord_emp = col_e2.text_input("Nome da Coordenação:*", placeholder="Ex: COTEC, COLOG, COPS")
                     else:
                         coord_emp = col_e2.selectbox("Nome da Coordenação:*", lista_siglas_coord)
 
@@ -605,7 +603,6 @@ else:
                         nome_p = df_itens_emp.loc[item_sel_idx, 'nome']
                         qtd_disponivel = int(df_itens_emp.loc[item_sel_idx, 'quantidade'])
 
-                        # Validações dos campos obrigatórios
                         if not resp_emp or not resp_emp.strip():
                             st.error("❌ O NOME DA PESSOA RESPONSÁVEL É OBRIGATÓRIO!")
                         elif not str(coord_emp).strip():
@@ -620,17 +617,16 @@ else:
                                 conn.rollback()
                                 cursor = conn.cursor()
                                 
-                                # Subtrai da quantidade do item de empréstimo
                                 cursor.execute("UPDATE itens_emprestimo SET quantidade = quantidade - %s WHERE codigo = %s;", (qtd_saida, cod_p))
 
-                                # Insere registro de empréstimo na tabela própria
                                 cursor.execute("""
                                     INSERT INTO emprestimos (codigo_item, nome_item, quantidade, responsavel, coordenacao, data_emprestimo, data_devolucao, status)
                                     VALUES (%s, %s, %s, %s, %s, %s, %s, 'Pendente');
                                 """, (cod_p, nome_p, qtd_saida, resp_emp.strip(), str(coord_emp).strip(), dt_emp_str, dt_dev_str))
 
                                 conn.commit()
-                                st.success(f"✅ Empréstimo de {qtd_saida}x '{nome_p}' para {resp_emp.strip()} ({coord_emp}) registrado com sucesso!")
+                                cursor.close()
+                                st.success(f"✅ Empréstimo de {qtd_saida}x '{nome_p}' registrado para {resp_emp.strip()} ({coord_emp}) com sucesso!")
                                 st.rerun()
                             except Exception as ex:
                                 conn.rollback()
@@ -644,6 +640,7 @@ else:
                 conn.rollback()
                 df_pendentes = pd.read_sql_query("SELECT id, codigo_item, nome_item, quantidade, responsavel, coordenacao, data_emprestimo, data_devolucao FROM emprestimos WHERE status = 'Pendente' ORDER BY id DESC", conn)
             except Exception:
+                conn.rollback()
                 df_pendentes = pd.DataFrame()
 
             if df_pendentes.empty:
@@ -668,13 +665,11 @@ else:
                             conn.rollback()
                             cursor = conn.cursor()
 
-                            # 1. Atualiza Status
                             cursor.execute("UPDATE emprestimos SET status = 'Devolvido', data_retorno_real = %s WHERE id = %s;", (dt_hoje_str, id_emp))
-
-                            # 2. Devolve quantidade ao item de empréstimo
                             cursor.execute("UPDATE itens_emprestimo SET quantidade = quantidade + %s WHERE codigo = %s;", (qtd_p, cod_p))
 
                             conn.commit()
+                            cursor.close()
                             st.success(f"✅ Devolução do item '{nome_p}' confirmada com sucesso!")
                             st.rerun()
                         except Exception as ex:
@@ -746,6 +741,7 @@ else:
                             cursor = conn.cursor()
                             cursor.execute("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", (cod.strip(), nome_it.strip(), 0, cat_it, float(val_unit)))
                             conn.commit()
+                            cursor.close()
                             st.success(f"Sucesso! {nome_it} adicionado.")
                             st.rerun()
                         except psycopg2.IntegrityError:
@@ -787,6 +783,7 @@ else:
                                 WHERE codigo = %s;
                             """, (edit_cod.strip(), edit_item.strip(), edit_qtd, edit_cat, float(edit_val), cod_atual))
                             conn.commit()
+                            cursor.close()
                             st.success("Modificado com sucesso!")
                             st.rerun()
                         except Exception as e:
@@ -799,6 +796,7 @@ else:
                             cursor = conn.cursor()
                             cursor.execute("DELETE FROM produtos WHERE codigo = %s;", (cod_atual,))
                             conn.commit()
+                            cursor.close()
                             st.warning("Removido com sucesso.")
                             st.rerun()
                         except Exception as e:
@@ -828,6 +826,7 @@ else:
                             cursor = conn.cursor()
                             cursor.execute("INSERT INTO categorias VALUES (%s);", (nova_cat.strip(),))
                             conn.commit()
+                            cursor.close()
                             st.success("Adicionada!")
                             st.rerun()
                         except psycopg2.IntegrityError:
@@ -852,6 +851,7 @@ else:
                             cursor = conn.cursor()
                             cursor.execute("UPDATE categorias SET nome = %s WHERE nome = %s;", (edit_nome_cat.strip(), cat_selecionada))
                             conn.commit()
+                            cursor.close()
                             st.success("Atualizado!")
                             st.rerun()
                         except Exception as e:
@@ -864,6 +864,7 @@ else:
                             cursor = conn.cursor()
                             cursor.execute("DELETE FROM categorias WHERE nome = %s;", (cat_selecionada,))
                             conn.commit()
+                            cursor.close()
                             st.warning("Removida.")
                             st.rerun()
                         except Exception as e:
@@ -899,6 +900,7 @@ else:
                                 VALUES (%s, %s, %s, %s);
                             """, (n.strip(), e.strip().lower(), s if s else "123", p))
                             conn.commit()
+                            cursor.close()
                             st.success("Usuário registrado com sucesso!")
                             st.rerun()
                         except psycopg2.IntegrityError:
@@ -934,6 +936,7 @@ else:
                                 UPDATE usuarios SET nome = %s, email = %s, senha = %s, perfil = %s WHERE email = %s;
                             """, (edit_n.strip(), edit_e.strip().lower(), edit_s, edit_p, email_chave))
                             conn.commit()
+                            cursor.close()
                             st.success("Atualizado!")
                             st.rerun()
                         except Exception as ex:
@@ -946,6 +949,7 @@ else:
                             cursor = conn.cursor()
                             cursor.execute("DELETE FROM usuarios WHERE email = %s;", (email_chave,))
                             conn.commit()
+                            cursor.close()
                             st.warning("Removido.")
                             st.rerun()
                         except Exception as ex:
@@ -975,6 +979,7 @@ else:
                             cursor = conn.cursor()
                             cursor.execute("INSERT INTO coordenacoes VALUES (%s, %s);", (s_coord.strip().upper(), nc.strip()))
                             conn.commit()
+                            cursor.close()
                             st.success("Cadastrada!")
                             st.rerun()
                         except psycopg2.IntegrityError:
@@ -996,7 +1001,9 @@ else:
                     cursor = conn.cursor()
                     cursor.execute("SELECT nome FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
                     nome_atual_c = cursor.fetchone()[0]
+                    cursor.close()
                 except Exception:
+                    conn.rollback()
                     nome_atual_c = ""
                 
                 edit_sigla = st.text_input("Sigla:", value=sigla_selecionada)
@@ -1010,6 +1017,7 @@ else:
                             cursor = conn.cursor()
                             cursor.execute("UPDATE coordenacoes SET sigla = %s, nome = %s WHERE sigla = %s;", (edit_sigla.strip().upper(), edit_nc.strip(), sigla_selecionada))
                             conn.commit()
+                            cursor.close()
                             st.success("Atualizada!")
                             st.rerun()
                         except Exception as ex:
@@ -1022,6 +1030,7 @@ else:
                             cursor = conn.cursor()
                             cursor.execute("DELETE FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
                             conn.commit()
+                            cursor.close()
                             st.warning("Removida.")
                             st.rerun()
                         except Exception as ex:
@@ -1080,6 +1089,7 @@ else:
                                     VALUES (%s, %s, %s, %s, %s, %s, %s);
                                 """, (data_hoje, tipo_mov, cod_p, item_p, qtd_mov, resp_mov.strip(), coord_mov))
                                 conn.commit()
+                                cursor.close()
                                 
                                 st.success(f"Movimentação ({tipo_mov}) realizada com sucesso! Novo saldo: {nova_qtd}")
                                 st.rerun()
