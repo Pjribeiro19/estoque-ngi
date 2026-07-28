@@ -111,6 +111,33 @@ def inicializar_banco_automatico():
         """)
         conn.commit()
 
+        # =====================================================================
+        # CORREÇÃO DO BUG: migração de colunas para tabelas que já existiam
+        # -------------------------------------------------------------------
+        # "CREATE TABLE IF NOT EXISTS" não faz nada quando a tabela já existe
+        # no banco (ex: criada por uma versão anterior do sistema, com menos
+        # colunas). Isso causava o erro:
+        #   column "nome_item" of relation "emprestimos" does not exist
+        # A solução é garantir, com ALTER TABLE ... ADD COLUMN IF NOT EXISTS,
+        # que todas as colunas necessárias existam mesmo em tabelas antigas.
+        # =====================================================================
+        cursor.execute("""
+            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS codigo_item TEXT;
+            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS nome_item TEXT;
+            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS quantidade INTEGER;
+            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS responsavel TEXT;
+            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS coordenacao TEXT;
+            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS data_emprestimo TEXT;
+            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS data_devolucao TEXT;
+            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS data_retorno_real TEXT;
+            ALTER TABLE emprestimos ADD COLUMN IF NOT EXISTS status TEXT;
+        """)
+        cursor.execute("""
+            ALTER TABLE itens_emprestimo ADD COLUMN IF NOT EXISTS nome TEXT;
+            ALTER TABLE itens_emprestimo ADD COLUMN IF NOT EXISTS quantidade INTEGER;
+        """)
+        conn.commit()
+
         # Carga inicial se for a primeira execução
         cursor.execute("SELECT valor FROM config_sistema WHERE chave = 'seed_inicial';")
         seed_realizado = cursor.fetchone()
