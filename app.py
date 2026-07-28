@@ -129,7 +129,7 @@ def inicializar_banco_automatico():
                 cursor.execute(f"ALTER TABLE emprestimos ADD COLUMN {col} {col_type};")
                 conn.commit()
             except Exception:
-                conn.rollback() # Ignora caso a coluna já exista
+                conn.rollback()
 
         # Carga inicial se for a primeira execução
         cursor.execute("SELECT valor FROM config_sistema WHERE chave = 'seed_inicial';")
@@ -221,8 +221,7 @@ except Exception:
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS", 
-    page_icon="🌿", 
+    page_title="Sistema de Gestão de Almoxarifado - NGI Carajás", 
     layout="wide"
 )
 
@@ -269,7 +268,6 @@ st.markdown("""
 
 ESTILO_MENU_HORIZONTAL = {
     "container": {"padding": "0!important", "background-color": "transparent"},
-    "icon": {"color": "#64748b", "font-size": "14px"}, 
     "nav-link": {
         "font-size": "14px", 
         "text-align": "center", 
@@ -316,7 +314,7 @@ if not st.session_state.autenticado:
             if st.button("Entrar no Sistema", type="primary", use_container_width=True):
                 if usuario_input and senha_input:
                     try:
-                        conn.rollback() # Limpa qualquer transação abortada previamente
+                        conn.rollback()
                         cursor = conn.cursor()
                         cursor.execute("SELECT nome, senha FROM usuarios WHERE LOWER(email) = %s;", (usuario_input.strip().lower(),))
                         resultado = cursor.fetchone()
@@ -329,14 +327,14 @@ if not st.session_state.autenticado:
                                 st.session_state.NOME_USUARIO_LOGADO = nome_banco
                                 st.rerun()
                             else:
-                                st.error("❌ Senha incorreta!")
+                                st.error("Senha incorreta.")
                         else:
-                            st.error("❌ Usuário ou E-mail não cadastrado!")
+                            st.error("Usuário ou E-mail não cadastrado.")
                     except Exception as e:
                         conn.rollback()
                         st.error(f"Erro ao processar login: {e}")
                 else:
-                    st.error("Por favor, preencha todos os campos!")
+                    st.error("Por favor, preencha todos os campos.")
                     
             if st.button("Esqueci a senha", use_container_width=True):
                 st.session_state.sub_tela_login = "esqueci"
@@ -346,7 +344,7 @@ if not st.session_state.autenticado:
         col_r1, col_r2, col_r3 = st.columns([1, 1.2, 1])
         with col_r2:
             st.write("<br><br>", unsafe_allow_html=True)
-            st.markdown("### 🔑 Recuperar Acesso")
+            st.markdown("### Recuperar Acesso")
             email_recuperar = st.text_input("E-mail corporativo", placeholder="exemplo@icmbio.gov.br")
 
             if st.button("Enviar Instruções", type="primary", use_container_width=True):
@@ -375,7 +373,7 @@ if not st.session_state.autenticado:
                                     server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
                                     server.sendmail(EMAIL_REMETENTE, email_recuperar.strip(), msg.as_string())
                                     server.quit()
-                                    st.success(f"Sucesso! Instruções enviadas para {email_recuperar}")
+                                    st.success(f"Instruções enviadas para {email_recuperar}")
                                 except Exception as e:
                                     st.error(f"Erro ao tentar enviar o e-mail: {e}")
                         else:
@@ -394,9 +392,10 @@ if not st.session_state.autenticado:
 # =============================================================================
 else:
     with st.sidebar:
-        st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
+        st.markdown(f"#### Olá, {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("---")
         
+        # Mantidos apenas os ícones da navegação principal
         escolha = option_menu(
             menu_title=None,
             options=[
@@ -490,7 +489,7 @@ else:
         if not df_filtrado.empty and categoria_selecionada != "Todas":
             df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
-        st.markdown("<br><h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>📋 Posição Atual do Estoque</h3>", unsafe_allow_html=True)
+        st.markdown("<br><h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>Posição Atual do Estoque</h3>", unsafe_allow_html=True)
         if df_filtrado.empty:
             st.info("Nenhum material encontrado com os filtros aplicados.")
         else:
@@ -507,21 +506,20 @@ else:
                 
             st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
 
-    # --- TELA: EMPRÉSTIMO DE MATERIAIS (MÓDULO INDEPENDENTE CORRIGIDO) ---
+    # --- TELA: EMPRÉSTIMO DE MATERIAIS ---
     elif escolha == "Empréstimo de Materiais":
         st.title("Controle de Empréstimo de Materiais")
         
         aba_emp = option_menu(
             menu_title=None,
             options=["Cadastrar Item para Empréstimo", "Registrar Empréstimo (Saída)", "Registrar Devolução", "Histórico & Pendências"],
-            icons=["plus-circle", "box-arrow-right", "box-arrow-in-left", "card-checklist"],
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
 
         # 1. SUB-ABA: CADASTRO DE ITENS DE EMPRÉSTIMO
         if aba_emp == "Cadastrar Item para Empréstimo":
-            st.markdown("### 🛠️ Cadastrar Equipamento / Item de Empréstimo")
+            st.markdown("### Cadastrar Equipamento / Item de Empréstimo")
             col_cemp1, col_cemp2 = st.columns([1, 1.5])
             
             with col_cemp1:
@@ -539,19 +537,19 @@ else:
                                                (cod_emp.strip().upper(), nome_emp.strip(), int(qtd_emp)))
                                 conn.commit()
                                 cursor.close()
-                                st.success(f"✅ Item '{nome_emp}' cadastrado com sucesso para Empréstimos!")
+                                st.success(f"Item '{nome_emp}' cadastrado com sucesso para Empréstimos.")
                                 st.rerun()
                             except psycopg2.IntegrityError:
                                 conn.rollback()
-                                st.error("❌ Código já cadastrado para outro item de empréstimo!")
+                                st.error("Código já cadastrado para outro item de empréstimo.")
                             except Exception as ex:
                                 conn.rollback()
                                 st.error(f"Erro ao salvar: {ex}")
                         else:
-                            st.error("Preencha o Código e o Nome do Equipamento!")
+                            st.error("Preencha o Código e o Nome do Equipamento.")
 
             with col_cemp2:
-                st.markdown("##### 📋 Equipamentos Cadastrados para Empréstimo")
+                st.markdown("##### Equipamentos Cadastrados para Empréstimo")
                 try:
                     conn.rollback()
                     df_itens_emp = pd.read_sql_query('SELECT codigo AS "Código", nome AS "Equipamento/Item", quantidade AS "Qtd Total" FROM itens_emprestimo ORDER BY codigo ASC', conn)
@@ -565,7 +563,7 @@ else:
 
         # 2. SUB-ABA: REGISTRO DE EMPRÉSTIMO (SAÍDA)
         elif aba_emp == "Registrar Empréstimo (Saída)":
-            st.markdown("### 📤 Registrar Saída por Empréstimo")
+            st.markdown("### Registrar Saída por Empréstimo")
             
             try:
                 conn.rollback()
@@ -575,7 +573,7 @@ else:
                 df_itens_emp = pd.DataFrame()
 
             if df_itens_emp.empty:
-                st.warning("⚠️ Nenhum item cadastrado na aba de Empréstimos. Cadastre um item na sub-aba 'Cadastrar Item para Empréstimo' primeiro.")
+                st.warning("Nenhum item cadastrado na aba de Empréstimos. Cadastre um item na sub-aba 'Cadastrar Item para Empréstimo' primeiro.")
             else:
                 with st.form("form_reg_emprestimo", clear_on_submit=True):
                     col_e1, col_e2 = st.columns(2)
@@ -604,11 +602,11 @@ else:
                         qtd_disponivel = int(df_itens_emp.loc[item_sel_idx, 'quantidade'])
 
                         if not resp_emp or not resp_emp.strip():
-                            st.error("❌ O NOME DA PESSOA RESPONSÁVEL É OBRIGATÓRIO!")
+                            st.error("O NOME DA PESSOA RESPONSÁVEL É OBRIGATÓRIO!")
                         elif not str(coord_emp).strip():
-                            st.error("❌ O NOME DA COORDENAÇÃO É OBRIGATÓRIO!")
+                            st.error("O NOME DA COORDENAÇÃO É OBRIGATÓRIO!")
                         elif qtd_saida > qtd_disponivel:
-                            st.error(f"❌ Quantidade informada ({qtd_saida}) maior que o saldo cadastrado ({qtd_disponivel})!")
+                            st.error(f"Quantidade informada ({qtd_saida}) é maior que o saldo cadastrado ({qtd_disponivel}).")
                         else:
                             dt_emp_str = dt_emprestimo.strftime("%Y-%m-%d")
                             dt_dev_str = dt_devolucao.strftime("%Y-%m-%d")
@@ -626,7 +624,7 @@ else:
 
                                 conn.commit()
                                 cursor.close()
-                                st.success(f"✅ Empréstimo de {qtd_saida}x '{nome_p}' registrado para {resp_emp.strip()} ({coord_emp}) com sucesso!")
+                                st.success(f"Empréstimo de {qtd_saida}x '{nome_p}' registrado para {resp_emp.strip()} ({coord_emp}) com sucesso.")
                                 st.rerun()
                             except Exception as ex:
                                 conn.rollback()
@@ -634,7 +632,7 @@ else:
 
         # 3. SUB-ABA: REGISTRAR DEVOLUÇÃO
         elif aba_emp == "Registrar Devolução":
-            st.markdown("### 📥 Registrar Devolução / Retorno de Material")
+            st.markdown("### Registrar Devolução / Retorno de Material")
             
             try:
                 conn.rollback()
@@ -670,7 +668,7 @@ else:
 
                             conn.commit()
                             cursor.close()
-                            st.success(f"✅ Devolução do item '{nome_p}' confirmada com sucesso!")
+                            st.success(f"Devolução do item '{nome_p}' confirmada com sucesso.")
                             st.rerun()
                         except Exception as ex:
                             conn.rollback()
@@ -678,7 +676,7 @@ else:
 
         # 4. SUB-ABA: HISTÓRICO & PENDÊNCIAS
         elif aba_emp == "Histórico & Pendências":
-            st.markdown("### 🟡 Empréstimos Pendentes (Em Uso)")
+            st.markdown("### Empréstimos Pendentes (Em Uso)")
             try:
                 conn.rollback()
                 df_hist_emp = pd.read_sql_query("""
@@ -700,12 +698,12 @@ else:
                 if not df_hist_emp.empty:
                     df_pend = df_hist_emp[df_hist_emp["Status"] == "Pendente"]
                     if df_pend.empty:
-                        st.success("🎉 Todos os materiais emprestados já foram devidamente devolvidos!")
+                        st.success("Todos os materiais emprestados já foram devidamente devolvidos.")
                     else:
                         st.dataframe(df_pend, use_container_width=True, hide_index=True)
 
                     st.markdown("<br><hr>", unsafe_allow_html=True)
-                    st.markdown("### 📜 Histórico Completo de Empréstimos e Devoluções")
+                    st.markdown("### Histórico Completo de Empréstimos e Devoluções")
                     st.dataframe(df_hist_emp, use_container_width=True, hide_index=True)
                 else:
                     st.info("Nenhum empréstimo cadastrado até o momento.")
@@ -720,7 +718,6 @@ else:
         aba_selecionada = option_menu(
             menu_title=None,
             options=["Novo Material", "Editar / Excluir Produtos"],
-            icons=["plus-circle", "pencil-square"],
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
@@ -732,7 +729,7 @@ else:
                 nome_it = col_b.text_input("Nome do Material")
                 cat_it = col_a.selectbox("Categoria", lista_categorias if lista_categorias else ["Padrão"])
                 val_unit = col_b.number_input("Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
-                st.caption("ℹ️ Novos materiais são registrados com saldo inicial 0.")
+                st.caption("Novos materiais são registrados com saldo inicial 0.")
                 
                 if st.form_submit_button("Finalizar Cadastro", type="primary"):
                     if cod and nome_it:
@@ -742,16 +739,16 @@ else:
                             cursor.execute("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", (cod.strip(), nome_it.strip(), 0, cat_it, float(val_unit)))
                             conn.commit()
                             cursor.close()
-                            st.success(f"Sucesso! {nome_it} adicionado.")
+                            st.success(f"Material '{nome_it}' adicionado com sucesso.")
                             st.rerun()
                         except psycopg2.IntegrityError:
                             conn.rollback()
-                            st.error(f"Erro! Código {cod} já existe.")
+                            st.error(f"Código '{cod}' já existe no sistema.")
                         except Exception as e:
                             conn.rollback()
                             st.error(f"Erro ao salvar: {e}")
                     else:
-                        st.error("Preencha todos os campos!")
+                        st.error("Preencha todos os campos obrigatórios.")
                         
         elif aba_selecionada == "Editar / Excluir Produtos":
             if not df_produtos.empty:
@@ -784,7 +781,7 @@ else:
                             """, (edit_cod.strip(), edit_item.strip(), edit_qtd, edit_cat, float(edit_val), cod_atual))
                             conn.commit()
                             cursor.close()
-                            st.success("Modificado com sucesso!")
+                            st.success("Modificado com sucesso.")
                             st.rerun()
                         except Exception as e:
                             conn.rollback()
@@ -810,7 +807,6 @@ else:
         aba_selecionada = option_menu(
             menu_title=None,
             options=["Nova Categoria", "Editar / Excluir Categorias"],
-            icons=["plus-circle", "pencil-square"],
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
@@ -827,7 +823,7 @@ else:
                             cursor.execute("INSERT INTO categorias VALUES (%s);", (nova_cat.strip(),))
                             conn.commit()
                             cursor.close()
-                            st.success("Adicionada!")
+                            st.success("Categoria adicionada com sucesso.")
                             st.rerun()
                         except psycopg2.IntegrityError:
                             conn.rollback()
@@ -852,7 +848,7 @@ else:
                             cursor.execute("UPDATE categorias SET nome = %s WHERE nome = %s;", (edit_nome_cat.strip(), cat_selecionada))
                             conn.commit()
                             cursor.close()
-                            st.success("Atualizado!")
+                            st.success("Atualizado com sucesso.")
                             st.rerun()
                         except Exception as e:
                             conn.rollback()
@@ -865,7 +861,7 @@ else:
                             cursor.execute("DELETE FROM categorias WHERE nome = %s;", (cat_selecionada,))
                             conn.commit()
                             cursor.close()
-                            st.warning("Removida.")
+                            st.warning("Categoria removida.")
                             st.rerun()
                         except Exception as e:
                             conn.rollback()
@@ -878,7 +874,6 @@ else:
         aba_selecionada = option_menu(
             menu_title=None,
             options=["Novo Usuário", "Editar / Excluir Usuários"],
-            icons=["person-plus", "pencil-square"],
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
@@ -901,7 +896,7 @@ else:
                             """, (n.strip(), e.strip().lower(), s if s else "123", p))
                             conn.commit()
                             cursor.close()
-                            st.success("Usuário registrado com sucesso!")
+                            st.success("Usuário registrado com sucesso.")
                             st.rerun()
                         except psycopg2.IntegrityError:
                             conn.rollback()
@@ -910,7 +905,7 @@ else:
                             conn.rollback()
                             st.error(f"Erro ao salvar: {ex}")
                     else:
-                        st.error("Preencha o Nome e o E-mail!")
+                        st.error("Preencha o Nome e o E-mail.")
                         
         elif aba_selecionada == "Editar / Excluir Usuários":
             conn.rollback()
@@ -937,7 +932,7 @@ else:
                             """, (edit_n.strip(), edit_e.strip().lower(), edit_s, edit_p, email_chave))
                             conn.commit()
                             cursor.close()
-                            st.success("Atualizado!")
+                            st.success("Atualizado com sucesso.")
                             st.rerun()
                         except Exception as ex:
                             conn.rollback()
@@ -950,7 +945,7 @@ else:
                             cursor.execute("DELETE FROM usuarios WHERE email = %s;", (email_chave,))
                             conn.commit()
                             cursor.close()
-                            st.warning("Removido.")
+                            st.warning("Removido com sucesso.")
                             st.rerun()
                         except Exception as ex:
                             conn.rollback()
@@ -963,7 +958,6 @@ else:
         aba_selecionada = option_menu(
             menu_title=None,
             options=["Nova Coordenação", "Editar / Excluir Coordenação"],
-            icons=["building-add", "pencil-square"],
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
@@ -980,7 +974,7 @@ else:
                             cursor.execute("INSERT INTO coordenacoes VALUES (%s, %s);", (s_coord.strip().upper(), nc.strip()))
                             conn.commit()
                             cursor.close()
-                            st.success("Cadastrada!")
+                            st.success("Coordenação cadastrada com sucesso.")
                             st.rerun()
                         except psycopg2.IntegrityError:
                             conn.rollback()
@@ -989,7 +983,7 @@ else:
                             conn.rollback()
                             st.error(f"Erro: {ex}")
                     else:
-                        st.error("Preencha todos os campos!")
+                        st.error("Preencha todos os campos.")
                         
         elif aba_selecionada == "Editar / Excluir Coordenação":
             if not df_coordenacoes.empty:
@@ -1018,7 +1012,7 @@ else:
                             cursor.execute("UPDATE coordenacoes SET sigla = %s, nome = %s WHERE sigla = %s;", (edit_sigla.strip().upper(), edit_nc.strip(), sigla_selecionada))
                             conn.commit()
                             cursor.close()
-                            st.success("Atualizada!")
+                            st.success("Atualizada com sucesso.")
                             st.rerun()
                         except Exception as ex:
                             conn.rollback()
@@ -1031,20 +1025,19 @@ else:
                             cursor.execute("DELETE FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
                             conn.commit()
                             cursor.close()
-                            st.warning("Removida.")
+                            st.warning("Removida com sucesso.")
                             st.rerun()
                         except Exception as ex:
                             conn.rollback()
                             st.error(f"Erro: {ex}")
 
-    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (CONSUMO DE MATERIAIS DE ESTOQUE GERAL) ---
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE ---
     elif escolha == "Movimentação de Estoque":
         st.title("Movimentação de Estoque Geral")
         
         aba_mov = option_menu(
             menu_title=None,
             options=["Lançar Movimentação", "Histórico de Movimentações"],
-            icons=["arrow-left-right", "clock-history"],
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
@@ -1075,7 +1068,7 @@ else:
                         qtd_atual = int(df_produtos.loc[prod_opcao, "Quantidade"])
                         
                         if tipo_mov == "Saída" and qtd_mov > qtd_atual:
-                            st.error(f"Saldo insuficiente! Saldo atual em estoque: {qtd_atual}")
+                            st.error(f"Saldo insuficiente. Saldo atual em estoque: {qtd_atual}")
                         else:
                             nova_qtd = qtd_atual + qtd_mov if tipo_mov == "Entrada" else qtd_atual - qtd_mov
                             data_hoje = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1091,14 +1084,14 @@ else:
                                 conn.commit()
                                 cursor.close()
                                 
-                                st.success(f"Movimentação ({tipo_mov}) realizada com sucesso! Novo saldo: {nova_qtd}")
+                                st.success(f"Movimentação ({tipo_mov}) realizada com sucesso. Novo saldo: {nova_qtd}")
                                 st.rerun()
                             except Exception as ex:
                                 conn.rollback()
                                 st.error(f"Erro ao salvar movimentação: {ex}")
                                 
         elif aba_mov == "Histórico de Movimentações":
-            st.markdown("### 📜 Registros de Entradas e Saídas do Estoque Geral")
+            st.markdown("### Registros de Entradas e Saídas do Estoque Geral")
             if df_movimentacoes.empty:
                 st.info("Nenhuma movimentação registrada no sistema até o momento.")
             else:
