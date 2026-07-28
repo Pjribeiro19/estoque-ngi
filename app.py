@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -71,7 +71,7 @@ def inicializar_banco_automatico():
             );
         """)
 
-        # 5. Tabela de movimentações
+        # 5. Tabela de movimentações gerais
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS movimentacoes (
                 id SERIAL PRIMARY KEY,
@@ -82,6 +82,22 @@ def inicializar_banco_automatico():
                 quantidade INTEGER,
                 responsavel TEXT,
                 coordenacao TEXT
+            );
+        """)
+
+        # 6. Tabela específica para controle de Empréstimos
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS emprestimos (
+                id SERIAL PRIMARY KEY,
+                codigo TEXT,
+                item TEXT,
+                quantidade INTEGER,
+                responsavel TEXT,
+                coordenacao TEXT,
+                data_saida TEXT,
+                data_prevista_devolucao TEXT,
+                data_retorno TEXT,
+                status TEXT
             );
         """)
         conn.commit()
@@ -105,7 +121,10 @@ def inicializar_banco_automatico():
                 produtos_iniciais = [
                     ("001", "Capacete de Segurança", 15, "EPI", 45.00),
                     ("002", "Resma Papel A4", 0, "Material de Escritório", 28.50),
-                    ("003", "Luva de Raspa", 50, "EPI", 12.00)
+                    ("003", "Luva de Raspa", 50, "EPI", 12.00),
+                    ("004", "Televisão 55''", 2, "Equipamentos Empréstimo", 2500.00),
+                    ("005", "Caixa de Som Amplificada", 3, "Equipamentos Empréstimo", 800.00),
+                    ("006", "Microfone Sem Fio", 4, "Equipamentos Empréstimo", 350.00)
                 ]
                 cursor.executemany("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", produtos_iniciais)
 
@@ -120,7 +139,7 @@ def inicializar_banco_automatico():
             # Inserção inicial de Categorias
             cursor.execute("SELECT COUNT(*) FROM categorias;")
             if cursor.fetchone()[0] == 0:
-                cat_iniciais = [("EPI",), ("Material de Escritório",), ("Informática",), ("Limpeza",), ("Copa",)]
+                cat_iniciais = [("EPI",), ("Material de Escritório",), ("Informática",), ("Limpeza",), ("Copa",), ("Equipamentos Empréstimo",)]
                 cursor.executemany("INSERT INTO categorias VALUES (%s);", cat_iniciais)
 
             cursor.execute("INSERT INTO config_sistema (chave, valor) VALUES ('seed_inicial', 'true');")
@@ -339,6 +358,7 @@ else:
             menu_title=None,
             options=[
                 "Painel Geral", 
+                "Empréstimo de Materiais",
                 "Cadastrar Produto", 
                 "Cadastrar Categoria", 
                 "Cadastrar Usuário", 
@@ -346,7 +366,7 @@ else:
                 "Movimentação de Estoque",
                 "Sair do Sistema"
             ],
-            icons=["grid", "box", "folder", "person-plus", "building", "arrow-left-right", "box-arrow-right"],
+            icons=["grid", "handbag", "box", "folder", "person-plus", "building", "arrow-left-right", "box-arrow-right"],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -443,6 +463,185 @@ else:
                 return [''] * len(row)
                 
             st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
+
+    # --- TELA: EMPRÉSTIMO DE MATERIAIS ---
+    elif escolha == "Empréstimo de Materiais":
+        st.title("Controle de Empréstimo de Materiais")
+        
+        aba_emp = option_menu(
+            menu_title=None,
+            options=["Registrar Saída / Devolução", "Itens Cadastrados & Histórico"],
+            icons=["box-arrow-right", "card-checklist"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+
+        if aba_emp == "Registrar Saída / Devolução":
+            col_emp_s1, col_emp_s2 = st.columns(2)
+
+            # --- BLOCO DE SAÍDA / RETIRADA DE EMPRÉSTIMO ---
+            with col_emp_s1:
+                st.markdown("### 📤 Registrar Saída por Empréstimo")
+                if df_produtos.empty:
+                    st.warning("Nenhum produto cadastrado para realizar empréstimo.")
+                else:
+                    with st.form("form_saida_emprestimo", clear_on_submit=True):
+                        prod_opcao = st.selectbox(
+                            "Selecione o Item para Empréstimo:*", 
+                            df_produtos.index, 
+                            format_func=lambda x: f"{df_produtos.loc[x, 'Código']} - {df_produtos.loc[x, 'Item']} (Disponível: {df_produtos.loc[x, 'Quantidade']})"
+                        )
+                        
+                        qtd_emp = st.number_input("Quantidade:*", min_value=1, value=1, step=1)
+                        
+                        # Nome do Responsável Obrigatorio
+                        resp_emp = st.text_input("Nome do Responsável pela Retirada:*", placeholder="Digite o nome completo do responsável")
+                        
+                        # Coordenação Obrigatória
+                        lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else []
+                        if not lista_siglas_coord:
+                            coord_emp = st.text_input("Coordenação Vinculada:*", placeholder="Ex: COTEC, COLOG")
+                        else:
+                            coord_emp = st.selectbox("Coordenação Vinculada:*", lista_siglas_coord)
+                            
+                        # Data Prevista de Devolução Obrigatória
+                        dt_prevista = st.date_input("Data Prevista de Devolução:*", min_value=date.today())
+
+                        if st.form_submit_button("Confirmar Saída por Empréstimo", type="primary"):
+                            cod_p = df_produtos.loc[prod_opcao, "Código"]
+                            item_p = df_produtos.loc[prod_opcao, "Item"]
+                            qtd_atual = int(df_produtos.loc[prod_opcao, "Quantidade"])
+                            
+                            # Validações de Obrigatoriedade
+                            if not resp_emp or not resp_emp.strip():
+                                st.error("❌ O nome do responsável é de preenchimento OBRIGATÓRIO!")
+                            elif not coord_emp or not str(coord_emp).strip():
+                                st.error("❌ A coordenação vinculada é de preenchimento OBRIGATÓRIO!")
+                            elif qtd_emp > qtd_atual:
+                                st.error(f"❌ Saldo insuficiente em estoque! Disponível: {qtd_atual}")
+                            else:
+                                dt_hoje = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                dt_prev_str = dt_prevista.strftime("%Y-%m-%d")
+                                nova_qtd = qtd_atual - qtd_emp
+
+                                try:
+                                    conn.rollback()
+                                    cursor = conn.cursor()
+
+                                    # 1. Atualiza Estoque
+                                    cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (nova_qtd, cod_p))
+
+                                    # 2. Registra na Tabela Específica de Empréstimos
+                                    cursor.execute("""
+                                        INSERT INTO emprestimos (codigo, item, quantidade, responsavel, coordenacao, data_saida, data_prevista_devolucao, status)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s, 'Pendente');
+                                    """, (cod_p, item_p, qtd_emp, resp_emp.strip(), str(coord_emp).strip(), dt_hoje, dt_prev_str))
+
+                                    # 3. Registra no Histórico Geral de Movimentações
+                                    cursor.execute("""
+                                        INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s);
+                                    """, (dt_hoje, "Empréstimo (Saída)", cod_p, item_p, qtd_emp, resp_emp.strip(), str(coord_emp).strip()))
+
+                                    conn.commit()
+                                    st.success(f"✅ Empréstimo de {qtd_emp}x '{item_p}' registrado com sucesso!")
+                                    st.rerun()
+                                except Exception as ex:
+                                    conn.rollback()
+                                    st.error(f"Erro ao registrar empréstimo: {ex}")
+
+            # --- BLOCO DE DEVOLUÇÃO / RETORNO ---
+            with col_emp_s2:
+                st.markdown("### 📥 Registrar Devolução / Retorno")
+                try:
+                    conn.rollback()
+                    df_pendentes = pd.read_sql_query("SELECT id, codigo, item, quantidade, responsavel, coordenacao, data_saida, data_prevista_devolucao FROM emprestimos WHERE status = 'Pendente' ORDER BY id DESC", conn)
+                except Exception:
+                    df_pendentes = pd.DataFrame()
+
+                if df_pendentes.empty:
+                    st.info("Não há nenhum item pendente de devolução no momento.")
+                else:
+                    with st.form("form_devolucao_emprestimo", clear_on_submit=True):
+                        emp_id_sel = st.selectbox(
+                            "Selecione o Item a ser Devolvido:*",
+                            df_pendentes.index,
+                            format_func=lambda x: f"ID #{df_pendentes.loc[x, 'id']} - {df_pendentes.loc[x, 'item']} ({df_pendentes.loc[x, 'quantidade']}x) - Retirado por: {df_pendentes.loc[x, 'responsavel']} ({df_pendentes.loc[x, 'coordenacao']})"
+                        )
+                        st.caption(f"📅 **Data Prevista de Devolução:** {df_pendentes.loc[emp_id_sel, 'data_prevista_devolucao']}")
+                        
+                        if st.form_submit_button("Confirmar Devolução do Material", type="primary"):
+                            id_emp = int(df_pendentes.loc[emp_id_sel, 'id'])
+                            cod_p = df_pendentes.loc[emp_id_sel, 'codigo']
+                            item_p = df_pendentes.loc[emp_id_sel, 'item']
+                            qtd_dev = int(df_pendentes.loc[emp_id_sel, 'quantidade'])
+                            resp_p = df_pendentes.loc[emp_id_sel, 'responsavel']
+                            coord_p = df_pendentes.loc[emp_id_sel, 'coordenacao']
+                            
+                            dt_retorno = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                            try:
+                                conn.rollback()
+                                cursor = conn.cursor()
+
+                                # 1. Atualiza Status do Empréstimo
+                                cursor.execute("""
+                                    UPDATE emprestimos 
+                                    SET status = 'Devolvido', data_retorno = %s 
+                                    WHERE id = %s;
+                                """, (dt_retorno, id_emp))
+
+                                # 2. Devolve a Quantidade ao Estoque
+                                cursor.execute("UPDATE produtos SET quantidade = quantidade + %s WHERE codigo = %s;", (qtd_dev, cod_p))
+
+                                # 3. Registra Movimentação de Retorno
+                                cursor.execute("""
+                                    INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s);
+                                """, (dt_retorno, "Empréstimo (Devolução)", cod_p, item_p, qtd_dev, resp_p, coord_p))
+
+                                conn.commit()
+                                st.success(f"✅ Material '{item_p}' devolvido ao estoque com sucesso!")
+                                st.rerun()
+                            except Exception as ex:
+                                conn.rollback()
+                                st.error(f"Erro ao processar devolução: {ex}")
+
+        elif aba_emp == "Itens Cadastrados & Histórico":
+            try:
+                conn.rollback()
+                df_todos_emp = pd.read_sql_query("""
+                    SELECT 
+                        id AS "ID",
+                        codigo AS "Código",
+                        item AS "Material",
+                        quantidade AS "Qtd",
+                        responsavel AS "Responsável",
+                        coordenacao AS "Coordenação",
+                        data_saida AS "Data Saída",
+                        data_prevista_devolucao AS "Devolução Prevista",
+                        data_retorno AS "Data Devolução Real",
+                        status AS "Status"
+                    FROM emprestimos 
+                    ORDER BY id DESC
+                """, conn)
+            except Exception:
+                df_todos_emp = pd.DataFrame()
+
+            st.markdown("### 🟡 Empréstimos Pendentes de Devolução")
+            if not df_todos_emp.empty:
+                df_pend = df_todos_emp[df_todos_emp["Status"] == "Pendente"]
+                if df_pend.empty:
+                    st.success("Nenhum empréstimo pendente!")
+                else:
+                    st.dataframe(df_pend, use_container_width=True, hide_index=True)
+            else:
+                st.info("Nenhum registro de empréstimo encontrado.")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown("### 📜 Histórico Completo de Empréstimos")
+            if not df_todos_emp.empty:
+                st.dataframe(df_todos_emp, use_container_width=True, hide_index=True)
 
     # --- TELA: CADASTRAR PRODUTO ---
     elif escolha == "Cadastrar Produto":
@@ -754,7 +953,7 @@ else:
                             conn.rollback()
                             st.error(f"Erro: {ex}")
 
-    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE ---
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (ENTRADA E SAÍDA DE CONSUMO) ---
     elif escolha == "Movimentação de Estoque":
         st.title("Movimentação de Estoque")
         
@@ -779,14 +978,11 @@ else:
                         format_func=lambda x: f"{df_produtos.loc[x, 'Código']} - {df_produtos.loc[x, 'Item']} (Saldo: {df_produtos.loc[x, 'Quantidade']})"
                     )
                     
-                    # Tipo de Movimentação incluindo Empréstimo
-                    tipo_mov = col_m2.selectbox("Tipo de Movimentação:", ["Entrada", "Saída", "Empréstimo"])
-                    
+                    tipo_mov = col_m2.selectbox("Tipo de Movimentação:", ["Entrada", "Saída"])
                     qtd_mov = col_m1.number_input("Quantidade:", min_value=1, value=1, step=1)
                     
                     lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["N/A"]
                     coord_mov = col_m2.selectbox("Coordenação Requisitante/Destino:", lista_siglas_coord)
-                    
                     resp_mov = st.text_input("Responsável pela Retirada / Recebimento:", value=st.session_state.NOME_USUARIO_LOGADO)
                     
                     if st.form_submit_button("Confirmar Movimentação", type="primary"):
@@ -794,23 +990,16 @@ else:
                         item_p = df_produtos.loc[prod_opcao, "Item"]
                         qtd_atual = int(df_produtos.loc[prod_opcao, "Quantidade"])
                         
-                        # Processa cálculo de estoque (Entrada soma, Saída e Empréstimo subtraem)
-                        if tipo_mov in ["Saída", "Empréstimo"] and qtd_mov > qtd_atual:
+                        if tipo_mov == "Saída" and qtd_mov > qtd_atual:
                             st.error(f"Saldo insuficiente! Saldo atual em estoque: {qtd_atual}")
                         else:
-                            if tipo_mov == "Entrada":
-                                nova_qtd = qtd_atual + qtd_mov
-                            else: # Saída ou Empréstimo
-                                nova_qtd = qtd_atual - qtd_mov
-                                
+                            nova_qtd = qtd_atual + qtd_mov if tipo_mov == "Entrada" else qtd_atual - qtd_mov
                             data_hoje = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             
                             try:
                                 conn.rollback()
                                 cursor = conn.cursor()
-                                # Atualiza o saldo do produto
                                 cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (nova_qtd, cod_p))
-                                # Registra a movimentação no histórico
                                 cursor.execute("""
                                     INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
                                     VALUES (%s, %s, %s, %s, %s, %s, %s);
@@ -829,7 +1018,7 @@ else:
                 st.info("Nenhuma movimentação registrada no sistema até o momento.")
             else:
                 col_h1, col_h2 = st.columns(2)
-                filtro_tipo = col_h1.selectbox("Filtrar por Tipo:", ["Todos", "Entrada", "Saída", "Empréstimo"])
+                filtro_tipo = col_h1.selectbox("Filtrar por Tipo:", ["Todos", "Entrada", "Saída", "Empréstimo (Saída)", "Empréstimo (Devolução)"])
                 filtro_resp = col_h2.text_input("Filtrar por Responsável ou Material:")
                 
                 df_hist = df_movimentacoes.copy()
