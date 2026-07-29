@@ -474,7 +474,7 @@ else:
                      Gestão de Empréstimo de Material
                 </h1>
                 <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
-                    Módulo independente de empréstimos, controle de devoluções e histórico
+            
                 </p>
             </div>
         """, unsafe_allow_html=True)
