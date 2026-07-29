@@ -800,135 +800,108 @@ else:
             styles=ESTILO_MENU_HORIZONTAL
         )
 
-        # 1. PAINEL COM A RELAÇÃO DOS ITENS DISPONÍVEIS PARA EMPRÉSTIMO
-        if aba_emp == "Disponíveis para Empréstimo":
-            st.markdown("### 📦 Itens Disponíveis para Empréstimo")
-            if not df_mat_emp.empty:
-                st.dataframe(df_mat_emp, use_container_width=True, hide_index=True)
-            else:
-                st.info("Nenhum material de empréstimo cadastrado no momento.")
-
-            with st.expander("➕ Cadastrar Novo Material Próprio para Empréstimo"):
-                with st.form("form_novo_mat_emp", clear_on_submit=True):
-                    col_e1, col_e2 = st.columns(2)
-                    c_emp = col_e1.text_input("Código do Material Emprestável:")
-                    i_emp = col_e2.text_input("Nome do Material:")
-                    q_emp = col_e1.number_input("Quantidade Total para Empréstimo:", min_value=1, step=1)
-                    cat_emp = col_e2.selectbox("Categoria:", lista_categorias if lista_categorias else ["Geral"])
-                    
-                    if st.form_submit_button("Cadastrar Item de Empréstimo", type="primary"):
-                        if c_emp and i_emp:
-                            try:
-                                cur_e = conn.cursor()
-                                cur_e.execute("INSERT INTO materiais_emprestimo VALUES (%s, %s, %s, %s);", (c_emp.strip(), i_emp.strip(), q_emp, cat_emp))
-                                conn.commit()
-                                st.success("Item de empréstimo cadastrado!")
-                                st.rerun()
-                            except psycopg2.IntegrityError:
-                                conn.rollback()
-                                st.error("Erro! Código já cadastrado nos materiais de empréstimo.")
-                        else:
-                            st.error("Preencha Código e Nome!")
-
-        # 2. SUB ABA PARA REGISTRAR O EMPRÉSTIMO DE MATERIAL
-        elif aba_emp == "Registrar Empréstimo":
-            st.markdown("### 📤 Registrar Novo Empréstimo")
-            if not df_mat_emp.empty:
-                lista_mat_combo = [f"{row['Código']} - {row['Item']} (Disp: {row['Quantidade']})" for _, row in df_mat_emp.iterrows()]
-                lista_coord_combo = [f"{row['Sigla']} - {row['Nome']}" for _, row in df_coordenacoes.iterrows()] if not df_coordenacoes.empty else []
-
-                with st.form("form_reg_emprestimo", clear_on_submit=True):
-                    mat_sel_str = st.selectbox("Selecione o Item para Empréstimo:*", lista_mat_combo)
-                    
-                    c_re1, c_re2 = st.columns(2)
-                    qtd_e = c_re1.number_input("Quantidade Emprestada:*", min_value=1, step=1)
-                    dt_emp = c_re2.date_input("Data do Empréstimo:*", datetime.now())
-                    dt_prev_dev = c_re1.date_input("Data Prevista para Devolução:*", datetime.now())
-                    resp_emp = c_re2.text_input("Nome da Pessoa Responsável:*")
-                    
-                    coord_emp = c_re1.selectbox("Nome da Coordenação:*", lista_coord_combo) if lista_coord_combo else c_re1.text_input("Nome da Coordenação:*")
-                    ativ_emp = c_re2.text_area("Atividade a ser Realizada:*", placeholder="Descreva a atividade/missão de uso do material...")
-
-                    if st.form_submit_button("Confirmar e Registrar Empréstimo", type="primary"):
-                        cod_m = mat_sel_str.split(" - ")[0]
-                        cur_e = conn.cursor()
-                        cur_e.execute("SELECT item, quantidade FROM materiais_emprestimo WHERE codigo = %s;", (cod_m,))
-                        res_item = cur_e.fetchone()
-
-                        if res_item:
-                            nome_m, qtd_disponivel = res_item
-                            if not resp_emp or not coord_emp or not ativ_emp:
-                                st.error("❌ Todos os campos com (*) são obrigatórios!")
-                            elif qtd_e > qtd_disponivel:
-                                st.error(f"❌ Quantidade solicitada ({qtd_e}) maior que a disponível ({qtd_disponivel})!")
-                            else:
-                                coord_str = coord_emp.split(" - ")[0] if " - " in str(coord_emp) else str(coord_emp)
-                                nova_qtd = qtd_disponivel - qtd_e
-                                
-                                # Atualiza saldo do item de empréstimo
-                                cur_e.execute("UPDATE materiais_emprestimo SET quantidade = %s WHERE codigo = %s;", (nova_qtd, cod_m))
-                                
-                                # Insere registro de empréstimo
-                                cur_e.execute("""
-                                    INSERT INTO emprestimos 
-                                    (codigo_item, nome_item, quantidade, data_emprestimo, data_prevista_devolucao, responsavel, coordenacao, atividade, status, data_devolucao, responsavel_devolucao)
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Ativo', '-', '-');
-                                """, (cod_m, nome_m, qtd_e, str(dt_emp), str(dt_prev_dev), resp_emp.strip(), coord_str, ativ_emp.strip()))
-                                
-                                conn.commit()
-                                st.success("✅ Empréstimo registrado com sucesso!")
-                                st.rerun()
-            else:
-                st.warning("Nenhum material cadastrado para empréstimo.")
-
-        # 3. SUB ABA PARA REGISTRAR A DEVOLUÇÃO
-        elif aba_emp == "Registrar Devolução":
-            st.markdown("### 📥 Registrar Devolução de Material")
+       # --- TELA: EMPRÉSTIMO DE MATERIAIS ---
+    elif escolha == "Empréstimo de Materiais":
+        st.title("Gestão de Empréstimo de Materiais")
+        
+        aba_selecionada = option_menu(
+            menu_title=None,
+            options=["Registrar Empréstimo", "Devolução / Controle Ativo"],
+            icons=["handbag", "arrow-return-left"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+        
+        if aba_selecionada == "Registrar Empréstimo":
+            df_mat_emp = pd.read_sql_query("SELECT * FROM materiais_emprestimo ORDER BY item ASC", conn)
             
-            cur_e = conn.cursor()
-            cur_e.execute("SELECT id, codigo_item, nome_item, quantidade, responsavel, coordenacao, data_emprestimo FROM emprestimos WHERE status = 'Ativo';")
-            emp_ativos = cur_e.fetchall()
+            if df_mat_emp.empty:
+                st.warning("Nenhum material de empréstimo cadastrado.")
+            else:
+                with st.form("form_emprestimo", clear_on_submit=True):
+                    col_e1, col_e2 = st.columns(2)
+                    
+                    item_emp_idx = col_e1.selectbox(
+                        "Selecione o Equipamento:", 
+                        df_mat_emp.index, 
+                        format_func=lambda x: f"{df_mat_emp.loc[x, 'codigo']} - {df_mat_emp.loc[x, 'item']} (Disponível: {df_mat_emp.loc[x, 'quantidade']})"
+                    )
+                    
+                    cod_emp = df_mat_emp.loc[item_emp_idx, "codigo"]
+                    nome_emp = df_mat_emp.loc[item_emp_idx, "item"]
+                    qtd_disponivel = df_mat_emp.loc[item_emp_idx, "quantidade"]
+                    
+                    qtd_solicitada = col_e2.number_input("Quantidade Solicitada:", min_value=1, step=1)
+                    responsavel_emp = col_e1.text_input("Responsável pelo Empréstimo:")
+                    
+                    lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["Geral"]
+                    coord_emp = col_e2.selectbox("Coordenação Solicitante:", lista_siglas_coord)
+                    
+                    atividade_emp = col_e1.text_input("Atividade / Finalidade:")
+                    data_prevista = col_e2.date_input("Previsão de Devolução:")
+                    
+                    if st.form_submit_button("Confirmar Empréstimo", type="primary"):
+                        if responsavel_emp.strip() and atividade_emp.strip():
+                            if qtd_solicitada > qtd_disponivel:
+                                st.error(f"Quantidade insuficiente para empréstimo! Disponível: {qtd_disponivel}")
+                            else:
+                                data_retirada = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                data_prev_str = data_prevista.strftime("%Y-%m-%d")
+                                nova_qtd_mat = qtd_disponivel - qtd_solicitada
+                                
+                                cursor = conn.cursor()
+                                cursor.execute("UPDATE materiais_emprestimo SET quantidade = %s WHERE codigo = %s;", (nova_qtd_mat, cod_emp))
+                                cursor.execute("""
+                                    INSERT INTO emprestimos (codigo_item, nome_item, quantidade, data_emprestimo, data_prevista_devolucao, responsavel, coordenacao, atividade, status)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
+                                """, (cod_emp, nome_emp, qtd_solicitada, data_retirada, data_prev_str, responsavel_emp.strip(), coord_emp, atividade_emp.strip(), "Em Aberto"))
+                                
+                                conn.commit()
+                                st.success("Empréstimo registrado com sucesso!")
+                                st.rerun()
+                        else:
+                            st.error("Por favor, preencha o nome do responsável e a atividade.")
 
-            if emp_ativos:
-                opcoes_dev = {f"ID #{e[0]} - {e[2]} (Qtd: {e[3]}) - Resp: {e[4]} ({e[5]})": e for e in emp_ativos}
-                sel_dev_label = st.selectbox("Selecione o Empréstimo Ativo para Devolução:*", list(opcoes_dev.keys()))
-                dados_emp_sel = opcoes_dev[sel_dev_label]
-
-                with st.form("form_reg_devolucao", clear_on_submit=True):
-                    col_d1, col_d2 = st.columns(2)
-                    dt_dev_real = col_d1.date_input("Data da Devolução:*", datetime.now())
-                    resp_dev_receb = col_d2.text_input("Nome da Pessoa Responsável pela Devolução (Recebimento):*")
-
-                    if st.form_submit_button("Registrar Devolução e Retornar ao Estoque", type="primary"):
-                        if resp_dev_receb:
-                            emp_id = dados_emp_sel[0]
-                            cod_item_emp = dados_emp_sel[1]
-                            qtd_retornada = dados_emp_sel[3]
-
-                            # Devolve a quantidade para o estoque de empréstimo
-                            cur_e.execute("SELECT quantidade FROM materiais_emprestimo WHERE codigo = %s;", (cod_item_emp,))
-                            qtd_atual_mat = cur_e.fetchone()[0]
-                            cur_e.execute("UPDATE materiais_emprestimo SET quantidade = %s WHERE codigo = %s;", (qtd_atual_mat + qtd_retornada, cod_item_emp))
-
+        elif aba_selecionada == "Devolução / Controle Ativo":
+            df_emp_ativos = pd.read_sql_query("SELECT * FROM emprestimos WHERE status = 'Em Aberto' ORDER BY id DESC", conn)
+            
+            st.markdown("### 📋 Empréstimos em Aberto")
+            if df_emp_ativos.empty:
+                st.info("Nenhum empréstimo pendente de devolução no momento.")
+            else:
+                st.dataframe(df_emp_ativos, use_container_width=True, hide_index=True)
+                
+                with st.form("form_devolucao"):
+                    st.markdown("#### Registrar Devolução de Equipamento")
+                    emp_idx = st.selectbox(
+                        "Selecione o Empréstimo a ser Finalizado:", 
+                        df_emp_ativos.index,
+                        format_func=lambda x: f"ID {df_emp_ativos.loc[x, 'id']} - {df_emp_ativos.loc[x, 'nome_item']} ({df_emp_ativos.loc[x, 'responsavel']})"
+                    )
+                    
+                    id_emprestimo = int(df_emp_ativos.loc[emp_idx, 'id'])
+                    cod_item_dev = df_emp_ativos.loc[emp_idx, 'codigo_item']
+                    qtd_dev = int(df_emp_ativos.loc[emp_idx, 'quantidade'])
+                    
+                    resp_devolucao = st.text_input("Responsável pelo Recebimento na Devolução:")
+                    
+                    if st.form_submit_button("Confirmar Devolução", type="primary"):
+                        if resp_devolucao.strip():
+                            data_devolucao = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            cursor = conn.cursor()
+                            
+                            # Devolve a quantidade para o estoque do item de empréstimo
+                            cursor.execute("UPDATE materiais_emprestimo SET quantidade = quantidade + %s WHERE codigo = %s;", (qtd_dev, cod_item_dev))
+                            
                             # Atualiza status do empréstimo
-                            cur_e.execute("""
+                            cursor.execute("""
                                 UPDATE emprestimos 
                                 SET status = 'Devolvido', data_devolucao = %s, responsavel_devolucao = %s 
                                 WHERE id = %s;
-                            """, (str(dt_dev_real), resp_dev_receb.strip(), emp_id))
-
+                            """, (data_devolucao, resp_devolucao.strip(), id_emprestimo))
+                            
                             conn.commit()
-                            st.success("✅ Devolução registrada e estoque reabastecido com sucesso!")
+                            st.success("Equipamento devolvido e estoque atualizado com sucesso!")
                             st.rerun()
                         else:
-                            st.error("❌ O nome do responsável pela devolução é obrigatório!")
-            else:
-                st.info("Não há nenhum empréstimo pendente de devolução no momento.")
-
-        # 4. HISTÓRICO DE MOVIMENTO
-        elif aba_emp == "Histórico de Movimento":
-            st.markdown("### 📜 Histórico de Empréstimos e Devoluções")
-            if not df_emp_hist.empty:
-                st.dataframe(df_emp_hist.sort_values(by="ID", ascending=False), use_container_width=True, hide_index=True)
-            else:
-                st.info("Nenhum histórico de empréstimo registrado.")
+                            st.error("Informe quem está recebendo a devolução.")
