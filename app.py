@@ -822,3 +822,114 @@ else:
             st.dataframe(df_itens_emp, use_container_width=True, hide_index=True)
 
         elif aba_emp == "Registrar Empréstimo":
+            st.subheader("📤 Registrar Saída por Empréstimo")
+            df_itens_disp = pd.read_sql_query("SELECT codigo_item, nome_item, quantidade_disponivel FROM itens_disponiveis_emprestimo WHERE quantidade_disponivel > 0", conn)
+            
+            if df_itens_disp.empty:
+                st.warning("Não há itens disponíveis para empréstimo no momento.")
+            else:
+                with st.form("form_reg_emp", clear_on_submit=True):
+                    item_sel = st.selectbox("Selecione o Item", df_itens_disp["codigo_item"] + " - " + df_itens_disp["nome_item"])
+                    cod_item_sel = item_sel.split(" - ")[0]
+                    nome_item_sel = item_sel.split(" - ")[1]
+                    
+                    qtd_disp = df_itens_disp[df_itens_disp["codigo_item"] == cod_item_sel]["quantidade_disponivel"].values[0]
+                    
+                    col_e1, col_e2 = st.columns(2)
+                    qtd_emp = col_e1.number_input(f"Quantidade a Emprestar (Máx: {qtd_disp})", min_value=1, max_value=int(qtd_disp), step=1)
+                    prev_dev = col_e2.date_input("Previsão de Devolução")
+                    
+                    resp_emp = col_e1.text_input("Responsável pelo Empréstimo (Quem Pega)")
+                    coord_emp = col_e2.selectbox("Coordenação Solicitante", lista_coordenacoes if lista_coordenacoes else ["N/A"])
+                    ativ_emp = st.text_input("Atividade / Destino do Material")
+
+                    if st.form_submit_button("Confirmar Empréstimo", type="primary"):
+                        if resp_emp and ativ_emp:
+                            cursor = conn.cursor()
+                            # 1. Registra o empréstimo
+                            cursor.execute("""
+                                INSERT INTO emprestimos 
+                                (codigo_item, nome_item, quantidade, data_emprestimo, previsao_devolucao, responsavel_emprestimo, coordenacao, atividade, status)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Emprestado');
+                            """, (cod_item_sel, nome_item_sel, qtd_emp, datetime.now().strftime("%d/%m/%Y %H:%M"), prev_dev.strftime("%d/%m/%Y"), resp_emp.strip(), coord_emp, ativ_emp.strip()))
+                            
+                            # 2. Abate do saldo do item
+                            cursor.execute("""
+                                UPDATE itens_disponiveis_emprestimo 
+                                SET quantidade_disponivel = quantidade_disponivel - %s 
+                                WHERE codigo_item = %s;
+                            """, (qtd_emp, cod_item_sel))
+                            
+                            conn.commit()
+                            st.success("Empréstimo registrado com sucesso!")
+                            st.rerun()
+                        else:
+                            st.error("Preencha o Responsável e a Atividade.")
+
+        elif aba_emp == "Registrar Devolução":
+            st.subheader("📥 Registrar Devolução de Material")
+            df_pendentes = pd.read_sql_query("""
+                SELECT id, codigo_item, nome_item, quantidade, responsavel_emprestimo, data_emprestimo 
+                FROM emprestimos WHERE status = 'Emprestado';
+            """, conn)
+
+            if df_pendentes.empty:
+                st.info("Não há empréstimos pendentes para devolução.")
+            else:
+                with st.form("form_reg_dev", clear_on_submit=True):
+                    emp_selecionado = st.selectbox(
+                        "Selecione o Empréstimo Pendente:",
+                        df_pendentes.index,
+                        format_func=lambda x: f"ID {df_pendentes.loc[x, 'id']} - {df_pendentes.loc[x, 'nome_item']} (Qtd: {df_pendentes.loc[x, 'quantidade']}) - Pegue por: {df_pendentes.loc[x, 'responsavel_emprestimo']}"
+                    )
+                    
+                    id_emp = int(df_pendentes.loc[emp_selecionado, "id"])
+                    cod_item_dev = df_pendentes.loc[emp_selecionado, "codigo_item"]
+                    qtd_dev = int(df_pendentes.loc[emp_selecionado, "quantidade"])
+                    
+                    resp_dev = st.text_input("Responsável pelo Recebimento/Devolução", value=st.session_state.NOME_USUARIO_LOGADO)
+                    
+                    if st.form_submit_button("Confirmar Devolução", type="primary"):
+                        cursor = conn.cursor()
+                        # 1. Atualiza status do empréstimo
+                        cursor.execute("""
+                            UPDATE emprestimos 
+                            SET status = 'Devolvido', data_devolucao = %s, responsavel_devolucao = %s 
+                            WHERE id = %s;
+                        """, (datetime.now().strftime("%d/%m/%Y %H:%M"), resp_dev.strip(), id_emp))
+                        
+                        # 2. Devolve quantidade ao estoque do acervo
+                        cursor.execute("""
+                            UPDATE itens_disponiveis_emprestimo 
+                            SET quantidade_disponivel = quantidade_disponivel + %s 
+                            WHERE codigo_item = %s;
+                        """, (qtd_dev, cod_item_dev))
+                        
+                        conn.commit()
+                        st.success("Devolução registrada e saldo atualizado!")
+                        st.rerun()
+
+        elif aba_emp == "Histórico de Movimentação":
+            st.subheader("📜 Histórico Completo de Empréstimos e Devoluções")
+            df_historico_emp = pd.read_sql_query("""
+                SELECT 
+                    id AS "ID",
+                    codigo_item AS "Código",
+                    nome_item AS "Item",
+                    quantidade AS "Qtd",
+                    data_emprestimo AS "Data Empréstimo",
+                    previsao_devolucao AS "Previsão Devolução",
+                    responsavel_emprestimo AS "Quem Pegou",
+                    coordenacao AS "Coordenação",
+                    atividade AS "Atividade",
+                    status AS "Status",
+                    data_devolucao AS "Data Devolução",
+                    responsavel_devolucao AS "Quem Recebeu"
+                FROM emprestimos 
+                ORDER BY id DESC;
+            """, conn)
+
+            if df_historico_emp.empty:
+                st.info("Nenhum histórico registrado até o momento.")
+            else:
+                st.dataframe(df_historico_emp, use_container_width=True, hide_index=True)
