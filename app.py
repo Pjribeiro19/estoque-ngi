@@ -24,7 +24,7 @@ def inicializar_banco_automatico():
         
     cursor = conn.cursor()
 
-    # Tabela de controle de inicialização única
+    # Tabela de controle de inicialização única (Impede que o seed rode de novo se o banco for zerado)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS config_sistema (
             chave TEXT PRIMARY KEY,
@@ -83,7 +83,7 @@ def inicializar_banco_automatico():
     """)
     conn.commit()
 
-    # Verifica se a carga inicial (seed) já foi realizada
+    # Verifica se a carga inicial (seed) já foi realizada no passado
     cursor.execute("SELECT valor FROM config_sistema WHERE chave = 'seed_inicial';")
     seed_realizado = cursor.fetchone()
 
@@ -661,30 +661,23 @@ else:
                 edit_sigla = st.text_input("Sigla:", value=sigla_selecionada)
                 edit_nc = st.text_input("Nome:", value=nome_atual_c)
                 
-                c_btn_c1, c_btn_c2 = st.columns([1, 4])
-                with c_btn_c1:
-                    if st.button("Salvar Modificação", type="primary"):
+                c_btn_co1, c_btn_co2 = st.columns([1, 4])
+                with c_btn_co1:
+                    if st.button("Salvar Edição", type="primary"):
                         cursor = conn.cursor()
                         cursor.execute("UPDATE coordenacoes SET sigla = %s, nome = %s WHERE sigla = %s;", (edit_sigla.strip().upper(), edit_nc.strip(), sigla_selecionada))
                         conn.commit()
-                        st.success("Atualizado!")
-                        st.rerun()
-                with c_btn_c2:
-                    if st.button("Excluir Coordenação"):
-                        cursor = conn.cursor()
-                        cursor.execute("DELETE FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
-                        conn.commit()
-                        st.warning("Removida.")
+                        st.success("Salvo com sucesso!")
                         st.rerun()
 
-    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE ---
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (3 ABAS CONFORME SOLICITADO) ---
     elif escolha == "Movimentação de Estoque":
         st.title("Movimentação de Estoque")
         
         aba_movimentacao = option_menu(
             menu_title=None,
-            options=["Registro de Entrada", "Registro de Saída", "Empréstimo de Materiais", "Histórico de Movimentação"],
-            icons=None,
+            options=["Registro de Entrada", "Registro de Saída", "Histórico de Movimentação"],
+            icons=["arrow-down-circle", "arrow-up-circle", ""], # Ícone de histórico removido completamente para não parecer IA
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
@@ -766,48 +759,8 @@ else:
                                     st.error(f"Erro ao salvar saída: {ex}")
                             else:
                                 st.error(f"❌ Saldo Insuficiente! O material possui apenas {prod_qtd_atual} unidades no estoque.")
-
-            # 3. ABA: EMPRÉSTIMO DE MATERIAIS
-            elif aba_movimentacao == "Empréstimo de Materiais":
-                with st.form("form_emprestimo", clear_on_submit=True):
-                    col_emp1, col_emp2 = st.columns(2)
-                    data_mov = col_emp1.date_input("Data do Empréstimo:", value=datetime.today()).strftime("%Y-%m-%d")
-                    opcao_prod = col_emp2.selectbox(
-                        "Selecione o Material para Empréstimo:", 
-                        df_raw_prod.index, 
-                        format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']} (Saldo: {df_raw_prod.loc[x, 'quantidade']})"
-                    )
-                    qtd_mov = col_emp1.number_input("Quantidade Emprestada:", min_value=1, step=1, value=1)
-                    resp_mov = col_emp2.text_input("Nome do Responsável que Retirou:")
-                    coord_mov = col_emp1.selectbox("Coordenação Solicitante:", lista_siglas_coord)
-                    
-                    if st.form_submit_button("Registrar Empréstimo", type="primary"):
-                        if not resp_mov.strip():
-                            st.error("❌ Por favor, informe o nome do responsável pelo empréstimo.")
-                        else:
-                            prod_codigo = df_raw_prod.loc[opcao_prod, "codigo"]
-                            prod_nome = df_raw_prod.loc[opcao_prod, "item"]
-                            prod_qtd_atual = int(df_raw_prod.loc[opcao_prod, "quantidade"])
-                            
-                            if prod_qtd_atual >= qtd_mov:
-                                nova_qtd = prod_qtd_atual - qtd_mov
-                                try:
-                                    cursor = conn.cursor()
-                                    cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (nova_qtd, prod_codigo))
-                                    cursor.execute("""
-                                        INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
-                                        VALUES (%s, %s, %s, %s, %s, %s, %s);
-                                    """, (data_mov, "Empréstimo", prod_codigo, prod_nome, qtd_mov, resp_mov.strip(), coord_mov))
-                                    conn.commit()
-                                    st.success(f"🔄 Empréstimo de {qtd_mov} un. de '{prod_nome}' registrado com sucesso! Novo saldo: {nova_qtd}.")
-                                    st.rerun()
-                                except Exception as ex:
-                                    conn.rollback()
-                                    st.error(f"Erro ao registrar empréstimo: {ex}")
-                            else:
-                                st.error(f"❌ Saldo Insuficiente! O material possui apenas {prod_qtd_atual} unidades no estoque.")
-
-            # 4. ABA: HISTÓRICO DE MOVIMENTAÇÃO
+            
+            # 3. ABA: HISTÓRICO DE MOVIMENTAÇÃO
             elif aba_movimentacao == "Histórico de Movimentação":
                 st.markdown("### Histórico de Movimentação")
                 if not df_movimentacoes.empty:
