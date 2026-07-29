@@ -1,5 +1,5 @@
-import pandas as pd
 import streamlit as st
+import pandas as pd
 from datetime import datetime, date
 import smtplib
 from email.mime.text import MIMEText
@@ -95,11 +95,9 @@ def inicializar_banco_automatico():
                 quantidade INTEGER,
                 solicitante TEXT,
                 coordenacao TEXT,
-                atividade TEXT,
                 data_saida DATE,
                 data_devolucao_prevista DATE,
                 data_devolucao_real DATE,
-                responsavel_devolucao TEXT,
                 status TEXT
             );
         """)
@@ -655,46 +653,46 @@ else:
         )
         
         if aba_selecionada == "Nova Coordenação":
-            with st.form("form_coord", clear_on_submit=True):
-                sigla = st.text_input("Sigla (ex: COTEC)")
-                nome_coord = st.text_input("Nome Completo da Coordenação")
-                
-                if st.form_submit_button("Salvar Coordenação", type="primary"):
-                    if sigla and nome_coord:
+            with st.form("cad_coord", clear_on_submit=True):
+                s_coord = st.text_input("Sigla")
+                nc = st.text_input("Nome da Coordenação")
+                if st.form_submit_button("Cadastrar", type="primary"):
+                    if s_coord and nc:
                         try:
                             cursor = conn.cursor()
-                            cursor.execute("INSERT INTO coordenacoes VALUES (%s, %s);", (sigla.strip().upper(), nome_coord.strip()))
+                            cursor.execute("INSERT INTO coordenacoes VALUES (%s, %s);", (s_coord.strip().upper(), nc.strip()))
                             conn.commit()
-                            st.success("Coordenação cadastrada com sucesso!")
+                            st.success("Cadastrada!")
                             st.rerun()
                         except psycopg2.IntegrityError:
                             conn.rollback()
-                            st.error("Esta sigla de coordenação já está cadastrada.")
+                            st.error("Esta sigla já está registrada.")
                     else:
                         st.error("Preencha todos os campos!")
-
+                        
         elif aba_selecionada == "Editar / Excluir Coordenação":
             if not df_coordenacoes.empty:
                 st.dataframe(df_coordenacoes, use_container_width=True, hide_index=True)
-                df_raw_coord = pd.read_sql_query("SELECT * FROM coordenacoes", conn)
-                idx_coord = st.selectbox("Selecione para editar:", df_raw_coord.index, format_func=lambda x: f"{df_raw_coord.loc[x, 'sigla']} - {df_raw_coord.loc[x, 'nome']}")
+                sigla_sel = st.selectbox("Selecione:", df_coordenacoes["Sigla"].tolist())
                 
-                sigla_chave = df_raw_coord.loc[idx_coord, "sigla"]
-                edit_sigla = st.text_input("Sigla:", value=df_raw_coord.loc[idx_coord, "sigla"])
-                edit_nome_c = st.text_input("Nome Completo:", value=df_raw_coord.loc[idx_coord, "nome"])
+                idx_sel = df_coordenacoes[df_coordenacoes["Sigla"] == sigla_sel].index[0]
+                nome_atual = df_coordenacoes.loc[idx_sel, "Nome"]
+                
+                edit_sigla = st.text_input("Sigla:", value=sigla_sel)
+                edit_nome = st.text_input("Nome:", value=nome_atual)
                 
                 c_btn_c1, c_btn_c2 = st.columns([1, 4])
                 with c_btn_c1:
-                    if st.button("Salvar Edição", type="primary"):
+                    if st.button("Salvar Alteração", type="primary"):
                         cursor = conn.cursor()
-                        cursor.execute("UPDATE coordenacoes SET sigla = %s, nome = %s WHERE sigla = %s;", (edit_sigla.strip().upper(), edit_nome_c.strip(), sigla_chave))
+                        cursor.execute("UPDATE coordenacoes SET sigla = %s, nome = %s WHERE sigla = %s;", (edit_sigla.strip().upper(), edit_nome.strip(), sigla_sel))
                         conn.commit()
-                        st.success("Atualizada com sucesso!")
+                        st.success("Atualizado!")
                         st.rerun()
                 with c_btn_c2:
                     if st.button("Excluir Coordenação"):
                         cursor = conn.cursor()
-                        cursor.execute("DELETE FROM coordenacoes WHERE sigla = %s;", (sigla_chave,))
+                        cursor.execute("DELETE FROM coordenacoes WHERE sigla = %s;", (sigla_sel,))
                         conn.commit()
                         st.warning("Removida.")
                         st.rerun()
@@ -703,215 +701,123 @@ else:
     elif escolha == "Movimentação de Estoque":
         st.title("Movimentação de Estoque")
         
-        lista_coord_siglas = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else []
-        df_raw_p = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos", conn)
-        
-        if df_raw_p.empty:
-            st.warning("Cadastre produtos antes de registrar movimentações.")
-        else:
-            with st.form("form_movimentacao", clear_on_submit=True):
-                col_m1, col_m2 = st.columns(2)
-                tipo_mov = col_m1.selectbox("Tipo de Movimentação", ["Entrada", "Saída"])
-                idx_prod = col_m2.selectbox("Produto", df_raw_p.index, format_func=lambda x: f"{df_raw_p.loc[x, 'codigo']} - {df_raw_p.loc[x, 'item']}")
-                
-                qtd_mov = col_m1.number_input("Quantidade", min_value=1, step=1)
-                coord_mov = col_m2.selectbox("Coordenação Destino/Origem", lista_coord_siglas)
-                
-                if st.form_submit_button("Registrar Movimentação", type="primary"):
-                    cod_prod = df_raw_p.loc[idx_prod, "codigo"]
-                    nome_prod = df_raw_p.loc[idx_prod, "item"]
-                    qtd_atual = df_raw_p.loc[idx_prod, "quantidade"]
-                    
-                    if tipo_mov == "Saída" and qtd_mov > qtd_atual:
-                        st.error(f"Estoque insuficiente! Saldo atual: {qtd_atual}")
-                    else:
-                        nova_qtd = (qtd_atual + qtd_mov) if tipo_mov == "Entrada" else (qtd_atual - qtd_mov)
-                        data_hoje = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        
-                        cursor = conn.cursor()
-                        cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (nova_qtd, cod_prod))
-                        cursor.execute("""
-                            INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s);
-                        """, (data_hoje, tipo_mov, cod_prod, nome_prod, qtd_mov, st.session_state.NOME_USUARIO_LOGADO, coord_mov))
-                        conn.commit()
-                        st.success("Movimentação registrada com sucesso!")
-                        st.rerun()
-                        
-            st.markdown("---")
-            st.subheader("Histórico de Movimentações")
-            if not df_movimentacoes.empty:
-                st.dataframe(df_movimentacoes.sort_values(by="Data", ascending=False), use_container_width=True, hide_index=True)
-
-    # --- TELA: EMPRÉSTIMO DE MATERIAL ---
-    elif escolha == "Empréstimo de Material":
-        st.markdown("""
-            <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
-                <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
-                    Gerenciamento e Empréstimo de Materiais
-                </h1>
-                <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
-                    Controle e rastreabilidade de empréstimos sem conflitos de disponibilidade
-                </p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        aba_emp = option_menu(
+        aba_selecionada = option_menu(
             menu_title=None,
-            options=["1. Itens Disponíveis", "2. Registrar Empréstimo", "3. Registrar Devolução", "4. Histórico de Movimentação"],
-            icons=["box-seam", "lock", "arrow-return-left", "card-checklist"],
+            options=["Lançar Movimentação", "Histórico de Movimentações"],
+            icons=["arrow-left-right", "clock-history"],
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
         
-        df_itens_emp = pd.read_sql_query("SELECT * FROM itens_emprestimo", conn)
+        if aba_selecionada == "Lançar Movimentação":
+            df_prod_raw = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos ORDER BY item ASC", conn)
+            lista_coord_raw = pd.read_sql_query("SELECT sigla FROM coordenacoes ORDER BY sigla ASC", conn)["sigla"].tolist()
+            
+            if not df_prod_raw.empty:
+                with st.form("form_mov", clear_on_submit=True):
+                    col_m1, col_m2 = st.columns(2)
+                    tipo_mov = col_m1.selectbox("Tipo de Movimentação", ["Entrada", "Saída"])
+                    prod_sel_idx = col_m2.selectbox("Selecione o Produto", df_prod_raw.index, format_func=lambda x: f"{df_prod_raw.loc[x, 'codigo']} - {df_prod_raw.loc[x, 'item']} (Saldo: {df_prod_raw.loc[x, 'quantidade']})")
+                    
+                    cod_prod = df_prod_raw.loc[prod_sel_idx, "codigo"]
+                    nome_prod = df_prod_raw.loc[prod_sel_idx, "item"]
+                    qtd_atual = int(df_prod_raw.loc[prod_sel_idx, "quantidade"])
+                    
+                    qtd_mov = col_m1.number_input("Quantidade", min_value=1, step=1)
+                    coord_mov = col_m2.selectbox("Coordenação Destino/Origem", lista_coord_raw if lista_coord_raw else ["N/A"])
+                    resp_mov = st.text_input("Responsável pela Retirada/Entrega", value=st.session_state.NOME_USUARIO_LOGADO)
+                    
+                    if st.form_submit_button("Confirmar Movimentação", type="primary"):
+                        if tipo_mov == "Saída" and qtd_mov > qtd_qtd_atual:
+                            st.error(f"Quantidade insuficiente em estoque! Saldo atual: {qtd_atual}")
+                        else:
+                            novo_saldo = (qtd_atual + qtd_mov) if tipo_mov == "Entrada" else (qtd_atual - qtd_mov)
+                            data_hoje = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s);
+                            """, (data_hoje, tipo_mov, cod_prod, nome_prod, qtd_mov, resp_mov, coord_mov))
+                            
+                            cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (novo_saldo, cod_prod))
+                            conn.commit()
+                            
+                            st.success(f"Movimentação de {tipo_mov} realizada com sucesso!")
+                            st.rerun()
+            else:
+                st.info("Cadastre um produto antes de realizar movimentações.")
+                
+        elif aba_selecionada == "Histórico de Movimentações":
+            if not df_movimentacoes.empty:
+                st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
+            else:
+                st.info("Nenhuma movimentação registrada até o momento.")
+
+    # --- TELA: EMPRÉSTIMO DE MATERIAL ---
+    elif escolha == "Empréstimo de Material":
+        st.title("Gestão de Empréstimos de Material")
         
-        # SQL ajustada utilizando os nomes corretos das colunas do PostgreSQL
-        df_emp_ativos = pd.read_sql_query(
-            "SELECT codigo, SUM(quantidade) as emprestados FROM emprestimos WHERE status = 'EMPRESTADO' GROUP BY codigo", 
-            conn
+        aba_selecionada = option_menu(
+            menu_title=None,
+            options=["Novo Empréstimo", "Empréstimos Ativos / Devolução"],
+            icons=["handbag", "arrow-return-left"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
         )
         
-        if aba_emp == "1. Itens Disponíveis":
-            st.subheader("📋 Relação de Itens para Empréstimo")
+        if aba_selecionada == "Novo Empréstimo":
+            df_prod_raw = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos ORDER BY item ASC", conn)
+            lista_coord_raw = pd.read_sql_query("SELECT sigla FROM coordenacoes ORDER BY sigla ASC", conn)["sigla"].tolist()
             
-            if df_itens_emp.empty:
-                st.info("Nenhum item cadastrado especificamente para empréstimo.")
-            else:
-                df_disp = df_itens_emp.copy()
-                if not df_emp_ativos.empty:
-                    df_disp = df_disp.merge(df_emp_ativos, on="codigo", how="left")
-                    df_disp["emprestados"] = df_disp["emprestados"].fillna(0).astype(int)
-                else:
-                    df_disp["emprestados"] = 0
+            if not df_prod_raw.empty:
+                with st.form("form_emp", clear_on_submit=True):
+                    col_e1, col_e2 = st.columns(2)
+                    prod_sel_idx = col_e1.selectbox("Selecione o Material", df_prod_raw.index, format_func=lambda x: f"{df_prod_raw.loc[x, 'codigo']} - {df_prod_raw.loc[x, 'item']}")
                     
-                df_disp["disponivel"] = df_disp["quantidade"] - df_disp["emprestados"]
-                df_disp.rename(columns={
-                    "codigo": "Código", 
-                    "nome": "Item", 
-                    "quantidade": "Total Cadastrado", 
-                    "emprestados": "Emprestados", 
-                    "disponivel": "Disponível"
-                }, inplace=True)
-                
-                st.dataframe(df_disp, use_container_width=True, hide_index=True)
-
-            with st.expander("➕ Cadastrar / Modificar Itens do Acervo de Empréstimo"):
-                with st.form("form_item_emp"):
-                    c_e1, c_e2, c_e3 = st.columns([1, 2, 1])
-                    cod_emp = c_e1.text_input("Código do Item")
-                    nome_emp = c_e2.text_input("Nome do Item")
-                    qtd_emp = c_e3.number_input("Quantidade Total", min_value=1, step=1)
+                    cod_prod = df_prod_raw.loc[prod_sel_idx, "codigo"]
+                    nome_prod = df_prod_raw.loc[prod_sel_idx, "item"]
                     
-                    if st.form_submit_button("Salvar Item"):
-                        if cod_emp and nome_emp:
+                    qtd_emp = col_e2.number_input("Quantidade Emprestada", min_value=1, step=1)
+                    solicitante = col_e1.text_input("Solicitante")
+                    coord_emp = col_e2.selectbox("Coordenação", lista_coord_raw if lista_coord_raw else ["N/A"])
+                    
+                    dt_saida = col_e1.date_input("Data de Saída", value=date.today())
+                    dt_prevista = col_e2.date_input("Data Prevista de Devolução", value=date.today())
+                    
+                    if st.form_submit_button("Registrar Empréstimo", type="primary"):
+                        if solicitante:
                             cursor = conn.cursor()
                             cursor.execute("""
-                                INSERT INTO itens_emprestimo (codigo, nome, quantidade) 
-                                VALUES (%s, %s, %s)
-                                ON CONFLICT (codigo) DO UPDATE 
-                                SET nome = EXCLUDED.nome, quantidade = EXCLUDED.quantidade;
-                            """, (cod_emp.strip(), nome_emp.strip(), qtd_emp))
+                                INSERT INTO emprestimos (codigo, item, quantidade, solicitante, coordenacao, data_saida, data_devolucao_prevista, status)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, 'EMPRÉSTIMO ATIVO');
+                            """, (cod_prod, nome_prod, qtd_emp, solicitante.strip(), coord_emp, dt_saida, dt_prevista))
                             conn.commit()
-                            st.success("Item de empréstimo atualizado!")
+                            st.success("Empréstimo registrado!")
                             st.rerun()
-
-        elif aba_emp == "2. Registrar Empréstimo":
-            st.subheader("🔒 Registrar Saída de Empréstimo")
-            
-            if df_itens_emp.empty:
-                st.warning("Cadastre primeiro itens na aba '1. Itens Disponíveis'.")
-            else:
-                lista_coord_siglas = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else []
-                
-                with st.form("form_reg_emprestimo"):
-                    c_re1, c_re2 = st.columns(2)
-                    idx_item_e = c_re1.selectbox("Selecione o Item", df_itens_emp.index, format_func=lambda x: f"{df_itens_emp.loc[x, 'codigo']} - {df_itens_emp.loc[x, 'nome']}")
-                    qtd_pedida = c_re2.number_input("Quantidade Retirada", min_value=1, step=1)
-                    
-                    solicitante = c_re1.text_input("Solicitante / Responsável")
-                    coord_sol = c_re2.selectbox("Coordenação", lista_coord_siglas)
-                    
-                    atividade = st.text_input("Atividade / Finalidade")
-                    
-                    c_dt1, c_dt2 = st.columns(2)
-                    dt_saida = c_dt1.date_input("Data de Saída", date.today())
-                    dt_prevista = c_dt2.date_input("Data Prevista para Devolução", date.today())
-                    
-                    if st.form_submit_button("Confirmar Empréstimo", type="primary"):
-                        cod_sel = df_itens_emp.loc[idx_item_e, "codigo"]
-                        nome_sel = df_itens_emp.loc[idx_item_e, "nome"]
-                        total_item = df_itens_emp.loc[idx_item_e, "quantidade"]
-                        
-                        emp_atuais = df_emp_ativos[df_emp_ativos["codigo"] == cod_sel]["emprestados"].sum() if not df_emp_ativos.empty else 0
-                        disp_real = total_item - emp_atuais
-                        
-                        if qtd_pedida > disp_real:
-                            st.error(f"Quantidade indisponível! Emprestados: {emp_atuais} / Total: {total_item} (Disponível: {disp_real})")
-                        elif not solicitante:
-                            st.error("Informe o nome do solicitante.")
                         else:
-                            cursor = conn.cursor()
-                            cursor.execute("""
-                                INSERT INTO emprestimos (codigo, item, quantidade, solicitante, coordenacao, atividade, data_saida, data_devolucao_prevista, status)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'EMPRESTADO');
-                            """, (cod_sel, nome_sel, qtd_pedida, solicitante.strip(), coord_sol, atividade.strip(), dt_saida, dt_prevista))
-                            conn.commit()
-                            st.success("Empréstimo registrado com sucesso!")
-                            st.rerun()
-
-        elif aba_emp == "3. Registrar Devolução":
-            st.subheader("↩️ Registrar Devolução de Material")
-            
-            df_pendentes = pd.read_sql_query("SELECT * FROM emprestimos WHERE status = 'EMPRESTADO'", conn)
-            
-            if df_pendentes.empty:
-                st.info("Não há empréstimos pendentes no momento.")
+                            st.error("Por favor, preencha o nome do solicitante.")
             else:
-                idx_dev = st.selectbox(
-                    "Selecione o Empréstimo para Baixa:", 
-                    df_pendentes.index, 
-                    format_func=lambda x: f"ID {df_pendentes.loc[x, 'id']} - {df_pendentes.loc[x, 'item']} ({df_pendentes.loc[x, 'quantidade']} un) - Solicitante: {df_pendentes.loc[x, 'solicitante']}"
-                )
+                st.info("Nenhum material disponível cadastrado.")
+
+        elif aba_selecionada == "Empréstimos Ativos / Devolução":
+            df_emprestimos = pd.read_sql_query("SELECT * FROM emprestimos WHERE status = 'EMPRÉSTIMO ATIVO' ORDER BY id DESC", conn)
+            
+            if not df_emprestimos.empty:
+                st.dataframe(df_emprestimos, use_container_width=True, hide_index=True)
                 
-                id_emp_sel = int(df_pendentes.loc[idx_dev, "id"])
+                id_emp_sel = st.selectbox("Selecione o Empréstimo para Devolução:", df_emprestimos["id"].tolist(), format_func=lambda x: f"ID {x} - {df_emprestimos.loc[df_emprestimos['id']==x, 'item'].values[0]} ({df_emprestimos.loc[df_emprestimos['id']==x, 'solicitante'].values[0]})")
+                dt_dev_real = st.date_input("Data Efetiva da Devolução", value=date.today())
                 
-                col_d1, col_d2 = st.columns(2)
-                dt_real = col_d1.date_input("Data Efetiva da Devolução", date.today())
-                resp_receb = col_d2.text_input("Responsável pelo Recebimento", value=st.session_state.NOME_USUARIO_LOGADO)
-                
-                if st.button("Confirmar Devolução", type="primary"):
+                if st.button("Dar Baixa (Devolvido)", type="primary"):
                     cursor = conn.cursor()
                     cursor.execute("""
                         UPDATE emprestimos 
-                        SET data_devolucao_real = %s, responsavel_devolucao = %s, status = 'DEVOLVIDO'
+                        SET data_devolucao_real = %s, status = 'DEVOLVIDO' 
                         WHERE id = %s;
-                    """, (dt_real, resp_receb.strip(), id_emp_sel))
+                    """, (dt_dev_real, id_emp_sel))
                     conn.commit()
-                    st.success("Devolução registrada com sucesso!")
+                    st.success("Empréstimo finalizado e devolvido!")
                     st.rerun()
-
-        elif aba_emp == "4. Histórico de Movimentação":
-            st.subheader("📊 Histórico Geral de Empréstimos")
-            
-            df_hist_emp = pd.read_sql_query("SELECT * FROM emprestimos ORDER BY id DESC", conn)
-            
-            if df_hist_emp.empty:
-                st.info("Nenhum registro de empréstimo até o momento.")
             else:
-                df_hist_emp.rename(columns={
-                    "id": "ID",
-                    "codigo": "Código",
-                    "item": "Item",
-                    "quantidade": "Qtd",
-                    "solicitante": "Solicitante",
-                    "coordenacao": "Coordenação",
-                    "atividade": "Atividade",
-                    "data_saida": "Data Saída",
-                    "data_devolucao_prevista": "Devolução Prevista",
-                    "data_devolucao_real": "Devolução Real",
-                    "responsavel_devolucao": "Recebido Por",
-                    "status": "Status"
-                }, inplace=True)
-                
-                st.dataframe(df_hist_emp, use_container_width=True, hide_index=True)
+                st.info("Não há empréstimos pendentes no momento.")
