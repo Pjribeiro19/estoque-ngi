@@ -82,7 +82,10 @@ def inicializar_banco_automatico():
         );
     """)
 
-    # 6. Tabela de Itens de Empréstimo
+    # =========================================================================
+    # NOVAS TABELAS PARA O MÓDULO INDEPENDENTE DE EMPRÉSTIMOS
+    # =========================================================================
+    # 6. Tabela de Itens de Empréstimo (Catálogo exclusivo)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS emprestimo_itens (
             id SERIAL PRIMARY KEY,
@@ -106,46 +109,27 @@ def inicializar_banco_automatico():
             data_retirada DATE NOT NULL,
             data_prevista DATE NOT NULL,
             data_devolucao DATE,
-            status TEXT NOT NULL DEFAULT 'EMPRESTADO',
+            status TEXT NOT NULL DEFAULT 'EMPRESTADO', -- 'EMPRESTADO' ou 'DEVOLVIDO'
             responsavel_devolucao TEXT
-        );
-    """)
-
-    # 8. Tabela de Solicitações do Sistema (Insumos e Empréstimos)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS solicitacoes (
-            id SERIAL PRIMARY KEY,
-            tipo_solicitacao TEXT NOT NULL, -- 'ALMOXARIFADO' ou 'EMPRESTIMO'
-            item_codigo TEXT,
-            item_id INTEGER,
-            item_nome TEXT NOT NULL,
-            quantidade INTEGER NOT NULL,
-            solicitante_nome TEXT NOT NULL,
-            solicitante_email TEXT NOT NULL,
-            coordenacao TEXT NOT NULL,
-            data_solicitacao DATE NOT NULL,
-            data_prevista_devolucao DATE,
-            status TEXT NOT NULL DEFAULT 'PENDENTE', -- 'PENDENTE', 'APROVADO', 'RECUSADO'
-            observacao TEXT
         );
     """)
 
     conn.commit()
 
-    # Verifica se a carga inicial (seed) já foi realizada
+    # Verifica se a carga inicial (seed) já foi realizada no passado
     cursor.execute("SELECT valor FROM config_sistema WHERE chave = 'seed_inicial';")
     seed_realizado = cursor.fetchone()
 
     if not seed_realizado:
+        # Inserção inicial única de Usuários
         cursor.execute("SELECT COUNT(*) FROM usuarios;")
         if cursor.fetchone()[0] == 0:
             cursor.execute("""
                 INSERT INTO usuarios (nome, email, senha, perfil) 
-                VALUES 
-                ('Administrador Padrão', 'admin@ngi.com', '123', 'Administrador'),
-                ('Usuário Padrão', 'usuario@ngi.com', '123', 'Usuário');
+                VALUES ('Administrador Padrão', 'admin@ngi.com', '123', 'Administrador');
             """)
 
+        # Inserção inicial única de Produtos
         cursor.execute("SELECT COUNT(*) FROM produtos;")
         if cursor.fetchone()[0] == 0:
             produtos_iniciais = [
@@ -155,6 +139,7 @@ def inicializar_banco_automatico():
             ]
             cursor.executemany("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", produtos_iniciais)
 
+        # Inserção inicial única de Coordenações
         cursor.execute("SELECT COUNT(*) FROM coordenacoes;")
         if cursor.fetchone()[0] == 0:
             cursor.executemany("INSERT INTO coordenacoes VALUES (%s, %s);", [
@@ -162,11 +147,13 @@ def inicializar_banco_automatico():
                 ("COLOG", "Coordenação de Logística")
             ])
 
+        # Inserção inicial única de Categorias
         cursor.execute("SELECT COUNT(*) FROM categorias;")
         if cursor.fetchone()[0] == 0:
             cat_iniciais = [("EPI",), ("Material de Escritório",), ("Informática",), ("Limpeza",), ("Copa",)]
             cursor.executemany("INSERT INTO categorias VALUES (%s);", cat_iniciais)
 
+        # Marca no banco que o seed inicial já foi finalizado
         cursor.execute("INSERT INTO config_sistema (chave, valor) VALUES ('seed_inicial', 'true');")
         conn.commit()
     
@@ -174,19 +161,18 @@ def inicializar_banco_automatico():
 
 conn = inicializar_banco_automatico()
 
-# Carregamento seguro dos dados
-def carregar_dados():
-    try:
-        df_prod = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
-        df_mov = pd.read_sql_query('SELECT data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenacao AS "Coordenação" FROM movimentacoes', conn)
-        df_coord = pd.read_sql_query('SELECT sigla AS "Sigla", nome AS "Nome" FROM coordenacoes', conn)
-        df_cat = pd.read_sql_query("SELECT nome FROM categorias", conn)
-        lista_cat = df_cat["nome"].tolist()
-        return df_prod, df_mov, df_coord, lista_cat
-    except Exception as e:
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), []
-
-df_produtos, df_movimentacoes, df_coordenacoes, lista_categorias = carregar_dados()
+# Carregamento seguro e global dos dados
+try:
+    df_produtos = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
+    df_movimentacoes = pd.read_sql_query('SELECT data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenacao AS "Coordenação" FROM movimentacoes', conn)
+    df_coordenacoes = pd.read_sql_query('SELECT sigla AS "Sigla", nome AS "Nome" FROM coordenacoes', conn)
+    df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
+    lista_categorias = df_cat_bruto["nome"].tolist()
+except Exception as e:
+    df_produtos = pd.DataFrame()
+    df_movimentacoes = pd.DataFrame()
+    df_coordenacoes = pd.DataFrame()
+    lista_categorias = []
 
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS DE E-MAIL
@@ -250,6 +236,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Dicionário de estilo adaptativo para os menus horizontais
 ESTILO_MENU_HORIZONTAL = {
     "container": {"padding": "0!important", "background-color": "transparent"},
     "icon": {"color": "#64748b", "font-size": "14px"}, 
@@ -277,12 +264,6 @@ if "sub_tela_login" not in st.session_state:
 if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = ""
 
-if "EMAIL_USUARIO_LOGADO" not in st.session_state:
-    st.session_state.EMAIL_USUARIO_LOGADO = ""
-
-if "PERFIL_USUARIO_LOGADO" not in st.session_state:
-    st.session_state.PERFIL_USUARIO_LOGADO = "Usuário"
-
 # =============================================================================
 # FLUXO 1: TELA DE LOGIN / RECUPERAÇÃO
 # =============================================================================
@@ -305,21 +286,19 @@ if not st.session_state.autenticado:
             if st.button("Entrar no Sistema", type="primary", use_container_width=True):
                 if usuario_input and senha_input:
                     cursor = conn.cursor()
-                    cursor.execute("SELECT nome, email, senha, perfil FROM usuarios WHERE LOWER(email) = %s;", (usuario_input.strip().lower(),))
+                    cursor.execute("SELECT nome, senha FROM usuarios WHERE LOWER(email) = %s;", (usuario_input.strip().lower(),))
                     resultado = cursor.fetchone()
                     
                     if resultado:
-                        nome_banco, email_banco, senha_banco, perfil_banco = resultado
+                        nome_banco, senha_banco = resultado
                         if str(senha_banco) == str(senha_input).strip():
                             st.session_state.autenticado = True
                             st.session_state.NOME_USUARIO_LOGADO = nome_banco
-                            st.session_state.EMAIL_USUARIO_LOGADO = email_banco
-                            st.session_state.PERFIL_USUARIO_LOGADO = perfil_banco or "Usuário"
                             st.rerun()
                         else:
-                            st.error("Senha incorreta!")
+                            st.error("❌ Senha incorreta!")
                     else:
-                        st.error("Usuário ou E-mail não cadastrado!")
+                        st.error("❌ Usuário ou E-mail não cadastrado!")
                 else:
                     st.error("Por favor, preencha todos os campos!")
                     
@@ -331,7 +310,7 @@ if not st.session_state.autenticado:
         col_r1, col_r2, col_r3 = st.columns([1, 1.2, 1])
         with col_r2:
             st.write("<br><br>", unsafe_allow_html=True)
-            st.markdown("### Recuperar Acesso")
+            st.markdown("### 🔑 Recuperar Acesso")
             email_recuperar = st.text_input("E-mail corporativo", placeholder="exemplo@icmbio.gov.br")
 
             if st.button("Enviar Instruções", type="primary", use_container_width=True):
@@ -370,18 +349,14 @@ if not st.session_state.autenticado:
 # FLUXO 2: SISTEMA PRINCIPAL (PÓS-AUTENTICAÇÃO)
 # =============================================================================
 else:
-    cursor = conn.cursor()
-    eh_admin = st.session_state.PERFIL_USUARIO_LOGADO == "Administrador"
-
-    # --- MENU LATERAL DE ACORDO COM PERFIL ---
+    # --- MENU LATERAL ---
     with st.sidebar:
-        st.markdown(f"#### Olá, {st.session_state.NOME_USUARIO_LOGADO}")
-        st.caption(f"Perfil: **{st.session_state.PERFIL_USUARIO_LOGADO}**")
+        st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("---")
         
-        # Opções completas mantidas exatamente igual solicitado
-        if eh_admin:
-            opcoes_menu = [
+        escolha = option_menu(
+            menu_title=None,
+            options=[
                 "Painel Geral", 
                 "Empréstimo de Material",
                 "Cadastrar Produto", 
@@ -390,20 +365,8 @@ else:
                 "Cadastrar Coordenação",
                 "Movimentação de Estoque",
                 "Sair do Sistema"
-            ]
-            icones_menu = ["grid", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "box-arrow-right"]
-        else:
-            opcoes_menu = [
-                "Painel Geral", 
-                "Empréstimo de Material",
-                "Sair do Sistema"
-            ]
-            icones_menu = ["grid", "arrow-repeat", "box-arrow-right"]
-
-        escolha = option_menu(
-            menu_title=None,
-            options=opcoes_menu,
-            icons=icones_menu,
+            ],
+            icons=["grid", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "box-arrow-right"],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -427,7 +390,6 @@ else:
     if escolha == "Sair do Sistema":
         st.session_state.autenticado = False
         st.session_state.NOME_USUARIO_LOGADO = ""
-        st.session_state.PERFIL_USUARIO_LOGADO = "Usuário"
         st.rerun()
 
     # --- TELA: PAINEL GERAL ---
@@ -442,174 +404,74 @@ else:
                 </p>
             </div>
         """, unsafe_allow_html=True)
+        
+        c1, c2, c3 = st.columns(3)
+        total_itens = len(df_produtos) if not df_produtos.empty else 0
+        produtos_esgotados = len(df_produtos[df_produtos['Quantidade'] == 0]) if not df_produtos.empty else 0
+        total_movimentacoes = len(df_movimentacoes) if not df_movimentacoes.empty else 0
+        
+        c1.markdown(f"""
+            <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 5px solid #4CAF50; padding: 18px; border-radius: 4px;">
+                <span style="font-size: 13px; font-weight: 600; text-transform: uppercase;">Total de Itens Cadastrados</span>
+                <h2 style="color: #4CAF50; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_itens}</h2>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        cor_esgotados = "#c62828" if produtos_esgotados > 0 else "#4CAF50"
+        bg_esgotados = "rgba(198, 40, 40, 0.08)" if produtos_esgotados > 0 else "rgba(76, 175, 80, 0.08)"
+        
+        c2.markdown(f"""
+            <div style="background-color: {bg_esgotados}; border-left: 5px solid {cor_esgotados}; padding: 18px; border-radius: 4px;">
+                <span style="font-size: 13px; font-weight: 600; text-transform: uppercase;">Produtos Esgotados</span>
+                <h2 style="color: {cor_esgotados}; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{produtos_esgotados}</h2>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        c3.markdown(f"""
+            <div style="background-color: rgba(33, 150, 243, 0.08); border-left: 5px solid #2196F3; padding: 18px; border-radius: 4px;">
+                <span style="font-size: 13px; font-weight: 600; text-transform: uppercase;">Movimentações Realizadas</span>
+                <h2 style="color: #2196F3; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_movimentacoes}</h2>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown("<br><hr style='margin: 10px 0 25px 0; opacity: 0.15;'>", unsafe_allow_html=True)
+        st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
+        
+        col_filtro1, col_filtro2 = st.columns([2, 1])
+        termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...")
+        categoria_selecionada = col_filtro2.selectbox("Filtrar por Categoria:", ["Todas"] + lista_categorias)
+        
+        df_filtrado = df_produtos.copy() if not df_produtos.empty else pd.DataFrame()
+        if not df_filtrado.empty and termo_busca:
+            df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
+        if not df_filtrado.empty and categoria_selecionada != "Todas":
+            df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
-        if eh_admin:
-            sub_painel = option_menu(
-                menu_title=None,
-                options=["Consulta de Estoque", "Aprovar Solicitações"],
-                icons=["search", "check-circle"],
-                orientation="horizontal",
-                styles=ESTILO_MENU_HORIZONTAL
-            )
+        st.markdown("<br><h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>📋 Posição Atual do Estoque</h3>", unsafe_allow_html=True)
+        if df_filtrado.empty:
+            st.info("Nenhum material encontrado com os filtros aplicados.")
         else:
-            sub_painel = "Consulta de Estoque"
+            df_display = df_filtrado.copy()
+            df_display["Valor Unitário"] = df_display["Valor Unitário"].astype(float)
+            df_display["Valor Total"] = df_display["Quantidade"] * df_display["Valor Unitário"]
+            df_display["Valor Unitário"] = df_display["Valor Unitário"].map("R$ {:.2f}".format)
+            df_display["Valor Total"] = df_display["Valor Total"].map("R$ {:.2f}".format)
 
-        if sub_painel == "Consulta de Estoque":
-            c1, c2, c3 = st.columns(3)
-            
-            # Ajuste de visualização conforme perfil
-            if eh_admin:
-                total_itens = len(df_produtos) if not df_produtos.empty else 0
-                produtos_esgotados = len(df_produtos[df_produtos['Quantidade'] == 0]) if not df_produtos.empty else 0
-            else:
-                total_itens = len(df_produtos[df_produtos['Quantidade'] > 0]) if not df_produtos.empty else 0
-                produtos_esgotados = 0
-
-            total_movimentacoes = len(df_movimentacoes) if not df_movimentacoes.empty else 0
-            
-            c1.markdown(f"""
-                <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 5px solid #4CAF50; padding: 18px; border-radius: 4px;">
-                    <span style="font-size: 13px; font-weight: 600; text-transform: uppercase;">Itens Disponíveis</span>
-                    <h2 style="color: #4CAF50; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_itens}</h2>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            cor_esgotados = "#c62828" if produtos_esgotados > 0 else "#4CAF50"
-            bg_esgotados = "rgba(198, 40, 40, 0.08)" if produtos_esgotados > 0 else "rgba(76, 175, 80, 0.08)"
-            
-            if eh_admin:
-                c2.markdown(f"""
-                    <div style="background-color: {bg_esgotados}; border-left: 5px solid {cor_esgotados}; padding: 18px; border-radius: 4px;">
-                        <span style="font-size: 13px; font-weight: 600; text-transform: uppercase;">Produtos Esgotados</span>
-                        <h2 style="color: {cor_esgotados}; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{produtos_esgotados}</h2>
-                    </div>
-                """, unsafe_allow_html=True)
-            else:
-                cursor.execute("SELECT COUNT(*) FROM solicitacoes WHERE solicitante_email = %s AND status = 'PENDENTE';", (st.session_state.EMAIL_USUARIO_LOGADO,))
-                minhas_pendentes = cursor.fetchone()[0]
-                c2.markdown(f"""
-                    <div style="background-color: rgba(255, 152, 0, 0.08); border-left: 5px solid #FF9800; padding: 18px; border-radius: 4px;">
-                        <span style="font-size: 13px; font-weight: 600; text-transform: uppercase;">Minhas Solicitações Pendentes</span>
-                        <h2 style="color: #FF9800; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{minhas_pendentes}</h2>
-                    </div>
-                """, unsafe_allow_html=True)
-            
-            c3.markdown(f"""
-                <div style="background-color: rgba(33, 150, 243, 0.08); border-left: 5px solid #2196F3; padding: 18px; border-radius: 4px;">
-                    <span style="font-size: 13px; font-weight: 600; text-transform: uppercase;">Movimentações Realizadas</span>
-                    <h2 style="color: #2196F3; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_movimentacoes}</h2>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            st.markdown("<br><hr style='margin: 10px 0 25px 0; opacity: 0.15;'>", unsafe_allow_html=True)
-            st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
-            
-            col_filtro1, col_filtro2 = st.columns([2, 1])
-            termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...")
-            categoria_selecionada = col_filtro2.selectbox("Filtrar por Categoria:", ["Todas"] + lista_categorias)
-            
-            df_filtrado = df_produtos.copy() if not df_produtos.empty else pd.DataFrame()
-            
-            # PERFIL USUÁRIO: Oculta itens zerados do estoque
-            if not eh_admin and not df_filtrado.empty:
-                df_filtrado = df_filtrado[df_filtrado['Quantidade'] > 0]
-
-            if not df_filtrado.empty and termo_busca:
-                df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
-            if not df_filtrado.empty and categoria_selecionada != "Todas":
-                df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
-
-            st.markdown("<br><h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>Posição Atual do Estoque</h3>", unsafe_allow_html=True)
-            if df_filtrado.empty:
-                st.info("Nenhum material encontrado com os filtros aplicados.")
-            else:
-                df_display = df_filtrado.copy()
+            def destacar_zerados(row):
+                if row['Quantidade'] == 0:
+                    return ['background-color: rgba(198, 40, 40, 0.12); color: #c62828; font-weight: bold;'] * len(row)
+                return [''] * len(row)
                 
-                # Ocultar Valores Monetários para Perfil Usuário
-                if not eh_admin:
-                    df_display = df_display.drop(columns=["Valor Unitário"], errors="ignore")
-                    st.dataframe(df_display, use_container_width=True, hide_index=True)
-                else:
-                    df_display["Valor Unitário"] = df_display["Valor Unitário"].astype(float)
-                    df_display["Valor Total"] = df_display["Quantidade"] * df_display["Valor Unitário"]
-                    df_display["Valor Unitário"] = df_display["Valor Unitário"].map("R$ {:.2f}".format)
-                    df_display["Valor Total"] = df_display["Valor Total"].map("R$ {:.2f}".format)
-
-                    def destacar_zerados(row):
-                        if row['Quantidade'] == 0:
-                            return ['background-color: rgba(198, 40, 40, 0.12); color: #c62828; font-weight: bold;'] * len(row)
-                        return [''] * len(row)
-                        
-                    st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
-
-            # Formulário de solicitação disponível para Perfil Usuário
-            if not eh_admin:
-                st.markdown("<br><hr>", unsafe_allow_html=True)
-                st.subheader("Solicitar Material do Almoxarifado")
-                if not df_filtrado.empty:
-                    with st.form("form_solicitar_material", clear_on_submit=True):
-                        col_s1, col_s2 = st.columns(2)
-                        item_solicitado = col_s1.selectbox("Selecione o Item*", df_filtrado["Item"].tolist())
-                        row_item = df_filtrado[df_filtrado["Item"] == item_solicitado].iloc[0]
-                        
-                        qtd_solicitada = col_s2.number_input("Quantidade Desejada*", min_value=1, max_value=int(row_item["Quantidade"]), value=1)
-                        lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
-                        coord_sol = col_s1.selectbox("Coordenação Solicitante*", lista_siglas_coord)
-                        obs_sol = col_s2.text_input("Observação / Justificativa")
-
-                        if st.form_submit_button("Enviar Solicitação", type="primary"):
-                            cursor.execute("""
-                                INSERT INTO solicitacoes (tipo_solicitacao, item_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_solicitacao, status, observacao)
-                                VALUES ('ALMOXARIFADO', %s, %s, %s, %s, %s, %s, %s, 'PENDENTE', %s);
-                            """, (row_item["Código"], item_solicitado, qtd_solicitada, st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol, date.today(), obs_sol))
-                            conn.commit()
-                            st.success("Solicitação enviada com sucesso! Aguarde aprovação do Administrador.")
-                            st.rerun()
-
-        elif sub_painel == "Aprovar Solicitações" and eh_admin:
-            st.subheader("Aprovação de Solicitações de Material")
-            cursor.execute("SELECT id, tipo_solicitacao, item_codigo, item_nome, quantidade, solicitante_nome, coordenacao, data_solicitacao, observacao FROM solicitacoes WHERE status = 'PENDENTE' AND tipo_solicitacao = 'ALMOXARIFADO';")
-            solic_pendentes = cursor.fetchall()
-
-            if not solic_pendentes:
-                st.info("Não há solicitações pendentes de aprovação no momento.")
-            else:
-                for sol in solic_pendentes:
-                    s_id, s_tipo, s_cod, s_nome, s_qtd, s_solicitante, s_coord, s_data, s_obs = sol
-                    with st.expander(f"Solicitação #{s_id} - {s_nome} ({s_qtd} un.) - Solicitado por: {s_solicitante}"):
-                        st.write(f"**Item:** {s_nome} | **Código:** {s_cod}")
-                        st.write(f"**Quantidade Solicitada:** {s_qtd} | **Coordenação:** {s_coord}")
-                        st.write(f"**Data da Solicitação:** {s_data} | **Justificativa:** {s_obs or 'Nenhuma'}")
-                        
-                        c_ap1, c_ap2 = st.columns(2)
-                        if c_ap1.button(f"Aprovar #{s_id}", key=f"app_{s_id}", type="primary"):
-                            cursor.execute("SELECT quantidade FROM produtos WHERE codigo = %s;", (s_cod,))
-                            qtd_atual = cursor.fetchone()
-                            if qtd_atual and qtd_atual[0] >= s_qtd:
-                                cursor.execute("UPDATE produtos SET quantidade = quantidade - %s WHERE codigo = %s;", (s_qtd, s_cod))
-                                cursor.execute("INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) VALUES (%s, 'SAIDA', %s, %s, %s, %s, %s);",
-                                               (date.today().strftime('%Y-%m-%d %H:%M:%S'), s_cod, s_nome, s_qtd, s_solicitante, s_coord))
-                                cursor.execute("UPDATE solicitacoes SET status = 'APROVADO' WHERE id = %s;", (s_id,))
-                                conn.commit()
-                                st.success("Solicitação aprovada e saída registrada!")
-                                st.rerun()
-                            else:
-                                st.error("Estoque insuficiente para aprovar esta solicitação!")
-
-                        if c_ap2.button(f"Recusar #{s_id}", key=f"rec_{s_id}"):
-                            cursor.execute("UPDATE solicitacoes SET status = 'RECUSADO' WHERE id = %s;", (s_id,))
-                            conn.commit()
-                            st.warning("Solicitação recusada.")
-                            st.rerun()
+            st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
 
     # =========================================================================
-    # TELA: EMPRÉSTIMO DE MATERIAL
+    # NOVA TELA: EMPRÉSTIMO DE MATERIAL (INDEPENDENTE)
     # =========================================================================
     elif escolha == "Empréstimo de Material":
         st.markdown("""
             <div style="background-color: #2E7D32; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
-                    Gestão de Empréstimo de Material
+                    🔄 Gestão de Empréstimo de Material
                 </h1>
                 <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                     Módulo independente de empréstimos, controle de devoluções e histórico
@@ -617,34 +479,27 @@ else:
             </div>
         """, unsafe_allow_html=True)
 
-        if eh_admin:
-            opcoes_emp = [
+        sub_emp = option_menu(
+            menu_title=None,
+            options=[
                 "Itens Disponíveis", 
                 "Cadastrar Item Empréstimo", 
                 "Registrar Saída (Empréstimo)", 
                 "Registrar Devolução", 
-                "Histórico de Movimentação",
-                "Aprovar Solicitações"
-            ]
-            icones_emp = ["box-seam", "plus-circle", "box-arrow-right", "box-arrow-in-left", "journal-text", "check-circle"]
-        else:
-            opcoes_emp = [
-                "Itens Disponíveis",
-                "Solicitar Empréstimo"
-            ]
-            icones_emp = ["box-seam", "plus-circle"]
-
-        sub_emp = option_menu(
-            menu_title=None,
-            options=opcoes_emp,
-            icons=icones_emp,
+                "Histórico de Movimentação"
+            ],
+            icons=["box-seam", "plus-circle", "box-arrow-right", "box-arrow-in-left", "journal-text"],
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
 
-        # SUB-ABA 1: ITENS DISPONÍVEIS
+        cursor = conn.cursor()
+
+        # ---------------------------------------------------------------------
+        # SUB-ABA 1: ITENS DISPONÍVEIS (PAINEL)
+        # ---------------------------------------------------------------------
         if sub_emp == "Itens Disponíveis":
-            st.subheader("Painel de Disponibilidade de Empréstimos")
+            st.subheader("📊 Painel de Disponibilidade de Empréstimos")
             
             df_emp_itens = pd.read_sql_query("""
                 SELECT 
@@ -660,44 +515,13 @@ else:
             if df_emp_itens.empty:
                 st.info("Nenhum item cadastrado no catálogo exclusivo de empréstimos ainda.")
             else:
-                if not eh_admin:
-                    df_emp_itens = df_emp_itens[df_emp_itens["Qtd Disponível"] > 0]
                 st.dataframe(df_emp_itens, use_container_width=True, hide_index=True)
 
-        # SUB-ABA: SOLICITAR EMPRÉSTIMO (PARA USUÁRIO COMUM)
-        elif sub_emp == "Solicitar Empréstimo" and not eh_admin:
-            st.subheader("Solicitar Item para Empréstimo")
-            cursor.execute("SELECT id, item, quantidade_disponivel FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY item ASC;")
-            itens_disp = cursor.fetchall()
-
-            if not itens_disp:
-                st.warning("Não há equipamentos disponíveis para empréstimo no momento.")
-            else:
-                opcoes_itens = {f"{item[1]} (Disponível: {item[2]})": (item[0], item[1], item[2]) for item in itens_disp}
-                with st.form("form_solicitar_emp", clear_on_submit=True):
-                    item_sel_label = st.selectbox("Selecione o Item desejado*", list(opcoes_itens.keys()))
-                    item_id, item_nome, max_q = opcoes_itens[item_sel_label]
-
-                    col_se1, col_se2 = st.columns(2)
-                    qtd_pedida = col_se1.number_input("Quantidade*", min_value=1, max_value=max_q, value=1)
-                    lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
-                    coord_user = col_se2.selectbox("Coordenação*", lista_siglas_coord)
-
-                    data_prev = col_se1.date_input("Data Prevista para Devolução*", value=date.today())
-                    obs_emp_sol = col_se2.text_input("Observação / Finalidade")
-
-                    if st.form_submit_button("Enviar Solicitação de Empréstimo", type="primary"):
-                        cursor.execute("""
-                            INSERT INTO solicitacoes (tipo_solicitacao, item_id, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_solicitacao, data_prevista_devolucao, status, observacao)
-                            VALUES ('EMPRESTIMO', %s, %s, %s, %s, %s, %s, %s, %s, 'PENDENTE', %s);
-                        """, (item_id, item_nome, qtd_pedida, st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_user, date.today(), data_prev, obs_emp_sol))
-                        conn.commit()
-                        st.success("Solicitação de empréstimo realizada com sucesso! Aguarde aprovação.")
-                        st.rerun()
-
-        # SUB-ABA 2: CADASTRAR ITEM PARA EMPRÉSTIMO (ADMIN)
-        elif sub_emp == "Cadastrar Item Empréstimo" and eh_admin:
-            st.subheader("Cadastrar Novo Item no Catálogo de Empréstimos")
+        # ---------------------------------------------------------------------
+        # SUB-ABA 2: CADASTRAR ITEM PARA EMPRÉSTIMO
+        # ---------------------------------------------------------------------
+        elif sub_emp == "Cadastrar Item Empréstimo":
+            st.subheader("📦 Cadastrar Novo Item no Catálogo de Empréstimos")
             st.caption("Nota: Itens cadastrados aqui são 100% independentes do estoque do Almoxarifado.")
 
             with st.form("form_cad_emp_item", clear_on_submit=True):
@@ -723,9 +547,11 @@ else:
                     else:
                         st.error("O campo 'Nome do Item' é obrigatório!")
 
-        # SUB-ABA 3: REGISTRAR SAÍDA (ADMIN)
-        elif sub_emp == "Registrar Saída (Empréstimo)" and eh_admin:
-            st.subheader("Registrar Saída de Material Por Empréstimo")
+        # ---------------------------------------------------------------------
+        # SUB-ABA 3: REGISTRAR SAÍDA (EMPRÉSTIMO)
+        # ---------------------------------------------------------------------
+        elif sub_emp == "Registrar Saída (Empréstimo)":
+            st.subheader("📤 Registrar Saída de Material Por Empréstimo")
 
             cursor.execute("SELECT id, item, quantidade_disponivel FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY item ASC;")
             itens_disponiveis = cursor.fetchall()
@@ -772,9 +598,11 @@ else:
                         else:
                             st.error("Por favor, preencha o Nome da Pessoa!")
 
-        # SUB-ABA 4: REGISTRAR DEVOLUÇÃO (ADMIN)
-        elif sub_emp == "Registrar Devolução" and eh_admin:
-            st.subheader("Registro de Devolução de Material")
+        # ---------------------------------------------------------------------
+        # SUB-ABA 4: REGISTRAR DEVOLUÇÃO
+        # ---------------------------------------------------------------------
+        elif sub_emp == "Registrar Devolução":
+            st.subheader("📥 Registro de Devolução de Material")
 
             cursor.execute("""
                 SELECT id, item_id, item_nome, quantidade, pessoa, data_retirada, data_prevista 
@@ -820,9 +648,11 @@ else:
                         else:
                             st.error("Preencha o nome da pessoa responsável pela devolução.")
 
-        # SUB-ABA 5: HISTÓRICO DE MOVIMENTAÇÃO (ADMIN)
-        elif sub_emp == "Histórico de Movimentação" and eh_admin:
-            st.subheader("Histórico Completo de Empréstimos e Devoluções")
+        # ---------------------------------------------------------------------
+        # SUB-ABA 5: HISTÓRICO DE MOVIMENTAÇÃO DE EMPRÉSTIMOS
+        # ---------------------------------------------------------------------
+        elif sub_emp == "Histórico de Movimentação":
+            st.subheader("📜 Histórico Completo de Empréstimos e Devoluções")
 
             df_hist_emp = pd.read_sql_query("""
                 SELECT 
@@ -833,175 +663,316 @@ else:
                     coordenacao AS "Coordenação",
                     to_char(data_retirada, 'DD/MM/YYYY') AS "Data Retirada",
                     to_char(data_prevista, 'DD/MM/YYYY') AS "Previsão Devolução",
-                    to_char(data_devolucao, 'DD/MM/YYYY') AS "Data Devolução",
+                    COALESCE(to_char(data_devolucao, 'DD/MM/YYYY'), '-') AS "Data Devolução Real",
                     status AS "Status",
-                    responsavel_devolucao AS "Devolvido Por"
-                FROM emprestimo_registros ORDER BY id DESC;
+                    COALESCE(responsavel_devolucao, '-') AS "Devolvido Por"
+                FROM emprestimo_registros 
+                ORDER BY id DESC;
             """, conn)
 
             if df_hist_emp.empty:
-                st.info("Nenhum registro de empréstimo/devolução efetuado até o momento.")
+                st.info("Nenhuma movimentação de empréstimo registrada até o momento.")
             else:
-                st.dataframe(df_hist_emp, use_container_width=True, hide_index=True)
+                def destacar_status(val):
+                    if val == 'EMPRESTADO':
+                        return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
+                    elif val == 'DEVOLVIDO':
+                        return 'background-color: #d4edda; color: #155724;'
+                    return ''
 
-        # SUB-ABA 6: APROVAR SOLICITAÇÕES DE EMPRÉSTIMO (ADMIN)
-        elif sub_emp == "Aprovar Solicitações" and eh_admin:
-            st.subheader("Aprovação de Solicitações de Empréstimo")
-            cursor.execute("SELECT id, item_id, item_nome, quantidade, solicitante_nome, coordenacao, data_solicitacao, data_prevista_devolucao, observacao FROM solicitacoes WHERE status = 'PENDENTE' AND tipo_solicitacao = 'EMPRESTIMO';")
-            solic_emp_pend = cursor.fetchall()
+                st.dataframe(df_hist_emp.style.map(destacar_status, subset=['Status']), use_container_width=True, hide_index=True)
 
-            if not solic_emp_pend:
-                st.info("Não há solicitações de empréstimo pendentes.")
-            else:
-                for sol in solic_emp_pend:
-                    se_id, se_item_id, se_nome, se_qtd, se_solicitante, se_coord, se_data, se_prev, se_obs = sol
-                    with st.expander(f"Solicitação #{se_id} - {se_nome} ({se_qtd} un.) - Solicitado por: {se_solicitante}"):
-                        st.write(f"**Item:** {se_nome} | **Quantidade:** {se_qtd}")
-                        st.write(f"**Coordenação:** {se_coord} | **Previsão Devolução:** {se_prev}")
-                        st.write(f"**Justificativa:** {se_obs or 'Nenhuma'}")
-
-                        c_eap1, c_eap2 = st.columns(2)
-                        if c_eap1.button(f"Aprovar #{se_id}", key=f"app_e_{se_id}", type="primary"):
-                            cursor.execute("SELECT quantidade_disponivel FROM emprestimo_itens WHERE id = %s;", (se_item_id,))
-                            disp = cursor.fetchone()
-                            if disp and disp[0] >= se_qtd:
-                                cursor.execute("""
-                                    INSERT INTO emprestimo_registros (item_id, item_nome, quantidade, pessoa, coordenacao, data_retirada, data_prevista, status)
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'EMPRESTADO');
-                                """, (se_item_id, se_nome, se_qtd, se_solicitante, se_coord, date.today(), se_prev))
-
-                                cursor.execute("UPDATE emprestimo_itens SET quantidade_disponivel = quantidade_disponivel - %s WHERE id = %s;", (se_qtd, se_item_id))
-                                cursor.execute("UPDATE solicitacoes SET status = 'APROVADO' WHERE id = %s;", (se_id,))
-                                conn.commit()
-                                st.success("Empréstimo aprovado com sucesso!")
-                                st.rerun()
-                            else:
-                                st.error("Quantidade indisponível no acervo no momento!")
-
-                        if c_eap2.button(f"Recusar #{se_id}", key=f"rec_e_{se_id}"):
-                            cursor.execute("UPDATE solicitacoes SET status = 'RECUSADO' WHERE id = %s;", (se_id,))
+    # --- TELA: CADASTRAR PRODUTO ---
+    elif escolha == "Cadastrar Produto":
+        st.title("Gerenciamento de Produtos")
+        
+        aba_selecionada = option_menu(
+            menu_title=None,
+            options=["Novo Material", "Editar / Excluir Produtos"],
+            icons=["plus-circle", "pencil-square"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+        
+        if aba_selecionada == "Novo Material":
+            with st.form("form_novo_produto", clear_on_submit=True):
+                col_a, col_b = st.columns(2)
+                cod = col_a.text_input("Código")
+                nome_it = col_b.text_input("Nome do Material")
+                cat_it = col_a.selectbox("Categoria", lista_categorias)
+                val_unit = col_b.number_input("Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
+                st.caption("ℹ️ Novos materiais são registrados com saldo inicial 0.")
+                
+                if st.form_submit_button("Finalizar Cadastro", type="primary"):
+                    if cod and nome_it:
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", (cod.strip(), nome_it.strip(), 0, cat_it, float(val_unit)))
                             conn.commit()
-                            st.warning("Solicitação recusada.")
+                            st.success(f"Sucesso! {nome_it} adicionado.")
                             st.rerun()
-
-    # =========================================================================
-    # TELA: CADASTRAR PRODUTO (ADMIN)
-    # =========================================================================
-    elif escolha == "Cadastrar Produto" and eh_admin:
-        st.subheader("Cadastrar Produto / Material no Almoxarifado")
-        with st.form("form_cad_prod", clear_on_submit=True):
-            col_p1, col_p2 = st.columns(2)
-            codigo_prod = col_p1.text_input("Código do Produto*")
-            item_prod = col_p2.text_input("Nome do Material / Item*")
-            qtd_prod = col_p1.number_input("Quantidade Inicial*", min_value=0, value=0)
-            cat_prod = col_p2.selectbox("Categoria*", lista_categorias if lista_categorias else ["Sem Categoria"])
-            valor_prod = col_p1.number_input("Valor Unitário (R$)*", min_value=0.0, value=0.0, format="%.2f")
-
-            if st.form_submit_button("Salvar Produto", type="primary"):
-                if codigo_prod and item_prod:
-                    try:
-                        cursor.execute("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", (codigo_prod.strip(), item_prod.strip(), qtd_prod, cat_prod, valor_prod))
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
+                            st.error(f"Erro! Código {cod} já existe.")
+                    else:
+                        st.error("Preencha todos os campos!")
+                        
+        elif aba_selecionada == "Editar / Excluir Produtos":
+            if not df_produtos.empty:
+                st.dataframe(df_produtos, use_container_width=True, hide_index=True)
+                df_raw_prod = pd.read_sql_query("SELECT * FROM produtos", conn)
+                opcao_selecionada = st.selectbox("Selecione para modificar:", df_raw_prod.index, format_func=lambda x: f"{df_raw_prod.loc[x, 'codigo']} - {df_raw_prod.loc[x, 'item']}")
+                
+                cod_atual = df_raw_prod.loc[opcao_selecionada, "codigo"]
+                col_ed1, col_ed2 = st.columns(2)
+                edit_cod = col_ed1.text_input("Código:", value=df_raw_prod.loc[opcao_selecionada, "codigo"])
+                edit_item = col_ed2.text_input("Nome:", value=df_raw_prod.loc[opcao_selecionada, "item"])
+                edit_qtd = col_ed1.number_input("Quantidade (Ajuste):", min_value=0, value=int(df_raw_prod.loc[opcao_selecionada, "quantidade"]))
+                
+                cat_atual = df_raw_prod.loc[opcao_selecionada, "categoria"]
+                idx_cat_padrao = lista_categorias.index(cat_atual) if cat_atual in lista_categorias else 0
+                edit_cat = col_ed2.selectbox("Categoria:", lista_categorias, index=idx_cat_padrao)
+                edit_val = st.number_input("Valor Unitário:", min_value=0.0, step=0.01, format="%.2f", value=float(df_raw_prod.loc[opcao_selecionada, "valor_unitario"]))
+                
+                col_b_prod1, col_b_prod2 = st.columns([1, 4])
+                with col_b_prod1:
+                    if st.button("Salvar Alterações", type="primary"):
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            UPDATE produtos 
+                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
+                            WHERE codigo = %s;
+                        """, (edit_cod.strip(), edit_item.strip(), edit_qtd, edit_cat, float(edit_val), cod_atual))
                         conn.commit()
-                        st.success("Produto cadastrado com sucesso!")
+                        st.success("Modificado com sucesso!")
                         st.rerun()
-                    except psycopg2.IntegrityError:
-                        conn.rollback()
-                        st.error("Já existe um produto com este código.")
-                else:
-                    st.error("Preencha todos os campos obrigatórios (*).")
-
-    # =========================================================================
-    # TELA: CADASTRAR CATEGORIA (ADMIN)
-    # =========================================================================
-    elif escolha == "Cadastrar Categoria" and eh_admin:
-        st.subheader("Cadastrar Nova Categoria")
-        with st.form("form_cad_cat", clear_on_submit=True):
-            nome_cat = st.text_input("Nome da Categoria*")
-            if st.form_submit_button("Salvar Categoria", type="primary"):
-                if nome_cat.strip():
-                    try:
-                        cursor.execute("INSERT INTO categorias VALUES (%s);", (nome_cat.strip(),))
+                with col_b_prod2:
+                    if st.button("Excluir Produto"):
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM produtos WHERE codigo = %s;", (cod_atual,))
                         conn.commit()
-                        st.success("Categoria salva!")
+                        st.warning("Removido com sucesso.")
                         st.rerun()
-                    except psycopg2.IntegrityError:
-                        conn.rollback()
-                        st.error("Esta categoria já existe.")
 
-    # =========================================================================
-    # TELA: CADASTRAR USUÁRIO (ADMIN)
-    # =========================================================================
-    elif escolha == "Cadastrar Usuário" and eh_admin:
-        st.subheader("Cadastrar Novo Usuário no Sistema")
-        with st.form("form_cad_user", clear_on_submit=True):
-            u_nome = st.text_input("Nome Completo*")
-            u_email = st.text_input("E-mail (Login)*")
-            u_senha = st.text_input("Senha*", type="password")
-            u_perfil = st.selectbox("Perfil de Acesso*", ["Usuário", "Administrador"])
-
-            if st.form_submit_button("Salvar Usuário", type="primary"):
-                if u_nome and u_email and u_senha:
-                    try:
-                        cursor.execute("INSERT INTO usuarios VALUES (%s, %s, %s, %s);", (u_nome.strip(), u_email.strip().lower(), u_senha.strip(), u_perfil))
+    # --- TELA: CADASTRAR CATEGORIA ---
+    elif escolha == "Cadastrar Categoria":
+        st.title("Gerenciamento de Categorias")
+        
+        aba_selecionada = option_menu(
+            menu_title=None,
+            options=["Nova Categoria", "Editar / Excluir Categorias"],
+            icons=["plus-circle", "pencil-square"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+        
+        if aba_selecionada == "Nova Categoria":
+            col_cat1, col_cat2 = st.columns([1, 2])
+            with col_cat1:
+                nova_cat = st.text_input("Nome da Nova Categoria:")
+                if st.button("Adicionar Categoria", type="primary"):
+                    if nova_cat and nova_cat.strip():
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("INSERT INTO categorias VALUES (%s);", (nova_cat.strip(),))
+                            conn.commit()
+                            st.success("Adicionada!")
+                            st.rerun()
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
+                            st.error("Esta categoria já existe.")
+            with col_cat2:
+                st.dataframe(pd.DataFrame(lista_categorias, columns=["Categorias Ativas"]), use_container_width=True, hide_index=True)
+                
+        elif aba_selecionada == "Editar / Excluir Categorias":
+            if lista_categorias:
+                cat_selecionada = st.selectbox("Selecione a categoria:", lista_categorias)
+                edit_nome_cat = st.text_input("Editar Nome:", value=cat_selecionada)
+                
+                c_btn_cat1, c_btn_cat2 = st.columns([1, 4])
+                with c_btn_cat1:
+                    if st.button("Salvar Edição", type="primary"):
+                        cursor = conn.cursor()
+                        cursor.execute("UPDATE categorias SET nome = %s WHERE nome = %s;", (edit_nome_cat.strip(), cat_selecionada))
                         conn.commit()
-                        st.success("Usuário cadastrado com sucesso!")
+                        st.success("Atualizado!")
                         st.rerun()
-                    except psycopg2.IntegrityError:
-                        conn.rollback()
-                        st.error("E-mail já cadastrado.")
-
-    # =========================================================================
-    # TELA: CADASTRAR COORDENAÇÃO (ADMIN)
-    # =========================================================================
-    elif escolha == "Cadastrar Coordenação" and eh_admin:
-        st.subheader("Cadastrar Coordenação / Setor")
-        with st.form("form_cad_coord", clear_on_submit=True):
-            col_c1, col_c2 = st.columns(2)
-            c_sigla = col_c1.text_input("Sigla (ex: COTEC)*")
-            c_nome = col_c2.text_input("Nome Completo da Coordenação*")
-
-            if st.form_submit_button("Salvar Coordenação", type="primary"):
-                if c_sigla and c_nome:
-                    try:
-                        cursor.execute("INSERT INTO coordenacoes VALUES (%s, %s);", (c_sigla.strip().upper(), c_nome.strip()))
+                with c_btn_cat2:
+                    if st.button("Excluir Categoria"):
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM categorias WHERE nome = %s;", (cat_selecionada,))
                         conn.commit()
-                        st.success("Coordenação cadastrada com sucesso!")
+                        st.warning("Removida.")
                         st.rerun()
-                    except psycopg2.IntegrityError:
-                        conn.rollback()
-                        st.error("Esta sigla de coordenação já está cadastrada.")
 
-    # =========================================================================
-    # TELA: MOVIMENTAÇÃO DE ESTOQUE (ADMIN)
-    # =========================================================================
-    elif escolha == "Movimentação de Estoque" and eh_admin:
-        st.subheader("Movimentação Direta de Estoque (Entrada / Saída)")
+    # --- TELA: CADASTRAR USUÁRIO ---
+    elif escolha == "Cadastrar Usuário":
+        st.title("Cadastrar Usuário")
+        
+        aba_selecionada = option_menu(
+            menu_title=None,
+            options=["Novo Usuário", "Editar / Excluir Usuários"],
+            icons=["person-plus", "pencil-square"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+        
+        if aba_selecionada == "Novo Usuário":
+            with st.form("cad_user", clear_on_submit=True):
+                n = st.text_input("Nome")
+                e = st.text_input("E-mail")
+                s = st.text_input("Senha", type="password")
+                p = st.selectbox("Perfil", ["Administrador", "Usuário Comum"])
+                
+                if st.form_submit_button("Salvar", type="primary"):
+                    if n and e:
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                INSERT INTO usuarios (nome, email, senha, perfil) 
+                                VALUES (%s, %s, %s, %s);
+                            """, (n.strip(), e.strip().lower(), s if s else "123", p))
+                            conn.commit()
+                            st.success("Usuário registrado com sucesso!")
+                            st.rerun()
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
+                            st.error("Este e-mail já está cadastrado.")
+                    else:
+                        st.error("Preencha o Nome e o E-mail!")
+                        
+        elif aba_selecionada == "Editar / Excluir Usuários":
+            df_raw_users = pd.read_sql_query("SELECT nome, email, perfil, senha FROM usuarios ORDER BY nome ASC", conn)
+            
+            if not df_raw_users.empty:
+                st.dataframe(df_raw_users[["nome", "email", "perfil"]], use_container_width=True, hide_index=True)
+                idx_user = st.selectbox("Selecione para editar:", df_raw_users.index, format_func=lambda x: f"{df_raw_users.loc[x, 'nome']} ({df_raw_users.loc[x, 'email']})")
+                email_chave = df_raw_users.loc[idx_user, "email"]
+                
+                edit_n = st.text_input("Nome:", value=df_raw_users.loc[idx_user, "nome"])
+                edit_e = st.text_input("E-mail:", value=df_raw_users.loc[idx_user, "email"])
+                edit_s = st.text_input("Senha:", value=df_raw_users.loc[idx_user, "senha"], type="password")
+                edit_p = st.selectbox("Perfil:", ["Administrador", "Usuário Comum"], index=0 if df_raw_users.loc[idx_user, "perfil"] == "Administrador" else 1)
+                
+                c_btn_u1, c_btn_u2 = st.columns([1, 4])
+                with c_btn_u1:
+                    if st.button("Atualizar Dados", type="primary"):
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            UPDATE usuarios SET nome = %s, email = %s, senha = %s, perfil = %s WHERE email = %s;
+                        """, (edit_n.strip(), edit_e.strip().lower(), edit_s, edit_p, email_chave))
+                        conn.commit()
+                        st.success("Atualizado!")
+                        st.rerun()
+                with c_btn_u2:
+                    if st.button("Excluir Usuário"):
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM usuarios WHERE email = %s;", (email_chave,))
+                        conn.commit()
+                        st.warning("Removido.")
+                        st.rerun()
+
+    # --- TELA: CADASTRAR COORDENAÇÃO ---
+    elif escolha == "Cadastrar Coordenação":
+        st.title("Cadastrar Coordenação")
+        
+        aba_selecionada = option_menu(
+            menu_title=None,
+            options=["Nova Coordenação", "Editar / Excluir Coordenação"],
+            icons=["building-add", "pencil-square"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+        
+        if aba_selecionada == "Nova Coordenação":
+            with st.form("cad_coord", clear_on_submit=True):
+                s_coord = st.text_input("Sigla")
+                nc = st.text_input("Nome da Coordenação")
+                if st.form_submit_button("Cadastrar", type="primary"):
+                    if s_coord and nc:
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("INSERT INTO coordenacoes VALUES (%s, %s);", (s_coord.strip().upper(), nc.strip()))
+                            conn.commit()
+                            st.success("Cadastrada!")
+                            st.rerun()
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
+                            st.error("Esta sigla já está registrada.")
+                    else:
+                        st.error("Preencha todos os campos!")
+                        
+        elif aba_selecionada == "Editar / Excluir Coordenação":
+            if not df_coordenacoes.empty:
+                st.dataframe(df_coordenacoes, use_container_width=True, hide_index=True)
+                sigla_selecionada = st.selectbox("Selecione para modificar:", df_coordenacoes["Sigla"].tolist())
+                cursor = conn.cursor()
+                cursor.execute("SELECT nome FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
+                nome_atual_c = cursor.fetchone()[0]
+                
+                edit_sigla = st.text_input("Sigla:", value=sigla_selecionada)
+                edit_nc = st.text_input("Nome:", value=nome_atual_c)
+                
+                c_btn_co1, c_btn_co2 = st.columns([1, 4])
+                with c_btn_co1:
+                    if st.button("Salvar Modificações", type="primary"):
+                        cursor.execute("UPDATE coordenacoes SET sigla = %s, nome = %s WHERE sigla = %s;", (edit_sigla.strip().upper(), edit_nc.strip(), sigla_selecionada))
+                        conn.commit()
+                        st.success("Atualizado!")
+                        st.rerun()
+                with c_btn_co2:
+                    if st.button("Excluir Coordenação"):
+                        cursor.execute("DELETE FROM coordenacoes WHERE sigla = %s;", (sigla_selecionada,))
+                        conn.commit()
+                        st.warning("Removida.")
+                        st.rerun()
+
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (ALMOXARIFADO GERAL) ---
+    elif escolha == "Movimentação de Estoque":
+        st.title("Movimentação de Estoque")
+        
         if df_produtos.empty:
-            st.warning("Cadastre produtos antes de realizar movimentações.")
+            st.warning("Cadastre produtos antes de registrar movimentações.")
         else:
             with st.form("form_movimentacao", clear_on_submit=True):
-                opcoes_prod = {f"{r['Código']} - {r['Item']} (Qtd: {r['Quantidade']})": (r['Código'], r['Item'], r['Quantidade']) for _, r in df_produtos.iterrows()}
-                p_selecionado = st.selectbox("Selecione o Produto*", list(opcoes_prod.keys()))
-                p_cod, p_nome, p_qtd_atual = opcoes_prod[p_selecionado]
-
                 col_m1, col_m2 = st.columns(2)
-                m_tipo = col_m1.selectbox("Tipo de Movimentação*", ["ENTRADA", "SAIDA"])
-                m_qtd = col_m2.number_input("Quantidade*", min_value=1, value=1)
-
-                m_resp = col_m1.text_input("Responsável*", value=st.session_state.NOME_USUARIO_LOGADO)
+                
+                df_raw_p = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos", conn)
+                opcoes_p = {f"{row['codigo']} - {row['item']} (Atual: {row['quantidade']})": (row['codigo'], row['item'], row['quantidade']) for _, row in df_raw_p.iterrows()}
+                
+                prod_sel_label = col_m1.selectbox("Selecione o Produto", list(opcoes_p.keys()))
+                cod_mov, item_mov, qtd_atual = opcoes_p[prod_sel_label]
+                
+                tipo_mov = col_m2.selectbox("Tipo de Movimentação", ["Entrada", "Saída"])
+                qtd_mov = col_m1.number_input("Quantidade", min_value=1, step=1, value=1)
+                resp_mov = col_m2.text_input("Responsável pela Retirada / Entrega")
+                
                 lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
-                m_coord = col_m2.selectbox("Coordenação*", lista_siglas_coord)
-
+                coord_mov = col_m1.selectbox("Coordenação Destino / Origem", lista_siglas_coord)
+                data_mov = col_m2.date_input("Data da Movimentação", value=datetime.now().date())
+                
                 if st.form_submit_button("Registrar Movimentação", type="primary"):
-                    if m_tipo == "SAIDA" and m_qtd > p_qtd_atual:
-                        st.error("Quantidade de saída maior do que a disponível em estoque!")
+                    if resp_mov.strip():
+                        if tipo_mov == "Saída" and qtd_mov > qtd_atual:
+                            st.error(f"Quantidade insuficiente em estoque! Saldo atual: {qtd_atual}")
+                        else:
+                            cursor = conn.cursor()
+                            nova_qtd = (qtd_atual + qtd_mov) if tipo_mov == "Entrada" else (qtd_atual - qtd_mov)
+                            
+                            cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (nova_qtd, cod_mov))
+                            cursor.execute("""
+                                INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s);
+                            """, (data_mov.strftime("%d/%m/%Y"), tipo_mov, cod_mov, item_mov, qtd_mov, resp_mov.strip(), coord_mov))
+                            
+                            conn.commit()
+                            st.success(f"Movimentação de {tipo_mov} realizada com sucesso!")
+                            st.rerun()
                     else:
-                        nova_qtd = p_qtd_atual + m_qtd if m_tipo == "ENTRADA" else p_qtd_atual - m_qtd
-                        cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (nova_qtd, p_cod))
-                        
-                        data_hoje = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                        cursor.execute("INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao) VALUES (%s, %s, %s, %s, %s, %s, %s);",
-                                       (data_hoje, m_tipo, p_cod, p_nome, m_qtd, m_resp, m_coord))
-                        conn.commit()
-                        st.success("Movimentação registrada com sucesso!")
-                        st.rerun()
+                        st.error("Informe o Nome do Responsável!")
+
+            st.markdown("<br>### 📜 Histórico de Movimentações (Almoxarifado)", unsafe_allow_html=True)
+            if not df_movimentacoes.empty:
+                st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
+            else:
+                st.info("Nenhuma movimentação registrada no almoxarifado.")
