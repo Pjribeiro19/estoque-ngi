@@ -81,111 +81,233 @@ def inicializar_banco_automatico():
             coordenacao TEXT
         );
     """)
- # =========================================================================
-    # NOVAS TABELAS PARA O MÓDULO INDEPENDENTE DE EMPRÉSTIMOS
+# =========================================================================
+    # TELA: EMPRÉSTIMO DE MATERIAL (COM BOTÃO DE EXCLUIR)
     # =========================================================================
-    # 6. Tabela de Itens de Empréstimo (Catálogo exclusivo)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS emprestimo_itens (
-            id SERIAL PRIMARY KEY,
-            codigo TEXT UNIQUE,
-            item TEXT NOT NULL,
-            quantidade_total INTEGER NOT NULL DEFAULT 1,
-            quantidade_disponivel INTEGER NOT NULL DEFAULT 1,
-            observacao TEXT
-        );
-    """)
+    elif escolha == "Empréstimo de Material":
+        st.markdown("""
+            <div style="background-color: #2E7D32; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+                <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+                     Gestão de Empréstimo de Material
+                </h1>
+                <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+            Módulo independente de empréstimos, controle de empréstimo de material, devoluções e histórico de movimentações
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
 
-    # 7. Tabela de Registros de Empréstimos e Devoluções
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS emprestimo_registros (
-            id SERIAL PRIMARY KEY,
-            item_id INTEGER REFERENCES emprestimo_itens(id),
-            item_nome TEXT NOT NULL,
-            quantidade INTEGER NOT NULL,
-            pessoa TEXT NOT NULL,
-            coordenacao TEXT NOT NULL,
-            data_retirada DATE NOT NULL,
-            data_prevista DATE NOT NULL,
-            data_devolucao DATE,
-            status TEXT NOT NULL DEFAULT 'EMPRESTADO', -- 'EMPRESTADO' ou 'DEVOLVIDO'
-            responsavel_devolucao TEXT
-        );
-    """)
+        sub_emp = option_menu(
+            menu_title=None,
+            options=[
+                "Itens Disponíveis", 
+                "Cadastrar Item Empréstimo", 
+                "Registrar Saída (Empréstimo)", 
+                "Registrar Devolução", 
+                "Histórico de Movimentação"
+            ],
+            icons=["box-seam", "plus-circle", "box-arrow-right", "box-arrow-in-left", "journal-text"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
 
-    conn.commit()
+        cursor = conn.cursor()
 
-    # Verifica se a carga inicial (seed) já foi realizada no passado
-    cursor.execute("SELECT valor FROM config_sistema WHERE chave = 'seed_inicial';")
-    seed_realizado = cursor.fetchone()
-
-    if not seed_realizado:
-        # Inserção inicial única de Usuários
-        cursor.execute("SELECT COUNT(*) FROM usuarios;")
-        if cursor.fetchone()[0] == 0:
+        # ---------------------------------------------------------------------
+        # SUB-ABA 1: ITENS DISPONÍVEIS (COM BOTÃO DE EXCLUIR NA TABELA)
+        # ---------------------------------------------------------------------
+        if sub_emp == "Itens Disponíveis":
+            st.subheader("📋 Painel de Disponibilidade de Empréstimos")
+            
             cursor.execute("""
-                INSERT INTO usuarios (nome, email, senha, perfil) 
-                VALUES ('Administrador Padrão', 'admin@ngi.com', '123', 'Administrador');
+                SELECT id, codigo, item, quantidade_total, quantidade_disponivel, observacao 
+                FROM emprestimo_itens 
+                ORDER BY item ASC;
             """)
+            itens_cadastrados = cursor.fetchall()
 
-        # Inserção inicial única de Produtos
-        cursor.execute("SELECT COUNT(*) FROM produtos;")
-        if cursor.fetchone()[0] == 0:
-            produtos_iniciais = [
-                ("001", "Capacete de Segurança", 15, "EPI", 45.00),
-                ("002", "Resma Papel A4", 0, "Material de Escritório", 28.50),
-                ("003", "Luva de Raspa", 50, "EPI", 12.00)
-            ]
-            cursor.executemany("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", produtos_iniciais)
+            if not itens_cadastrados:
+                st.info("Nenhum item cadastrado no catálogo exclusivo de empréstimos ainda.")
+            else:
+                # Cabeçalho da tabela interativa com a coluna "Ação"
+                c_cod, c_nome, c_tot, c_disp, c_obs, c_acao = st.columns([1.5, 3, 1, 1, 2.5, 1])
+                c_cod.markdown("**Código**")
+                c_nome.markdown("**Item / Equipamento**")
+                c_tot.markdown("**Qtd Total**")
+                c_disp.markdown("**Disponível**")
+                c_obs.markdown("**Observações**")
+                c_acao.markdown("**Ação**")
+                st.markdown("---")
 
-        # Inserção inicial única de Coordenações
-        cursor.execute("SELECT COUNT(*) FROM coordenacoes;")
-        if cursor.fetchone()[0] == 0:
-            cursor.executemany("INSERT INTO coordenacoes VALUES (%s, %s);", [
-                ("COTEC", "Coordenação Técnica"),
-                ("COLOG", "Coordenação de Logística")
-            ])
+                # Exibe cada item com o botão 🗑️ na última coluna
+                for item_id, cod, nome, q_tot, q_disp, obs in itens_cadastrados:
+                    col1, col2, col3, col4, col5, col6 = st.columns([1.5, 3, 1, 1, 2.5, 1])
+                    col1.write(cod or "S/C")
+                    col2.write(nome)
+                    col3.write(str(q_tot))
+                    col4.write(str(q_disp))
+                    col5.write(obs or "-")
+                    
+                    # AQUI ESTÁ O BOTÃO DE EXCLUIR:
+                    if col6.button("🗑️", key=f"btn_del_{item_id}", help=f"Excluir {nome}"):
+                        if excluir_item_emprestimo(item_id):
+                            st.success(f"Item '{nome}' excluído com sucesso!")
+                            st.rerun()
 
-        # Inserção inicial única de Categorias
-        cursor.execute("SELECT COUNT(*) FROM categorias;")
-        if cursor.fetchone()[0] == 0:
-            cat_iniciais = [("EPI",), ("Material de Escritório",), ("Informática",), ("Limpeza",), ("Copa",)]
-            cursor.executemany("INSERT INTO categorias VALUES (%s);", cat_iniciais)
+        # ---------------------------------------------------------------------
+        # SUB-ABA 2: CADASTRAR ITEM PARA EMPRÉSTIMO
+        # ---------------------------------------------------------------------
+        elif sub_emp == "Cadastrar Item Empréstimo":
+            st.subheader("Cadastrar Novo Item no Catálogo de Empréstimos")
+            st.caption("Nota: Itens cadastrados aqui são 100% independentes do estoque do Almoxarifado.")
 
-        # Marca no banco que o seed inicial já foi finalizado
-        cursor.execute("INSERT INTO config_sistema (chave, valor) VALUES ('seed_inicial', 'true');")
-        conn.commit()
-    
-    return conn
+            with st.form("form_cad_emp_item", clear_on_submit=True):
+                col_e1, col_e2 = st.columns(2)
+                cod_emp = col_e1.text_input("Código / Patrimônio (opcional)")
+                item_emp = col_e2.text_input("Nome do Item / Equipamento*")
+                qtd_total = col_e1.number_input("Quantidade Total em Acervo*", min_value=1, value=1, step=1)
+                obs_emp = col_e2.text_area("Observações / Descrição", placeholder="Ex: Acompanha cabo de força e maleta")
 
-conn = inicializar_banco_automatico()
+                if st.form_submit_button("Cadastrar Item", type="primary"):
+                    if item_emp.strip():
+                        try:
+                            cursor.execute("""
+                                INSERT INTO emprestimo_itens (codigo, item, quantidade_total, quantidade_disponivel, observacao)
+                                VALUES (%s, %s, %s, %s, %s);
+                            """, (cod_emp.strip() if cod_emp else None, item_emp.strip(), qtd_total, qtd_total, obs_emp.strip()))
+                            conn.commit()
+                            st.success(f"Item '{item_emp}' cadastrado com sucesso para empréstimos!")
+                            st.rerun()
+                        except Exception as e:
+                            conn.rollback()
+                            st.error(f"Erro ao cadastrar item: {e}")
+                    else:
+                        st.error("O campo 'Nome do Item' é obrigatório!")
 
-# Função para excluir item de empréstimo de forma segura
-def excluir_item_emprestimo(item_id):
-    try:
-        cur = conn.cursor()
-        # Remove os registros associados primeiro para não quebrar a chave estrangeira
-        cur.execute("DELETE FROM emprestimo_registros WHERE item_id = %s;", (item_id,))
-        cur.execute("DELETE FROM emprestimo_itens WHERE id = %s;", (item_id,))
-        conn.commit()
-        return True
-    except Exception as e:
-        conn.rollback()
-        st.error(f"Erro ao excluir item: {e}")
-        return False
+        # ---------------------------------------------------------------------
+        # SUB-ABA 3: REGISTRAR SAÍDA (EMPRÉSTIMO)
+        # ---------------------------------------------------------------------
+        elif sub_emp == "Registrar Saída (Empréstimo)":
+            st.subheader("Registrar Saída de Material Por Empréstimo")
 
-# Carregamento seguro e global dos dados
-try:
-    df_produtos = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
-    df_movimentacoes = pd.read_sql_query('SELECT data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenacao AS "Coordenação" FROM movimentacoes', conn)
-    df_coordenacoes = pd.read_sql_query('SELECT sigla AS "Sigla", nome AS "Nome" FROM coordenacoes', conn)
-    df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
-    lista_categorias = df_cat_bruto["nome"].tolist()
-except Exception as e:
-    df_produtos = pd.DataFrame()
-    df_movimentacoes = pd.DataFrame()
-    df_coordenacoes = pd.DataFrame()
-    lista_categorias = []
+            cursor.execute("SELECT id, item, quantidade_disponivel FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY item ASC;")
+            itens_disponiveis = cursor.fetchall()
+
+            if not itens_disponiveis:
+                st.warning("Não há itens disponíveis no catálogo de empréstimo no momento.")
+            else:
+                opcoes_itens = {f"{item[1]} (Disponível: {item[2]})": (item[0], item[1], item[2]) for item in itens_disponiveis}
+                
+                with st.form("form_registro_saida_emp", clear_on_submit=True):
+                    item_selecionado_label = st.selectbox("Selecione o Item para Empréstimo*", list(opcoes_itens.keys()))
+                    item_id, item_nome, max_qtd = opcoes_itens[item_selecionado_label]
+
+                    col_s1, col_s2 = st.columns(2)
+                    qtd_saida = col_s1.number_input("Quantidade*", min_value=1, max_value=max_qtd, value=1, step=1)
+                    nome_pessoa = col_s2.text_input("Nome da Pessoa (Solicitante)*")
+
+                    lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
+                    coord_pessoa = col_s1.selectbox("Coordenação*", lista_siglas_coord)
+                    
+                    data_retirada = col_s2.date_input("Data de Retirada*", value=date.today())
+                    data_prevista = col_s1.date_input("Data Prevista para Devolução*", value=date.today())
+
+                    if st.form_submit_button("Confirmar Empréstimo", type="primary"):
+                        if nome_pessoa.strip():
+                            if data_prevista < data_retirada:
+                                st.error("A data prevista de devolução não pode ser anterior à data de retirada!")
+                            else:
+                                cursor.execute("""
+                                    INSERT INTO emprestimo_registros 
+                                    (item_id, item_nome, quantidade, pessoa, coordenacao, data_retirada, data_prevista, status)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'EMPRESTADO');
+                                """, (item_id, item_nome, qtd_saida, nome_pessoa.strip(), coord_pessoa, data_retirada, data_prevista))
+                                
+                                cursor.execute("""
+                                    UPDATE emprestimo_itens 
+                                    SET quantidade_disponivel = quantidade_disponivel - %s 
+                                    WHERE id = %s;
+                                """, (qtd_saida, item_id))
+                                
+                                conn.commit()
+                                st.success(f"Empréstimo registrado com sucesso para {nome_pessoa}!")
+                                st.rerun()
+                        else:
+                            st.error("Por favor, preencha o Nome da Pessoa!")
+
+        # ---------------------------------------------------------------------
+        # SUB-ABA 4: REGISTRAR DEVOLUÇÃO
+        # ---------------------------------------------------------------------
+        elif sub_emp == "Registrar Devolução":
+            st.subheader("Registro de Devolução de Material")
+
+            cursor.execute("""
+                SELECT id, item_id, item_nome, quantidade, pessoa, data_retirada, data_prevista 
+                FROM emprestimo_registros 
+                WHERE status = 'EMPRESTADO'
+                ORDER BY data_retirada ASC;
+            """)
+            emp_ativos = cursor.fetchall()
+
+            if not emp_ativos:
+                st.info("Nenhum empréstimo pendente de devolução no momento.")
+            else:
+                opcoes_dev = {
+                    f"{e[2]} (Qtd: {e[3]}) - Emprestado para: {e[4]} (Retirada: {e[5].strftime('%d/%m/%Y')})": e
+                    for e in emp_ativos
+                }
+
+                with st.form("form_registro_devolucao", clear_on_submit=True):
+                    emp_selecionado_label = st.selectbox("Selecione o Empréstimo a ser Baixado*", list(opcoes_dev.keys()))
+                    reg_id, item_id, item_nome, qtd, pessoa_orig, d_ret, d_prev = opcoes_dev[emp_selecionado_label]
+
+                    col_d1, col_d2 = st.columns(2)
+                    pessoa_devolvendo = col_d1.text_input("Nome de Quem Está Devolvendo*", value=pessoa_orig)
+                    data_devolucao = col_d2.date_input("Data Real da Devolução*", value=date.today())
+
+                    if st.form_submit_button("Confirmar Devolução", type="primary"):
+                        if pessoa_devolvendo.strip():
+                            cursor.execute("""
+                                UPDATE emprestimo_registros 
+                                SET status = 'DEVOLVIDO', data_devolucao = %s, responsavel_devolucao = %s 
+                                WHERE id = %s;
+                            """, (data_devolucao, pessoa_devolvendo.strip(), reg_id))
+
+                            cursor.execute("""
+                                UPDATE emprestimo_itens 
+                                SET quantidade_disponivel = quantidade_disponivel + %s 
+                                WHERE id = %s;
+                            """, (qtd, item_id))
+
+                            conn.commit()
+                            st.success(f"Devolução do item '{item_nome}' realizada com sucesso!")
+                            st.rerun()
+                        else:
+                            st.error("Preencha o nome da pessoa responsável pela devolução.")
+
+        # ---------------------------------------------------------------------
+        # SUB-ABA 5: HISTÓRICO DE MOVIMENTAÇÃO
+        # ---------------------------------------------------------------------
+        elif sub_emp == "Histórico de Movimentação":
+            st.subheader("📜 Histórico Geral de Empréstimos")
+            
+            df_hist = pd.read_sql_query("""
+                SELECT 
+                    item_nome AS "Item", 
+                    quantidade AS "Qtd", 
+                    pessoa AS "Solicitante", 
+                    coordenacao AS "Coordenação", 
+                    data_retirada AS "Data Retirada", 
+                    data_prevista AS "Data Prevista", 
+                    data_devolucao AS "Data Devolução", 
+                    status AS "Status", 
+                    responsavel_devolucao AS "Devolvido Por"
+                FROM emprestimo_registros ORDER BY id DESC;
+            """, conn)
+
+            if df_hist.empty:
+                st.info("Nenhuma movimentação de empréstimo registrada até o momento.")
+            else:
+                st.dataframe(df_hist, use_container_width=True, hide_index=True)
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS DE E-MAIL
 # =============================================================================
