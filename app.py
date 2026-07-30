@@ -81,7 +81,8 @@ def inicializar_banco_automatico():
             coordenacao TEXT
         );
     """)
-  # =========================================================================
+
+    # =========================================================================
     # NOVAS TABELAS PARA O MÓDULO INDEPENDENTE DE EMPRÉSTIMOS
     # =========================================================================
     # 6. Tabela de Itens de Empréstimo (Catálogo exclusivo)
@@ -185,7 +186,6 @@ except Exception as e:
     df_movimentacoes = pd.DataFrame()
     df_coordenacoes = pd.DataFrame()
     lista_categorias = []
-
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS DE E-MAIL
 # =============================================================================
