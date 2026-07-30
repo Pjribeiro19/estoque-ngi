@@ -97,10 +97,11 @@ def inicializar_banco_automatico():
     """)
 
     # 7. Tabela de Registros de Empréstimos e Devoluções
+    # Adicionado 'ON DELETE SET NULL' para permitir excluir o item mantendo o histórico de empréstimos
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS emprestimo_registros (
             id SERIAL PRIMARY KEY,
-            item_id INTEGER REFERENCES emprestimo_itens(id),
+            item_id INTEGER REFERENCES emprestimo_itens(id) ON DELETE SET NULL,
             item_nome TEXT NOT NULL,
             quantidade INTEGER NOT NULL,
             pessoa TEXT NOT NULL,
@@ -160,6 +161,24 @@ def inicializar_banco_automatico():
 
 conn = inicializar_banco_automatico()
 
+# =========================================================================
+# FUNÇÃO PARA EXCLUIR ITEM DO CATÁLOGO DE EMPRÉSTIMOS
+# =========================================================================
+def excluir_item_emprestimo(item_id):
+    """
+    Remove um item do catálogo de empréstimos pelo seu ID.
+    O histórico em 'emprestimo_registros' permanecerá intacto.
+    """
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM emprestimo_itens WHERE id = %s;", (item_id,))
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        print(f"Erro ao excluir item: {e}")
+        return False
+
 # Carregamento seguro e global dos dados
 try:
     df_produtos = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
@@ -172,7 +191,6 @@ except Exception as e:
     df_movimentacoes = pd.DataFrame()
     df_coordenacoes = pd.DataFrame()
     lista_categorias = []
-  
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS DE E-MAIL
 # =============================================================================
