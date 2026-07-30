@@ -81,7 +81,7 @@ def inicializar_banco_automatico():
             coordenacao TEXT
         );
     """)
-# =========================================================================
+    # =========================================================================
     # NOVAS TABELAS PARA O MÓDULO INDEPENDENTE DE EMPRÉSTIMOS
     # =========================================================================
     # 6. Tabela de Itens de Empréstimo (Catálogo exclusivo)
@@ -176,7 +176,7 @@ def excluir_item_emprestimo(item_id):
         return True
     except Exception as e:
         conn.rollback()
-        print(f"Erro ao excluir item: {e}")
+        st.error(f"Erro ao excluir item: {e}")
         return False
 
 # Carregamento seguro e global dos dados
