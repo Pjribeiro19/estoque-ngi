@@ -98,10 +98,11 @@ def inicializar_banco_automatico():
     """)
 
     # 7. Tabela de Registros de Empréstimos e Devoluções
+    # AJUSTE: Adicionado ON DELETE SET NULL para permitir excluir o cadastro do item sem travar o histórico
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS emprestimo_registros (
             id SERIAL PRIMARY KEY,
-            item_id INTEGER REFERENCES emprestimo_itens(id),
+            item_id INTEGER REFERENCES emprestimo_itens(id) ON DELETE SET NULL,
             item_nome TEXT NOT NULL,
             quantidade INTEGER NOT NULL,
             pessoa TEXT NOT NULL,
@@ -168,12 +169,15 @@ try:
     df_coordenacoes = pd.read_sql_query('SELECT sigla AS "Sigla", nome AS "Nome" FROM coordenacoes', conn)
     df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
     lista_categorias = df_cat_bruto["nome"].tolist()
+    
+    # AJUSTE: Adicionada a leitura do catálogo de empréstimos para alimentar opções de exclusão
+    df_emprestimo_itens = pd.read_sql_query('SELECT id AS "ID", codigo AS "Código", item AS "Item", quantidade_disponivel AS "Disponível", quantidade_total AS "Total" FROM emprestimo_itens', conn)
 except Exception as e:
     df_produtos = pd.DataFrame()
     df_movimentacoes = pd.DataFrame()
     df_coordenacoes = pd.DataFrame()
+    df_emprestimo_itens = pd.DataFrame()
     lista_categorias = []
-
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS DE E-MAIL
 # =============================================================================
