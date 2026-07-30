@@ -82,7 +82,7 @@ def inicializar_banco_automatico():
         );
     """)
 
-    # =========================================================================
+   # =========================================================================
     # NOVAS TABELAS PARA O MÓDULO INDEPENDENTE DE EMPRÉSTIMOS
     # =========================================================================
     # 6. Tabela de Itens de Empréstimo (Catálogo exclusivo)
@@ -161,6 +161,19 @@ def inicializar_banco_automatico():
 
 conn = inicializar_banco_automatico()
 
+# Função utilitária para exclusão segura de itens de empréstimo
+def excluir_item_emprestimo(item_id):
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM emprestimo_registros WHERE item_id = %s;", (item_id,))
+        cur.execute("DELETE FROM emprestimo_itens WHERE id = %s;", (item_id,))
+        conn.commit()
+        return True
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Erro ao excluir item: {e}")
+        return False
+
 # Carregamento seguro e global dos dados
 try:
     df_produtos = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
@@ -173,7 +186,6 @@ except Exception as e:
     df_movimentacoes = pd.DataFrame()
     df_coordenacoes = pd.DataFrame()
     lista_categorias = []
-
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS DE E-MAIL
 # =============================================================================
