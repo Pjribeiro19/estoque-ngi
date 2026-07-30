@@ -85,7 +85,7 @@ def inicializar_banco_automatico():
     # =========================================================================
   # NOVAS TABELAS PARA O MÓDULO INDEPENDENTE DE EMPRÉSTIMOS
     # =========================================================================
-    # 6. Tabela de Itens de Empréstimo (Catálogo exclusivo)
+   # 6. Tabela de Itens de Empréstimo (Catálogo exclusivo)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS emprestimo_itens (
             id SERIAL PRIMARY KEY,
@@ -98,7 +98,6 @@ def inicializar_banco_automatico():
     """)
 
     # 7. Tabela de Registros de Empréstimos e Devoluções
-    # ON DELETE SET NULL permite excluir o cadastro do item mantendo o histórico de empréstimo intacto
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS emprestimo_registros (
             id SERIAL PRIMARY KEY,
@@ -117,12 +116,11 @@ def inicializar_banco_automatico():
 
     conn.commit()
 
-    # Verifica se a carga inicial (seed) já foi realizada no passado
+    # Verifica se a carga inicial (seed) já foi realizada
     cursor.execute("SELECT valor FROM config_sistema WHERE chave = 'seed_inicial';")
     seed_realizado = cursor.fetchone()
 
     if not seed_realizado:
-        # Inserção inicial única de Usuários
         cursor.execute("SELECT COUNT(*) FROM usuarios;")
         if cursor.fetchone()[0] == 0:
             cursor.execute("""
@@ -130,7 +128,6 @@ def inicializar_banco_automatico():
                 VALUES ('Administrador Padrão', 'admin@ngi.com', '123', 'Administrador');
             """)
 
-        # Inserção inicial única de Produtos
         cursor.execute("SELECT COUNT(*) FROM produtos;")
         if cursor.fetchone()[0] == 0:
             produtos_iniciais = [
@@ -140,7 +137,6 @@ def inicializar_banco_automatico():
             ]
             cursor.executemany("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", produtos_iniciais)
 
-        # Inserção inicial única de Coordenações
         cursor.execute("SELECT COUNT(*) FROM coordenacoes;")
         if cursor.fetchone()[0] == 0:
             cursor.executemany("INSERT INTO coordenacoes VALUES (%s, %s);", [
@@ -148,13 +144,11 @@ def inicializar_banco_automatico():
                 ("COLOG", "Coordenação de Logística")
             ])
 
-        # Inserção inicial única de Categorias
         cursor.execute("SELECT COUNT(*) FROM categorias;")
         if cursor.fetchone()[0] == 0:
             cat_iniciais = [("EPI",), ("Material de Escritório",), ("Informática",), ("Limpeza",), ("Copa",)]
             cursor.executemany("INSERT INTO categorias VALUES (%s);", cat_iniciais)
 
-        # Marca no banco que o seed inicial já foi finalizado
         cursor.execute("INSERT INTO config_sistema (chave, valor) VALUES ('seed_inicial', 'true');")
         conn.commit()
     
@@ -163,7 +157,7 @@ def inicializar_banco_automatico():
 conn = inicializar_banco_automatico()
 
 # =============================================================================
-# FUNÇÕES AUXILIARES DE EXCLUSÃO (Para serem chamadas nos botões da interface)
+# FUNÇÕES AUXILIARES DE EXCLUSÃO
 # =============================================================================
 def excluir_item_emprestimo(item_id):
     """Exclui um item do catálogo de empréstimos pelo seu ID."""
@@ -197,7 +191,6 @@ try:
     df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
     lista_categorias = df_cat_bruto["nome"].tolist()
     
-    # Carregamento dos itens e registros do módulo de empréstimos
     df_emprestimo_itens = pd.read_sql_query('SELECT id AS "ID", codigo AS "Código", item AS "Item", quantidade_disponivel AS "Disponível", quantidade_total AS "Total", observacao AS "Observação" FROM emprestimo_itens', conn)
     df_emprestimo_registros = pd.read_sql_query('SELECT * FROM emprestimo_registros', conn)
 
