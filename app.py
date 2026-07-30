@@ -82,11 +82,8 @@ def inicializar_banco_automatico():
         );
     """)
 # =========================================================================
-   # =========================================================================
-
-  # NOVAS TABELAS PARA O MÓDULO INDEPENDENTE DE EMPRÉSTIMOS
-
-    # =========================================================================
+# NOVAS TABELAS PARA O MÓDULO INDEPENDENTE DE EMPRÉSTIMOS
+# =========================================================================
 
     # 6. Tabela de Itens de Empréstimo (Catálogo exclusivo)
 
