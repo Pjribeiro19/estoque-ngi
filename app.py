@@ -82,8 +82,8 @@ def inicializar_banco_automatico():
         );
     """)
 # =========================================================================
-    # NOVA TELA: EMPRÉSTIMO DE MATERIAL (INDEPENDENTE)
-    # =========================================================================
+# NOVA TELA: EMPRÉSTIMO DE MATERIAL (INDEPENDENTE)
+# =========================================================================
     elif escolha == "Empréstimo de Material":
         st.markdown("""
             <div style="background-color: #2E7D32; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
@@ -321,6 +321,7 @@ def inicializar_banco_automatico():
                         st.rerun()
                     else:
                         st.error("Erro ao tentar excluir o item. Verifique a conexão com o banco de dados.")
+                        #
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS DE E-MAIL
 # =============================================================================
