@@ -82,8 +82,8 @@ def inicializar_banco_automatico():
         );
     """)
 # =========================================================================
-    # TELA: EMPRÉSTIMO DE MATERIAL
-    # =========================================================================
+# TELA: EMPRÉSTIMO DE MATERIAL
+# =========================================================================
     elif escolha == "Empréstimo de Material":
         st.markdown("""
             <div style="background-color: #2E7D32; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
