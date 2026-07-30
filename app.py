@@ -172,6 +172,7 @@ def excluir_item_emprestimo(item_id):
         conn.rollback()
         st.error(f"Erro ao excluir item: {e}")
         return False
+
 # Carregamento seguro e global dos dados
 try:
     df_produtos = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
@@ -184,6 +185,7 @@ except Exception as e:
     df_movimentacoes = pd.DataFrame()
     df_coordenacoes = pd.DataFrame()
     lista_categorias = []
+
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS DE E-MAIL
 # =============================================================================
