@@ -472,7 +472,7 @@ else:
         st.markdown("""
             <div style="background-color: #2E7D32; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
-                    🔄 Gestão de Empréstimo de Material
+                    Gestão de Empréstimo de Material
                 </h1>
                 <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                     Módulo independente de empréstimos, controle de devoluções e histórico
@@ -500,7 +500,7 @@ else:
         # SUB-ABA 1: ITENS DISPONÍVEIS (PAINEL + EDITAR / EXCLUIR)
         # ---------------------------------------------------------------------
         if sub_emp == "Itens Disponíveis":
-            st.subheader("📊 Painel de Disponibilidade de Empréstimos")
+            st.subheader("Painel de Disponibilidade de Empréstimos")
             
             df_emp_itens = pd.read_sql_query("""
                 SELECT 
@@ -522,7 +522,7 @@ else:
                 st.dataframe(df_exibir, use_container_width=True, hide_index=True)
 
                 st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
-                st.markdown("### ✏️ Gerenciar / Editar / Excluir Item de Empréstimo")
+                st.markdown("### Gerenciar / Editar / Excluir Item de Empréstimo")
 
                 # Seleção do item
                 df_raw_emp = pd.read_sql_query("SELECT id, codigo, item, quantidade_total, quantidade_disponivel, observacao FROM emprestimo_itens ORDER BY item ASC;", conn)
@@ -549,7 +549,7 @@ else:
                     edit_qtd_tot = col_ed_e1.number_input("Quantidade Total em Acervo:", min_value=qtd_emprestados_atual, value=qtd_tot_sel, step=1, key="ed_qtd_tot_emp")
                     
                     if qtd_emprestados_atual > 0:
-                        st.caption(f"⚠️ Existem {qtd_emprestados_atual} unidade(s) emprestada(s) no momento. A quantidade total não pode ser menor que isso.")
+                        st.caption(f"Existem {qtd_emprestados_atual} unidade(s) emprestada(s) no momento. A quantidade total não pode ser menor que isso.")
 
                     edit_obs_emp = col_ed_e2.text_area("Observações / Descrição:", value=obs_emp_sel, key="ed_obs_emp")
 
@@ -596,7 +596,7 @@ else:
         # SUB-ABA 2: CADASTRAR ITEM PARA EMPRÉSTIMO
         # ---------------------------------------------------------------------
         elif sub_emp == "Cadastrar Item Empréstimo":
-            st.subheader("📦 Cadastrar Novo Item no Catálogo de Empréstimos")
+            st.subheader("Cadastrar Novo Item no Catálogo de Empréstimos")
             st.caption("Nota: Itens cadastrados aqui são 100% independentes do estoque do Almoxarifado.")
 
             with st.form("form_cad_emp_item", clear_on_submit=True):
@@ -626,7 +626,7 @@ else:
         # SUB-ABA 3: REGISTRAR SAÍDA (EMPRÉSTIMO)
         # ---------------------------------------------------------------------
         elif sub_emp == "Registrar Saída (Empréstimo)":
-            st.subheader("📤 Registrar Saída de Material Por Empréstimo")
+            st.subheader("Registrar Saída de Material Por Empréstimo")
 
             cursor.execute("SELECT id, item, quantidade_disponivel FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY item ASC;")
             itens_disponiveis = cursor.fetchall()
@@ -677,7 +677,7 @@ else:
         # SUB-ABA 4: REGISTRAR DEVOLUÇÃO
         # ---------------------------------------------------------------------
         elif sub_emp == "Registrar Devolução":
-            st.subheader("📥 Registro de Devolução de Material")
+            st.subheader("Registro de Devolução de Material")
 
             cursor.execute("""
                 SELECT id, item_id, item_nome, quantidade, pessoa, data_retirada, data_prevista 
@@ -727,7 +727,7 @@ else:
         # SUB-ABA 5: HISTÓRICO DE MOVIMENTAÇÃO DE EMPRÉSTIMOS
         # ---------------------------------------------------------------------
         elif sub_emp == "Histórico de Movimentação":
-            st.subheader("📜 Histórico Completo de Empréstimos e Devoluções")
+            st.subheader("Histórico Completo de Empréstimos e Devoluções")
 
             df_hist_emp = pd.read_sql_query("""
                 SELECT 
@@ -775,7 +775,7 @@ else:
                 nome_it = col_b.text_input("Nome do Material")
                 cat_it = col_a.selectbox("Categoria", lista_categorias)
                 val_unit = col_b.number_input("Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
-                st.caption("ℹ️ Novos materiais são registrados com saldo inicial 0.")
+                st.caption("Novos materiais são registrados com saldo inicial 0.")
                 
                 if st.form_submit_button("Finalizar Cadastro", type="primary"):
                     if cod and nome_it:
@@ -1046,7 +1046,7 @@ else:
                     else:
                         st.error("Informe o Nome do Responsável!")
 
-            st.markdown("<br>### 📜 Histórico de Movimentações (Almoxarifado)", unsafe_allow_html=True)
+            st.markdown("<br>### Histórico de Movimentações (Almoxarifado)", unsafe_allow_html=True)
             if not df_movimentacoes.empty:
                 st.dataframe(df_movimentacoes, use_container_width=True, hide_index=True)
             else:
