@@ -83,7 +83,7 @@ def inicializar_banco_automatico():
     """)
 
     # =========================================================================
-    # NOVAS TABELAS PARA O MÓDULO INDEPENDENTE DE EMPRÉSTIMOS
+  # NOVAS TABELAS PARA O MÓDULO INDEPENDENTE DE EMPRÉSTIMOS
     # =========================================================================
     # 6. Tabela de Itens de Empréstimo (Catálogo exclusivo)
     cursor.execute("""
@@ -98,7 +98,7 @@ def inicializar_banco_automatico():
     """)
 
     # 7. Tabela de Registros de Empréstimos e Devoluções
-    # AJUSTE: Adicionado ON DELETE SET NULL para permitir excluir o cadastro do item sem travar o histórico
+    # ON DELETE SET NULL permite excluir o cadastro do item mantendo o histórico de empréstimo intacto
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS emprestimo_registros (
             id SERIAL PRIMARY KEY,
@@ -162,6 +162,33 @@ def inicializar_banco_automatico():
 
 conn = inicializar_banco_automatico()
 
+# =============================================================================
+# FUNÇÕES AUXILIARES DE EXCLUSÃO (Para serem chamadas nos botões da interface)
+# =============================================================================
+def excluir_item_emprestimo(item_id):
+    """Exclui um item do catálogo de empréstimos pelo seu ID."""
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM emprestimo_itens WHERE id = %s;", (item_id,))
+        conn.commit()
+        cur.close()
+        return True
+    except Exception as e:
+        conn.rollback()
+        return False
+
+def excluir_produto_estoque(codigo_produto):
+    """Exclui um produto do estoque geral pelo seu Código."""
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM produtos WHERE codigo = %s;", (codigo_produto,))
+        conn.commit()
+        cur.close()
+        return True
+    except Exception as e:
+        conn.rollback()
+        return False
+
 # Carregamento seguro e global dos dados
 try:
     df_produtos = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
@@ -170,13 +197,16 @@ try:
     df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
     lista_categorias = df_cat_bruto["nome"].tolist()
     
-    # AJUSTE: Adicionada a leitura do catálogo de empréstimos para alimentar opções de exclusão
-    df_emprestimo_itens = pd.read_sql_query('SELECT id AS "ID", codigo AS "Código", item AS "Item", quantidade_disponivel AS "Disponível", quantidade_total AS "Total" FROM emprestimo_itens', conn)
+    # Carregamento dos itens e registros do módulo de empréstimos
+    df_emprestimo_itens = pd.read_sql_query('SELECT id AS "ID", codigo AS "Código", item AS "Item", quantidade_disponivel AS "Disponível", quantidade_total AS "Total", observacao AS "Observação" FROM emprestimo_itens', conn)
+    df_emprestimo_registros = pd.read_sql_query('SELECT * FROM emprestimo_registros', conn)
+
 except Exception as e:
     df_produtos = pd.DataFrame()
     df_movimentacoes = pd.DataFrame()
     df_coordenacoes = pd.DataFrame()
     df_emprestimo_itens = pd.DataFrame()
+    df_emprestimo_registros = pd.DataFrame()
     lista_categorias = []
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS DE E-MAIL
