@@ -172,34 +172,7 @@ except Exception as e:
     df_movimentacoes = pd.DataFrame()
     df_coordenacoes = pd.DataFrame()
     lista_categorias = []
-    # ---------------------------------------------------------------------
-        # SUB-ABA 6: GERENCIAR / EXCLUIR ITEM DO CATÁLOGO DE EMPRÉSTIMO
-        # ---------------------------------------------------------------------
-        elif sub_emp == "Gerenciar / Excluir Item":
-            st.subheader("🗑️ Excluir Item do Catálogo de Empréstimos")
-            st.warning("Atenção: A exclusão removerá o item do catálogo. O histórico de empréstimos passados desse item será preservado.")
-
-            cursor.execute("SELECT id, codigo, item, quantidade_total, quantidade_disponivel FROM emprestimo_itens ORDER BY item ASC;")
-            todos_itens = cursor.fetchall()
-
-            if not todos_itens:
-                st.info("Não há itens cadastrados no catálogo para exclusão.")
-            else:
-                opcoes_excluir = {
-                    f"{i[2]} | Cód: {i[1] or 'N/A'} (Total: {i[3]} / Disponível: {i[4]})": i[0]
-                    for i in todos_itens
-                }
-
-                item_para_excluir = st.selectbox("Selecione o Item para Excluir permanentemente:", list(opcoes_excluir.keys()))
-                item_id_del = opcoes_excluir[item_para_excluir]
-
-                if st.button("❌ Excluir Item Selecionado", type="primary"):
-                    if excluir_item_emprestimo(item_id_del):
-                        st.success("Item removido com sucesso do catálogo de empréstimos!")
-                        st.rerun()
-                    else:
-                        st.error("Erro ao tentar excluir o item. Verifique a conexão com o banco de dados.")
-
+  
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS DE E-MAIL
 # =============================================================================
