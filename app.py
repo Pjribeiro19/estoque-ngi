@@ -81,7 +81,7 @@ def inicializar_banco_automatico():
             coordenacao TEXT
         );
     """)
-   # =========================================================================
+  # =========================================================================
     # TELA: EMPRÉSTIMO DE MATERIAL (COM OPÇÃO DE EXCLUIR NA TABELA)
     # =========================================================================
     elif escolha == "Empréstimo de Material":
