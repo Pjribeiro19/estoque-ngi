@@ -82,503 +82,97 @@ def inicializar_banco_automatico():
         );
     """)
 # =========================================================================
-# NOVA TELA: EMPRÉSTIMO DE MATERIAL (INDEPENDENTE)
-# =========================================================================
-# 6. Tabela de Itens de Empréstimo (Catálogo exclusivo)
-
-
-
+    # NOVAS TABELAS PARA O MÓDULO INDEPENDENTE DE EMPRÉSTIMOS
+    # =========================================================================
+    # 6. Tabela de Itens de Empréstimo (Catálogo exclusivo)
     cursor.execute("""
-
-
-
-        CRIAR TABELA SE NÃO EXISTIR emprestimo_itens (
-
-
-
-            ID da chave primária serial,
-
-
-
-            código TEXTO ÚNICO,
-
-
-
-            item TEXTO NÃO NULO,
-
-
-
-            quantidade_total INTEIRO NÃO NULO PADRÃO 1,
-
-
-
-            quantidade_disponivel INTEIRO NÃO NULO PADRÃO 1,
-
-
-
-            observação TEXTO
-
-
-
+        CREATE TABLE IF NOT EXISTS emprestimo_itens (
+            id SERIAL PRIMARY KEY,
+            codigo TEXT UNIQUE,
+            item TEXT NOT NULL,
+            quantidade_total INTEGER NOT NULL DEFAULT 1,
+            quantidade_disponivel INTEGER NOT NULL DEFAULT 1,
+            observacao TEXT
         );
-
-
-
-    "")
-
-
-
-
-
-
+    """)
 
     # 7. Tabela de Registros de Empréstimos e Devoluções
-
-
-
-    # ON DELETE SET NULL permite excluir o cadastro do item mantendo o histórico de empréstimo intacto
-
-
-
     cursor.execute("""
-
-
-
-        CRIAR TABELA SE NÃO EXISTIR emprestimo_registros (
-
-
-
-            ID da chave primária serial,
-
-
-
-            item_id REFERÊNCIAS INTEIRAS emprestimo_itens(id) ON DELETE SET NULL,
-
-
-
-            item_nome TEXTO NÃO NULO,
-
-
-
-            INTEIRO NÃO NULO,
-
-
-
-            pessoa TEXTO NÃO NULO,
-
-
-
-            coordenacao TEXTO NÃO NULO,
-
-
-
+        CREATE TABLE IF NOT EXISTS emprestimo_registros (
+            id SERIAL PRIMARY KEY,
+            item_id INTEGER REFERENCES emprestimo_itens(id),
+            item_nome TEXT NOT NULL,
+            quantidade INTEGER NOT NULL,
+            pessoa TEXT NOT NULL,
+            coordenacao TEXT NOT NULL,
             data_retirada DATE NOT NULL,
-
-
-
-            data_prevista DATA NÃO NULA,
-
-
-
-            data_devolucao DATA,
-
-
-
+            data_prevista DATE NOT NULL,
+            data_devolucao DATE,
             status TEXT NOT NULL DEFAULT 'EMPRESTADO', -- 'EMPRESTADO' ou 'DEVOLVIDO'
-
-
-
             responsavel_devolucao TEXT
-
-
-
         );
+    """)
 
+    conn.commit()
 
-
-    "")
-
-
-
-
-
-
-
-    conexão.commit()
-
-
-
-
-
-
-
-    # Verifique se a carga inicial (semente) já foi realizada no passado
-
-
-
+    # Verifica se a carga inicial (seed) já foi realizada no passado
     cursor.execute("SELECT valor FROM config_sistema WHERE chave = 'seed_inicial';")
-
-
-
     seed_realizado = cursor.fetchone()
 
-
-
-
-
-
-
-    se não seed_realizado:
-
-
-
-        # Inserção inicial única de usuários
-
-
-
+    if not seed_realizado:
+        # Inserção inicial única de Usuários
         cursor.execute("SELECT COUNT(*) FROM usuarios;")
-
-
-
-        se cursor.fetchone()[0] == 0:
-
-
-
+        if cursor.fetchone()[0] == 0:
             cursor.execute("""
-
-
-
-                INSERT INTO usuários (nome, email, senha, perfil) 
-
-
-
-                VALORES ('Administrador Padrão', 'admin@ngi.com', '123', 'Administrador');
-
-
-
-            "")
-
-
-
-
-
-
+                INSERT INTO usuarios (nome, email, senha, perfil) 
+                VALUES ('Administrador Padrão', 'admin@ngi.com', '123', 'Administrador');
+            """)
 
         # Inserção inicial única de Produtos
-
-
-
         cursor.execute("SELECT COUNT(*) FROM produtos;")
-
-
-
-        se cursor.fetchone()[0] == 0:
-
-
-
+        if cursor.fetchone()[0] == 0:
             produtos_iniciais = [
-
-
-
-                ("001", "Capacete de Segurança", 15, "EPI", 45,00),
-
-
-
+                ("001", "Capacete de Segurança", 15, "EPI", 45.00),
                 ("002", "Resma Papel A4", 0, "Material de Escritório", 28.50),
-
-
-
-                ("003", "Luva de Raspa", 50, "EPI", 12,00)
-
-
-
+                ("003", "Luva de Raspa", 50, "EPI", 12.00)
             ]
-
-
-
             cursor.executemany("INSERT INTO produtos VALUES (%s, %s, %s, %s, %s);", produtos_iniciais)
 
-
-
-
-
-
-
         # Inserção inicial única de Coordenações
-
-
-
-        cursor.execute("SELECT COUNT(*) FROM coordenadas;")
-
-
-
-        se cursor.fetchone()[0] == 0:
-
-
-
-            cursor.executemany("INSERT INTO coordenadas VALUES (%s, %s);", [
-
-
-
+        cursor.execute("SELECT COUNT(*) FROM coordenacoes;")
+        if cursor.fetchone()[0] == 0:
+            cursor.executemany("INSERT INTO coordenacoes VALUES (%s, %s);", [
                 ("COTEC", "Coordenação Técnica"),
-
-
-
                 ("COLOG", "Coordenação de Logística")
-
-
-
             ])
 
-
-
-
-
-
-
-        # Inserção inicial única de categorias
-
-
-
+        # Inserção inicial única de Categorias
         cursor.execute("SELECT COUNT(*) FROM categorias;")
-
-
-
-        se cursor.fetchone()[0] == 0:
-
-
-
+        if cursor.fetchone()[0] == 0:
             cat_iniciais = [("EPI",), ("Material de Escritório",), ("Informática",), ("Limpeza",), ("Copa",)]
-
-
-
             cursor.executemany("INSERT INTO categorias VALUES (%s);", cat_iniciais)
 
-
-
-
-
-
-
-        # Marca no banco que a semente inicial já foi finalizada
-
-
-
+        # Marca no banco que o seed inicial já foi finalizado
         cursor.execute("INSERT INTO config_sistema (chave, valor) VALUES ('seed_inicial', 'true');")
-
-
-
-        conexão.commit()
-
-
-
+        conn.commit()
     
-
-
-
-    retornar conexão
-
-
-
-
-
-
+    return conn
 
 conn = inicializar_banco_automatico()
 
-
-
-
-
-
-
-# =============================================================================
-
-
-
-# FUNÇÕES AUXILIARES DE EXCLUSÃO (Para serem chamadas nos botões da interface)
-
-
-
-# =============================================================================
-
-
-
-def excluir_item_emprestimo(item_id):
-
-
-
-    """Exclui item do catálogo de empréstimos pelo seu ID."""
-
-
-
-    tentar:
-
-
-
-        cur = conn.cursor()
-
-
-
-        cur.execute("DELETE FROM emprestimo_itens WHERE id = %s;", (item_id,))
-
-
-
-        conexão.commit()
-
-
-
-        cur.close()
-
-
-
-        retornar Verdadeiro
-
-
-
-    exceto Exception como e:
-
-
-
-        conexão.rollback()
-
-
-
-        retornar Falso
-
-
-
-
-
-
-
-def excluir_produto_estoque(codigo_produto):
-
-
-
-    """Exclui um produto do estoque geral pelo seu Código."""
-
-
-
-    tentar:
-
-
-
-        cur = conn.cursor()
-
-
-
-        cur.execute("DELETE FROM produtos WHERE codigo = %s;", (codigo_produto,))
-
-
-
-        conexão.commit()
-
-
-
-        cur.close()
-
-
-
-        retornar Verdadeiro
-
-
-
-    exceto Exception como e:
-
-
-
-        conexão.rollback()
-
-
-
-        retornar Falso
-
-
-
-
-
-
-
-# Carregamento seguro e global de dados
-
-
-
-tentar:
-
-
-
-    df_produtos = pd.read_sql_query('SELECT código AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
-
-
-
-    df_movimentacoes = pd.read_sql_query('SELECT data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenação AS "Coordenação" FROM movimentações', conn)
-
-
-
-    df_coordenacoes = pd.read_sql_query('SELECT sigla AS "Sigla", nome AS "Nome" FROM coordenadas', conn)
-
-
-
+# Carregamento seguro e global dos dados
+try:
+    df_produtos = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
+    df_movimentacoes = pd.read_sql_query('SELECT data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenacao AS "Coordenação" FROM movimentacoes', conn)
+    df_coordenacoes = pd.read_sql_query('SELECT sigla AS "Sigla", nome AS "Nome" FROM coordenacoes', conn)
     df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
-
-
-
     lista_categorias = df_cat_bruto["nome"].tolist()
-
-
-
-    
-
-
-
-    # Carregamento de itens e registros do módulo de empréstimos
-
-
-
-    df_emprestimo_itens = pd.read_sql_query('SELECT id AS "ID", codigo AS "Código", item AS "Item", quantidade_disponivel AS "Disponível", quantidade_total AS "Total", observação AS "Observação" FROM emprestimo_itens', conn)
-
-
-
-    df_emprestimo_registros = pd.read_sql_query('SELECT * FROM emprestimo_registros', conn)
-
-
-
-
-
-
-
-exceto Exception como e:
-
-
-
+except Exception as e:
     df_produtos = pd.DataFrame()
-
-
-
-    df_movimentos = pd.DataFrame()
-
-
-
+    df_movimentacoes = pd.DataFrame()
     df_coordenacoes = pd.DataFrame()
-
-
-
-    df_emprestimo_itens = pd.DataFrame()
-
-
-
-    df_emprestimo_registros = pd.DataFrame()
-
-
-
     lista_categorias = []
 
-
-
-#
-
-#
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS DE E-MAIL
 # =============================================================================
