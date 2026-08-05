@@ -82,6 +82,110 @@ def inicializar_banco_automatico():
         );
     """)
 
+    # ===================================import streamlit as st
+import pandas as pd
+from datetime import datetime, date
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+import psycopg2
+from psycopg2.extras import DictCursor
+from streamlit_option_menu import option_menu
+import os
+
+# =============================================================================
+# PREVENÇÃO DE ERROS DE RENDERIZAÇÃO / TRADUÇÃO AUTOMÁTICA DO NAVEGADOR
+# =============================================================================
+st.markdown(
+    """
+    <head>
+        <meta name="google" content="notranslate">
+    </head>
+    <style>
+        html {
+            -webkit-translate: no !important;
+            -moz-translate: no !important;
+            -ms-translate: no !important;
+            translate: no !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# =============================================================================
+# CONEXÃO E INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (Neon Postgres)
+# =============================================================================
+def inicializar_banco_automatico():
+    conn = None
+    try:
+        conn_string = os.environ.get("POSTGRES_URL") or st.secrets["postgres"]["url"]
+        conn = psycopg2.connect(conn_string)
+    except Exception as e:
+        st.error(f"Erro ao conectar ao Neon Postgres: {e}")
+        st.info("Verifique as credenciais na aba 'Variables' do Railway.")
+        st.stop()
+        
+    cursor = conn.cursor()
+
+    # Tabela de controle de inicialização única
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS config_sistema (
+            chave TEXT PRIMARY KEY,
+            valor TEXT
+        );
+    """)
+
+    # 1. Tabela de usuários
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            nome TEXT,
+            email TEXT PRIMARY KEY,
+            senha TEXT,
+            perfil TEXT
+        );
+    """)
+
+    # 2. Tabela de produtos (Almoxarifado Geral)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS produtos (
+            codigo TEXT PRIMARY KEY,
+            item TEXT,
+            quantidade INTEGER,
+            categoria TEXT,
+            valor_unitario REAL
+        );
+    """)
+
+    # 3. Tabela de coordenações
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS coordenacoes (
+            sigla TEXT PRIMARY KEY,
+            nome TEXT
+        );
+    """)
+
+    # 4. Tabela de categorias
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS categorias (
+            nome TEXT PRIMARY KEY
+        );
+    """)
+
+    # 5. Tabela de movimentações (Almoxarifado Geral)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS movimentacoes (
+            id SERIAL PRIMARY KEY,
+            data TEXT,
+            tipo TEXT,
+            codigo TEXT,
+            item TEXT,
+            quantidade INTEGER,
+            responsavel TEXT,
+            coordenacao TEXT
+        );
+    """)
+
     # =========================================================================
     # NOVAS TABELAS PARA O MÓDULO INDEPENDENTE DE EMPRÉSTIMOS
     # =========================================================================
@@ -173,7 +277,6 @@ except Exception as e:
     df_movimentacoes = pd.DataFrame()
     df_coordenacoes = pd.DataFrame()
     lista_categorias = []
-
 # =============================================================================
 # CONFIGURAÇÕES SEGURAS DE E-MAIL
 # =============================================================================
