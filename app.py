@@ -448,7 +448,7 @@ else:
         if not df_filtrado.empty and categoria_selecionada != "Todas":
             df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
-        st.markdown("<br><h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'>📋 Posição Atual do Estoque</h3>", unsafe_allow_html=True)
+        st.markdown("<br><h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'> Controle de Estoque</h3>", unsafe_allow_html=True)
         if df_filtrado.empty:
             st.info("Nenhum material encontrado com os filtros aplicados.")
         else:
