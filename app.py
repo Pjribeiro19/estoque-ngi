@@ -82,9 +82,6 @@ def inicializar_banco_automatico():
         );
     """)
 
-    # =========================================================================
-    # NOVAS TABELAS PARA O MÓDULO INDEPENDENTE DE EMPRÉSTIMOS
-    # =========================================================================
     # 6. Tabela de Itens de Empréstimo (Catálogo exclusivo)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS emprestimo_itens (
@@ -111,6 +108,23 @@ def inicializar_banco_automatico():
             data_devolucao DATE,
             status TEXT NOT NULL DEFAULT 'EMPRESTADO', -- 'EMPRESTADO' ou 'DEVOLVIDO'
             responsavel_devolucao TEXT
+        );
+    """)
+
+    # 8. Tabela de Solicitações de Materiais do Almoxarifado
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS solicitacoes (
+            id SERIAL PRIMARY KEY,
+            usuario_nome TEXT NOT NULL,
+            usuario_email TEXT NOT NULL,
+            codigo_produto TEXT NOT NULL,
+            item_nome TEXT NOT NULL,
+            quantidade INTEGER NOT NULL,
+            coordenacao TEXT NOT NULL,
+            data_solicitacao DATE NOT NULL,
+            status TEXT NOT NULL DEFAULT 'PENDENTE', -- 'PENDENTE', 'APROVADO', 'REPROVADO'
+            justificativa TEXT,
+            data_resposta DATE
         );
     """)
 
@@ -188,6 +202,40 @@ except Exception as e:
     SMTP_HOST = "smtp.gmail.com"
     SMTP_PORTA = 587
 
+def enviar_notificacao_aprovacao(email_destino, nome_usuario, item_nome, quantidade):
+    """Envia um e-mail informando o usuário sobre a aprovação da solicitação."""
+    if EMAIL_REMETENTE != "configurar_no_secrets@email.com" and email_destino:
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = EMAIL_REMETENTE
+            msg['To'] = email_destino
+            msg['Subject'] = "Solicitação Aprovada - Almoxarifado NGI Carajás"
+            
+            corpo = f"""Olá, {nome_usuario}!
+
+Sua solicitação de material foi APROVADA!
+
+Item: {item_nome}
+Quantidade: {quantidade}
+
+O material já está disponível para retirada no Almoxarifado.
+
+Atenciosamente,
+Equipe de Gestão de Almoxarifado NGI Carajás.
+"""
+            msg.attach(MIMEText(corpo, 'plain'))
+            
+            server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
+            server.starttls()
+            server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
+            server.sendmail(EMAIL_REMETENTE, email_destino, msg.as_string())
+            server.quit()
+            return True
+        except Exception as ex:
+            st.warning(f"Não foi possível enviar e-mail de notificação: {ex}")
+            return False
+    return False
+
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
     page_title="SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS", 
@@ -264,6 +312,12 @@ if "sub_tela_login" not in st.session_state:
 if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = ""
 
+if "EMAIL_USUARIO_LOGADO" not in st.session_state:
+    st.session_state.EMAIL_USUARIO_LOGADO = ""
+
+if "PERFIL_USUARIO_LOGADO" not in st.session_state:
+    st.session_state.PERFIL_USUARIO_LOGADO = "Usuário Comum"
+
 # =============================================================================
 # FLUXO 1: TELA DE LOGIN / RECUPERAÇÃO
 # =============================================================================
@@ -287,14 +341,16 @@ if not st.session_state.autenticado:
             if st.button("Entrar no Sistema", type="primary", use_container_width=True):
                 if usuario_input and senha_input:
                     cursor = conn.cursor()
-                    cursor.execute("SELECT nome, senha FROM usuarios WHERE LOWER(email) = %s;", (usuario_input.strip().lower(),))
+                    cursor.execute("SELECT nome, senha, email, perfil FROM usuarios WHERE LOWER(email) = %s;", (usuario_input.strip().lower(),))
                     resultado = cursor.fetchone()
-                    
+            
                     if resultado:
-                        nome_banco, senha_banco = resultado
+                        nome_banco, senha_banco, email_banco, perfil_banco = resultado
                         if str(senha_banco) == str(senha_input).strip():
                             st.session_state.autenticado = True
                             st.session_state.NOME_USUARIO_LOGADO = nome_banco
+                            st.session_state.EMAIL_USUARIO_LOGADO = email_banco
+                            st.session_state.PERFIL_USUARIO_LOGADO = perfil_banco or "Usuário Comum"
                             st.rerun()
                         else:
                             st.error("❌ Senha incorreta!")
@@ -353,12 +409,14 @@ else:
     # --- MENU LATERAL ---
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
+        st.caption(f"Perfil: {st.session_state.PERFIL_USUARIO_LOGADO}")
         st.write("---")
         
         escolha = option_menu(
             menu_title=None,
             options=[
                 "Painel Geral", 
+                "Solicitações de Material",
                 "Empréstimo de Material",
                 "Cadastrar Produto", 
                 "Cadastrar Categoria", 
@@ -367,7 +425,7 @@ else:
                 "Movimentação de Estoque",
                 "Sair do Sistema"
             ],
-            icons=["grid", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "box-arrow-right"],
+            icons=["grid", "inbox", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "box-arrow-right"],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -391,6 +449,8 @@ else:
     if escolha == "Sair do Sistema":
         st.session_state.autenticado = False
         st.session_state.NOME_USUARIO_LOGADO = ""
+        st.session_state.EMAIL_USUARIO_LOGADO = ""
+        st.session_state.PERFIL_USUARIO_LOGADO = "Usuário Comum"
         st.rerun()
 
     # --- TELA: PAINEL GERAL ---
@@ -464,6 +524,230 @@ else:
                 return [''] * len(row)
                 
             st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
+
+    # =========================================================================
+    # NOVA TELA: SOLICITAÇÕES DE MATERIAL (MÓDULO DE USUÁRIO E ADMIN)
+    # =========================================================================
+    elif escolha == "Solicitações de Material":
+        st.markdown("""
+            <div style="background-color: #1565C0; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+                <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+                    Solicitações de Materiais do Almoxarifado
+                </h1>
+                <p style="color: #E3F2FD; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                    Módulo de requisição de insumos, acompanhamento e análise de solicitações
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+
+        opcoes_sub = ["Fazer / Consultar Solicitação"]
+        if st.session_state.PERFIL_USUARIO_LOGADO == "Administrador":
+            opcoes_sub.append("Analisar Solicitações")
+
+        sub_sol = option_menu(
+            menu_title=None,
+            options=opcoes_sub,
+            icons=["pencil-square", "check2-square"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+
+        cursor = conn.cursor()
+
+        # ---------------------------------------------------------------------
+        # ABA 1: FAZER E CONSULTAR SOLICITAÇÃO (USUÁRIO)
+        # ---------------------------------------------------------------------
+        if sub_sol == "Fazer / Consultar Solicitação":
+            st.subheader("📦 Fazer Nova Solicitação de Material")
+
+            df_prod_disp = pd.read_sql_query("SELECT codigo, item, quantidade, categoria FROM produtos WHERE quantidade > 0 ORDER BY item ASC;", conn)
+
+            if df_prod_disp.empty:
+                st.warning("Não há materiais disponíveis no momento para solicitação.")
+            else:
+                mapa_produtos = {f"{r['item']} (Cód: {r['codigo']} | Saldo Disp: {r['quantidade']})": (r['codigo'], r['item'], r['quantidade']) for _, r in df_prod_disp.iterrows()}
+
+                with st.form("form_nova_solicitacao", clear_on_submit=True):
+                    prod_sel_label = st.selectbox("Selecione o Material Desejado*", list(mapa_produtos.keys()))
+                    cod_p, nome_p, qtd_disp_p = mapa_produtos[prod_sel_label]
+
+                    col_s1, col_s2 = st.columns(2)
+                    qtd_solicitada = col_s1.number_input("Quantidade Desejada*", min_value=1, max_value=qtd_disp_p, value=1, step=1)
+                    
+                    lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
+                    coord_solicitante = col_s2.selectbox("Sua Coordenação*", lista_siglas_coord)
+
+                    if st.form_submit_button("Enviar Solicitação", type="primary"):
+                        try:
+                            cursor.execute("""
+                                INSERT INTO solicitacoes 
+                                (usuario_nome, usuario_email, codigo_produto, item_nome, quantidade, coordenacao, data_solicitacao, status)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, 'PENDENTE');
+                            """, (st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, cod_p, nome_p, qtd_solicitada, coord_solicitante, date.today()))
+                            conn.commit()
+                            st.success(f"Solicitação de {qtd_solicitada} un. de '{nome_p}' enviada com sucesso! Aguarde a análise.")
+                            st.rerun()
+                        except Exception as ex:
+                            conn.rollback()
+                            st.error(f"Erro ao registrar solicitação: {ex}")
+
+            st.markdown("<hr style='margin: 30px 0 20px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+            st.subheader("📋 Minhas Solicitações Realizadas")
+
+            df_minhas_sol = pd.read_sql_query("""
+                SELECT 
+                    id AS "ID",
+                    item_nome AS "Material",
+                    quantidade AS "Qtd",
+                    coordenacao AS "Coordenação",
+                    to_char(data_solicitacao, 'DD/MM/YYYY') AS "Data Solicitação",
+                    status AS "Status",
+                    COALESCE(justificativa, '-') AS "Justificativa de Reprovação",
+                    COALESCE(to_char(data_resposta, 'DD/MM/YYYY'), '-') AS "Data Resposta"
+                FROM solicitacoes 
+                WHERE LOWER(usuario_email) = %s 
+                ORDER BY id DESC;
+            """, (st.session_state.EMAIL_USUARIO_LOGADO.lower(),), conn)
+
+            if df_minhas_sol.empty:
+                st.info("Você ainda não realizou nenhuma solicitação.")
+            else:
+                def destacar_status_sol(val):
+                    if val == 'PENDENTE':
+                        return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
+                    elif val == 'APROVADO':
+                        return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+                    elif val == 'REPROVADO':
+                        return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
+                    return ''
+
+                st.dataframe(df_minhas_sol.style.map(destacar_status_sol, subset=['Status']), use_container_width=True, hide_index=True)
+
+        # ---------------------------------------------------------------------
+        # ABA 2: ANALISAR SOLICITAÇÕES (EXCLUSIVO ADMINISTRADOR)
+        # ---------------------------------------------------------------------
+        elif sub_sol == "Analisar Solicitações" and st.session_state.PERFIL_USUARIO_LOGADO == "Administrador":
+            st.subheader("🔍 Painel de Análise de Solicitações Pendentes")
+
+            cursor.execute("""
+                SELECT id, usuario_nome, usuario_email, codigo_produto, item_nome, quantidade, coordenacao, data_solicitacao 
+                FROM solicitacoes 
+                WHERE status = 'PENDENTE' 
+                ORDER BY id ASC;
+            """)
+            pendentes = cursor.fetchall()
+
+            if not pendentes:
+                st.success("Não existem solicitações pendentes de análise no momento.")
+            else:
+                mapa_pendentes = {
+                    f"ID #{p[0]} - {p[1]} ({p[6]}) solicitou {p[5]} un. de '{p[4]}' em {p[7].strftime('%d/%m/%Y')}": p
+                    for p in pendentes
+                }
+
+                sol_sel_label = st.selectbox("Selecione a solicitação para analisar:", list(mapa_pendentes.keys()))
+                p_id, p_nome, p_email, p_cod_prod, p_item_nome, p_qtd, p_coord, p_data = mapa_pendentes[sol_sel_label]
+
+                # Verifica saldo atual do produto em estoque
+                cursor.execute("SELECT quantidade FROM produtos WHERE codigo = %s;", (p_cod_prod,))
+                res_prod = cursor.fetchone()
+                saldo_atual = res_prod[0] if res_prod else 0
+
+                st.info(f"👤 **Solicitante**: {p_nome} ({p_email}) | 🏢 **Coordenação**: {p_coord}\n\n📦 **Material**: {p_item_nome} (Código: {p_cod_prod}) | 🔢 **Qtd Solicitada**: {p_qtd} | 📊 **Saldo em Estoque**: {saldo_atual}")
+
+                col_ap1, col_ap2 = st.columns(2)
+
+                # BOTAO APROVAR
+                with col_ap1:
+                    st.markdown("#### ✅ Aprovar Solicitação")
+                    if st.button("Aprovar Solicitação", type="primary", key="btn_aprovar_sol"):
+                        if saldo_atual < p_qtd:
+                            st.error(f"Saldo insuficiente em estoque! O material possui apenas {saldo_atual} un.")
+                        else:
+                            try:
+                                # Update status da solicitação
+                                cursor.execute("""
+                                    UPDATE solicitacoes 
+                                    SET status = 'APROVADO', data_resposta = %s, justificativa = NULL 
+                                    WHERE id = %s;
+                                """, (date.today(), p_id))
+
+                                # Debita do estoque de produtos
+                                novo_saldo = saldo_atual - p_qtd
+                                cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (novo_saldo, p_cod_prod))
+
+                                # Registra movimentação de saída
+                                cursor.execute("""
+                                    INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s);
+                                """, (date.today().strftime("%Y-%m-%d"), "Saída", p_cod_prod, p_item_nome, p_qtd, p_nome, p_coord))
+
+                                conn.commit()
+
+                                # Envia e-mail de notificação ao usuário
+                                enviou_email = enviar_notificacao_aprovacao(p_email, p_nome, p_item_nome, p_qtd)
+                                
+                                st.success(f"Solicitação #{p_id} APROVADA com sucesso! O estoque foi atualizado.")
+                                if enviou_email:
+                                    st.info("E-mail de notificação enviado ao usuário solicitante.")
+                                st.rerun()
+                            except Exception as ex:
+                                conn.rollback()
+                                st.error(f"Erro ao aprovar solicitação: {ex}")
+
+                # BOTAO REPROVAR
+                with col_ap2:
+                    st.markdown("#### ❌ Reprovar Solicitação")
+                    justificativa_input = st.text_area("Justificativa da Reprovação*", placeholder="Informe o motivo da reprovação para o usuário...")
+                    if st.button("Reprovar Solicitação", key="btn_reprovar_sol"):
+                        if not justificativa_input.strip():
+                            st.error("Por favor, preencha a justificativa para reprovar a solicitação.")
+                        else:
+                            try:
+                                cursor.execute("""
+                                    UPDATE solicitacoes 
+                                    SET status = 'REPROVADO', justificativa = %s, data_resposta = %s 
+                                    WHERE id = %s;
+                                """, (justificativa_input.strip(), date.today(), p_id))
+                                conn.commit()
+                                st.warning(f"Solicitação #{p_id} REPROVADA. Justificativa registrada.")
+                                st.rerun()
+                            except Exception as ex:
+                                conn.rollback()
+                                st.error(f"Erro ao reprovar solicitação: {ex}")
+
+            st.markdown("<hr style='margin: 30px 0 20px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+            st.subheader("📜 Histórico Geral de Solicitações")
+
+            df_hist_sol = pd.read_sql_query("""
+                SELECT 
+                    id AS "ID",
+                    usuario_nome AS "Solicitante",
+                    usuario_email AS "E-mail",
+                    item_nome AS "Material",
+                    quantidade AS "Qtd",
+                    coordenacao AS "Coordenação",
+                    to_char(data_solicitacao, 'DD/MM/YYYY') AS "Data Solicitada",
+                    status AS "Status",
+                    COALESCE(justificativa, '-') AS "Justificativa",
+                    COALESCE(to_char(data_resposta, 'DD/MM/YYYY'), '-') AS "Data Resposta"
+                FROM solicitacoes 
+                ORDER BY id DESC;
+            """, conn)
+
+            if df_hist_sol.empty:
+                st.info("Nenhuma solicitação analisada até o momento.")
+            else:
+                def destacar_status_sol_adm(val):
+                    if val == 'PENDENTE':
+                        return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
+                    elif val == 'APROVADO':
+                        return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+                    elif val == 'REPROVADO':
+                        return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
+                    return ''
+
+                st.dataframe(df_hist_sol.style.map(destacar_status_sol_adm, subset=['Status']), use_container_width=True, hide_index=True)
 
     # =========================================================================
     # NOVA TELA: EMPRÉSTIMO DE MATERIAL (INDEPENDENTE)
@@ -1004,15 +1288,14 @@ else:
                         st.warning("Removida.")
                         st.rerun()
 
-  
-    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (3 ABAS CONFORME SOLICITADO) ---
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE ---
     elif escolha == "Movimentação de Estoque":
         st.title("Movimentação de Estoque")
         
         aba_movimentacao = option_menu(
             menu_title=None,
             options=["Registro de Entrada", "Registro de Saída", "Histórico de Movimentação"],
-            icons=["arrow-down-circle", "arrow-up-circle", ""], # Ícone de histórico removido completamente para não parecer IA
+            icons=["arrow-down-circle", "arrow-up-circle", ""],
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
