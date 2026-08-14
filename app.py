@@ -774,8 +774,8 @@ else:
                     lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
                     coord_pessoa = col_s1.selectbox("Coordenação*", lista_siglas_coord)
                     
-                    data_retirada = col_s2.date_input("Data de Retirada*", value=date.today())
-                    data_prevista = col_s1.date_input("Data Prevista para Devolução*", value=date.today())
+                    data_retirada = col_s2.date_input("Data de Retirada*", value=date.today(), format="DD/MM/YYYY")
+                    data_prevista = col_s1.date_input("Data Prevista para Devolução*", value=date.today(), format="DD/MM/YYYY")
 
                     if st.form_submit_button("Confirmar Empréstimo", type="primary"):
                         if nome_pessoa.strip():
@@ -828,7 +828,7 @@ else:
 
                     col_d1, col_d2 = st.columns(2)
                     pessoa_devolvendo = col_d1.text_input("Nome de Quem Está Devolvendo*", value=pessoa_orig)
-                    data_devolucao = col_d2.date_input("Data Real da Devolução*", value=date.today())
+                    data_devolucao = col_d2.date_input("Data Real da Devolução*", value=date.today(), format="DD/MM/YYYY")
 
                     if st.form_submit_button("Confirmar Devolução", type="primary"):
                         if pessoa_devolvendo.strip():
@@ -992,8 +992,8 @@ else:
                 coord_sol_emp = st.selectbox("Coordenação:", lista_siglas_coord_emp_user)
 
                 col_dt1, col_dt2 = st.columns(2)
-                data_retirada_sol = col_dt1.date_input("Data de Retirada: *", value=date.today())
-                data_prev_sol = col_dt2.date_input("Data de Devolução: *", value=date.today())
+                data_retirada_sol = col_dt1.date_input("Data de Retirada: *", value=date.today(), format="DD/MM/YYYY")
+                data_prev_sol = col_dt2.date_input("Data de Devolução: *", value=date.today(), format="DD/MM/YYYY")
 
                 atividade_sol_emp = st.text_input("Atividade Associada: *", placeholder="Ex: Vistoria de campo na trilha X")
                 obs_sol_emp = st.text_area("Observações (opcional):")
@@ -1524,7 +1524,7 @@ else:
             if aba_movimentacao == "Registro de Entrada":
                 with st.form("form_entrada", clear_on_submit=True):
                     col_e1, col_e2 = st.columns(2)
-                    data_mov = col_e1.date_input("Data da Movimentação:", value=datetime.today()).strftime("%Y-%m-%d")
+                    data_mov = col_e1.date_input("Data da Movimentação:", value=datetime.today(), format="DD/MM/YYYY").strftime("%Y-%m-%d")
                     opcao_prod = col_e2.selectbox(
                         "Selecione o Material:", 
                         df_raw_prod.index, 
@@ -1556,7 +1556,7 @@ else:
             elif aba_movimentacao == "Registro de Saída":
                 with st.form("form_saida", clear_on_submit=True):
                     col_s1, col_s2 = st.columns(2)
-                    data_mov = col_s1.date_input("Data da Movimentação:", value=datetime.today()).strftime("%Y-%m-%d")
+                    data_mov = col_s1.date_input("Data da Movimentação:", value=datetime.today(), format="DD/MM/YYYY").strftime("%Y-%m-%d")
                     opcao_prod = col_s2.selectbox(
                         "Selecione o Material:", 
                         df_raw_prod.index, 
@@ -1599,3 +1599,4 @@ else:
                     st.dataframe(df_movimentacoes.sort_index(ascending=False), use_container_width=True, hide_index=True)
                 else:
                     st.info("Nenhuma movimentação registrada até o momento.")
+        
