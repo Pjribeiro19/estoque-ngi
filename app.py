@@ -439,6 +439,8 @@ if not st.session_state.autenticado:
 # =============================================================================
 else:
     # --- MENU LATERAL ---
+    label_solicitacoes = "Solicitações"
+
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
         st.write("---")
@@ -479,6 +481,15 @@ else:
             # ---------------------------------------------------------------
             # MENU COMPLETO - PERFIL ADMINISTRADOR (MENU ORIGINAL + SOLICITAÇÕES)
             # ---------------------------------------------------------------
+            try:
+                cursor_badge = conn.cursor()
+                cursor_badge.execute("SELECT COUNT(*) FROM solicitacoes_almoxarifado WHERE status = 'PENDENTE';")
+                qtd_pendentes_badge = cursor_badge.fetchone()[0]
+            except Exception:
+                qtd_pendentes_badge = 0
+
+            label_solicitacoes = f"Solicitações ({qtd_pendentes_badge})" if qtd_pendentes_badge > 0 else "Solicitações"
+
             escolha = option_menu(
                 menu_title=None,
                 options=[
@@ -489,7 +500,7 @@ else:
                     "Cadastrar Usuário", 
                     "Cadastrar Coordenação",
                     "Movimentação de Estoque",
-                    "Solicitações",
+                    label_solicitacoes,
                     "Sair do Sistema"
                 ],
                 icons=["grid", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "bell", "box-arrow-right"],
@@ -1060,7 +1071,7 @@ else:
     # =========================================================================
     # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL ADMINISTRADOR): SOLICITAÇÕES
     # =========================================================================
-    elif escolha == "Solicitações":
+    elif escolha == label_solicitacoes:
         st.markdown("""
             <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
@@ -1599,4 +1610,3 @@ else:
                     st.dataframe(df_movimentacoes.sort_index(ascending=False), use_container_width=True, hide_index=True)
                 else:
                     st.info("Nenhuma movimentação registrada até o momento.")
-        
