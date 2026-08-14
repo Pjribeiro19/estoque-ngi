@@ -254,6 +254,20 @@ st.set_page_config(
 # --- ESTILIZAÇÃO CSS COMPATÍVEL ---
 st.markdown("""
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    html, body, [class*="css"], .stMarkdown, .stMarkdown p, .stMarkdown li,
+    [data-testid="stWidgetLabel"] p, label, span, div, button,
+    input, textarea, select, .stDataFrame, [data-testid="stMetricValue"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif !important;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif !important;
+        font-weight: 600 !important;
+        letter-spacing: -0.01em;
+    }
+
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
     
