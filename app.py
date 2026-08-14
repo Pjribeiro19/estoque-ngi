@@ -12,6 +12,7 @@ import os
 # =============================================================================
 # CONEXÃO E INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (Neon Postgres)
 # =============================================================================
+@st.cache_resource
 def inicializar_banco_automatico():
     conn = None
     try:
