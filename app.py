@@ -82,6 +82,9 @@ def inicializar_banco_automatico():
         );
     """)
 
+    # =========================================================================
+    # NOVAS TABELAS PARA O MÓDULO INDEPENDENTE DE EMPRÉSTIMOS
+    # =========================================================================
     # 6. Tabela de Itens de Empréstimo (Catálogo exclusivo)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS emprestimo_itens (
@@ -111,20 +114,26 @@ def inicializar_banco_automatico():
         );
     """)
 
-    # 8. Tabela de Solicitações de Materiais do Almoxarifado
+    # =========================================================================
+    # NOVA TABELA PARA O MÓDULO DE SOLICITAÇÕES (USUÁRIO / ADMINISTRADOR)
+    # =========================================================================
+    # 8. Tabela de Solicitações
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS solicitacoes (
             id SERIAL PRIMARY KEY,
-            usuario_nome TEXT NOT NULL,
-            usuario_email TEXT NOT NULL,
-            codigo_produto TEXT NOT NULL,
+            tipo TEXT NOT NULL, -- 'MATERIAL' ou 'EMPRESTIMO'
+            referencia_codigo TEXT,
             item_nome TEXT NOT NULL,
             quantidade INTEGER NOT NULL,
-            coordenacao TEXT NOT NULL,
-            data_solicitacao DATE NOT NULL,
-            status TEXT NOT NULL DEFAULT 'PENDENTE', -- 'PENDENTE', 'APROVADO', 'REPROVADO'
-            justificativa TEXT,
-            data_resposta DATE
+            solicitante_nome TEXT NOT NULL,
+            solicitante_email TEXT NOT NULL,
+            coordenacao TEXT,
+            data_solicitacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            data_prevista DATE,
+            status TEXT NOT NULL DEFAULT 'PENDENTE', -- 'PENDENTE', 'APROVADA' ou 'REJEITADA'
+            data_decisao TIMESTAMP,
+            aprovador TEXT,
+            observacao TEXT
         );
     """)
 
@@ -202,39 +211,27 @@ except Exception as e:
     SMTP_HOST = "smtp.gmail.com"
     SMTP_PORTA = 587
 
-def enviar_notificacao_aprovacao(email_destino, nome_usuario, item_nome, quantidade):
-    """Envia um e-mail informando o usuário sobre a aprovação da solicitação."""
-    if EMAIL_REMETENTE != "configurar_no_secrets@email.com" and email_destino:
-        try:
-            msg = MIMEMultipart()
-            msg['From'] = EMAIL_REMETENTE
-            msg['To'] = email_destino
-            msg['Subject'] = "Solicitação Aprovada - Almoxarifado NGI Carajás"
-            
-            corpo = f"""Olá, {nome_usuario}!
+# =============================================================================
+# FUNÇÃO AUXILIAR: ENVIO DE E-MAIL DE NOTIFICAÇÃO (MÓDULO DE SOLICITAÇÃO)
+# =============================================================================
+def enviar_email_notificacao(destinatario, assunto, corpo_html):
+    if EMAIL_REMETENTE == "configurar_no_secrets@email.com" or not destinatario:
+        return False
+    try:
+        msg = MIMEMultipart()
+        msg["From"] = EMAIL_REMETENTE
+        msg["To"] = destinatario
+        msg["Subject"] = assunto
+        msg.attach(MIMEText(corpo_html, "html"))
 
-Sua solicitação de material foi APROVADA!
-
-Item: {item_nome}
-Quantidade: {quantidade}
-
-O material já está disponível para retirada no Almoxarifado.
-
-Atenciosamente,
-Equipe de Gestão de Almoxarifado NGI Carajás.
-"""
-            msg.attach(MIMEText(corpo, 'plain'))
-            
-            server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
-            server.starttls()
-            server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
-            server.sendmail(EMAIL_REMETENTE, email_destino, msg.as_string())
-            server.quit()
-            return True
-        except Exception as ex:
-            st.warning(f"Não foi possível enviar e-mail de notificação: {ex}")
-            return False
-    return False
+        servidor = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
+        servidor.starttls()
+        servidor.login(EMAIL_REMETENTE, SENHA_REMETENTE)
+        servidor.sendmail(EMAIL_REMETENTE, destinatario, msg.as_string())
+        servidor.quit()
+        return True
+    except Exception:
+        return False
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
@@ -312,11 +309,11 @@ if "sub_tela_login" not in st.session_state:
 if "NOME_USUARIO_LOGADO" not in st.session_state:
     st.session_state.NOME_USUARIO_LOGADO = ""
 
+if "PERFIL_USUARIO_LOGADO" not in st.session_state:
+    st.session_state.PERFIL_USUARIO_LOGADO = ""
+
 if "EMAIL_USUARIO_LOGADO" not in st.session_state:
     st.session_state.EMAIL_USUARIO_LOGADO = ""
-
-if "PERFIL_USUARIO_LOGADO" not in st.session_state:
-    st.session_state.PERFIL_USUARIO_LOGADO = "Usuário Comum"
 
 # =============================================================================
 # FLUXO 1: TELA DE LOGIN / RECUPERAÇÃO
@@ -341,16 +338,16 @@ if not st.session_state.autenticado:
             if st.button("Entrar no Sistema", type="primary", use_container_width=True):
                 if usuario_input and senha_input:
                     cursor = conn.cursor()
-                    cursor.execute("SELECT nome, senha, email, perfil FROM usuarios WHERE LOWER(email) = %s;", (usuario_input.strip().lower(),))
+                    cursor.execute("SELECT nome, senha, perfil, email FROM usuarios WHERE LOWER(email) = %s;", (usuario_input.strip().lower(),))
                     resultado = cursor.fetchone()
-            
+                    
                     if resultado:
-                        nome_banco, senha_banco, email_banco, perfil_banco = resultado
+                        nome_banco, senha_banco, perfil_banco, email_banco = resultado
                         if str(senha_banco) == str(senha_input).strip():
                             st.session_state.autenticado = True
                             st.session_state.NOME_USUARIO_LOGADO = nome_banco
+                            st.session_state.PERFIL_USUARIO_LOGADO = perfil_banco
                             st.session_state.EMAIL_USUARIO_LOGADO = email_banco
-                            st.session_state.PERFIL_USUARIO_LOGADO = perfil_banco or "Usuário Comum"
                             st.rerun()
                         else:
                             st.error("❌ Senha incorreta!")
@@ -409,48 +406,83 @@ else:
     # --- MENU LATERAL ---
     with st.sidebar:
         st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
-        st.caption(f"Perfil: {st.session_state.PERFIL_USUARIO_LOGADO}")
         st.write("---")
         
-        escolha = option_menu(
-            menu_title=None,
-            options=[
-                "Painel Geral", 
-                "Solicitações de Material",
-                "Empréstimo de Material",
-                "Cadastrar Produto", 
-                "Cadastrar Categoria", 
-                "Cadastrar Usuário", 
-                "Cadastrar Coordenação",
-                "Movimentação de Estoque",
-                "Sair do Sistema"
-            ],
-            icons=["grid", "inbox", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "box-arrow-right"],
-            menu_icon="cast",
-            default_index=0,
-            styles={
-                "container": {"padding": "0!important", "background-color": "transparent"},
-                "icon": {"color": "#64748b", "font-size": "15px"}, 
-                "nav-link": {
-                    "font-size": "14px", 
-                    "text-align": "left", 
-                    "margin": "0px", 
-                    "color": "var(--text-color)",
-                    "--hover-color": "rgba(76, 175, 80, 0.12)"
-                },
-                "nav-link-selected": {
-                    "background-color": "#4CAF50", 
-                    "color": "white", 
-                    "font-weight": "500"
-                },
-            }
-        )
+        if st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
+            # ---------------------------------------------------------------
+            # MENU RESTRITO - PERFIL USUÁRIO (MÓDULO DE SOLICITAÇÃO)
+            # ---------------------------------------------------------------
+            escolha = option_menu(
+                menu_title=None,
+                options=[
+                    "Materiais Disponíveis",
+                    "Empréstimo Disponível",
+                    "Minhas Solicitações",
+                    "Sair do Sistema"
+                ],
+                icons=["box-seam", "arrow-repeat", "clock-history", "box-arrow-right"],
+                menu_icon="cast",
+                default_index=0,
+                styles={
+                    "container": {"padding": "0!important", "background-color": "transparent"},
+                    "icon": {"color": "#64748b", "font-size": "15px"}, 
+                    "nav-link": {
+                        "font-size": "14px", 
+                        "text-align": "left", 
+                        "margin": "0px", 
+                        "color": "var(--text-color)",
+                        "--hover-color": "rgba(76, 175, 80, 0.12)"
+                    },
+                    "nav-link-selected": {
+                        "background-color": "#4CAF50", 
+                        "color": "white", 
+                        "font-weight": "500"
+                    },
+                }
+            )
+        else:
+            # ---------------------------------------------------------------
+            # MENU COMPLETO - PERFIL ADMINISTRADOR (MENU ORIGINAL + SOLICITAÇÕES)
+            # ---------------------------------------------------------------
+            escolha = option_menu(
+                menu_title=None,
+                options=[
+                    "Painel Geral", 
+                    "Empréstimo de Material",
+                    "Cadastrar Produto", 
+                    "Cadastrar Categoria", 
+                    "Cadastrar Usuário", 
+                    "Cadastrar Coordenação",
+                    "Movimentação de Estoque",
+                    "Solicitações",
+                    "Sair do Sistema"
+                ],
+                icons=["grid", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "bell", "box-arrow-right"],
+                menu_icon="cast",
+                default_index=0,
+                styles={
+                    "container": {"padding": "0!important", "background-color": "transparent"},
+                    "icon": {"color": "#64748b", "font-size": "15px"}, 
+                    "nav-link": {
+                        "font-size": "14px", 
+                        "text-align": "left", 
+                        "margin": "0px", 
+                        "color": "var(--text-color)",
+                        "--hover-color": "rgba(76, 175, 80, 0.12)"
+                    },
+                    "nav-link-selected": {
+                        "background-color": "#4CAF50", 
+                        "color": "white", 
+                        "font-weight": "500"
+                    },
+                }
+            )
 
     if escolha == "Sair do Sistema":
         st.session_state.autenticado = False
         st.session_state.NOME_USUARIO_LOGADO = ""
+        st.session_state.PERFIL_USUARIO_LOGADO = ""
         st.session_state.EMAIL_USUARIO_LOGADO = ""
-        st.session_state.PERFIL_USUARIO_LOGADO = "Usuário Comum"
         st.rerun()
 
     # --- TELA: PAINEL GERAL ---
@@ -524,230 +556,6 @@ else:
                 return [''] * len(row)
                 
             st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
-
-    # =========================================================================
-    # NOVA TELA: SOLICITAÇÕES DE MATERIAL (MÓDULO DE USUÁRIO E ADMIN)
-    # =========================================================================
-    elif escolha == "Solicitações de Material":
-        st.markdown("""
-            <div style="background-color: #1565C0; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
-                <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
-                    Solicitações de Materiais do Almoxarifado
-                </h1>
-                <p style="color: #E3F2FD; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
-                    Módulo de requisição de insumos, acompanhamento e análise de solicitações
-                </p>
-            </div>
-        """, unsafe_allow_html=True)
-
-        opcoes_sub = ["Fazer / Consultar Solicitação"]
-        if st.session_state.PERFIL_USUARIO_LOGADO == "Administrador":
-            opcoes_sub.append("Analisar Solicitações")
-
-        sub_sol = option_menu(
-            menu_title=None,
-            options=opcoes_sub,
-            icons=["pencil-square", "check2-square"],
-            orientation="horizontal",
-            styles=ESTILO_MENU_HORIZONTAL
-        )
-
-        cursor = conn.cursor()
-
-        # ---------------------------------------------------------------------
-        # ABA 1: FAZER E CONSULTAR SOLICITAÇÃO (USUÁRIO)
-        # ---------------------------------------------------------------------
-        if sub_sol == "Fazer / Consultar Solicitação":
-            st.subheader("📦 Fazer Nova Solicitação de Material")
-
-            df_prod_disp = pd.read_sql_query("SELECT codigo, item, quantidade, categoria FROM produtos WHERE quantidade > 0 ORDER BY item ASC;", conn)
-
-            if df_prod_disp.empty:
-                st.warning("Não há materiais disponíveis no momento para solicitação.")
-            else:
-                mapa_produtos = {f"{r['item']} (Cód: {r['codigo']} | Saldo Disp: {r['quantidade']})": (r['codigo'], r['item'], r['quantidade']) for _, r in df_prod_disp.iterrows()}
-
-                with st.form("form_nova_solicitacao", clear_on_submit=True):
-                    prod_sel_label = st.selectbox("Selecione o Material Desejado*", list(mapa_produtos.keys()))
-                    cod_p, nome_p, qtd_disp_p = mapa_produtos[prod_sel_label]
-
-                    col_s1, col_s2 = st.columns(2)
-                    qtd_solicitada = col_s1.number_input("Quantidade Desejada*", min_value=1, max_value=qtd_disp_p, value=1, step=1)
-                    
-                    lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
-                    coord_solicitante = col_s2.selectbox("Sua Coordenação*", lista_siglas_coord)
-
-                    if st.form_submit_button("Enviar Solicitação", type="primary"):
-                        try:
-                            cursor.execute("""
-                                INSERT INTO solicitacoes 
-                                (usuario_nome, usuario_email, codigo_produto, item_nome, quantidade, coordenacao, data_solicitacao, status)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, 'PENDENTE');
-                            """, (st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, cod_p, nome_p, qtd_solicitada, coord_solicitante, date.today()))
-                            conn.commit()
-                            st.success(f"Solicitação de {qtd_solicitada} un. de '{nome_p}' enviada com sucesso! Aguarde a análise.")
-                            st.rerun()
-                        except Exception as ex:
-                            conn.rollback()
-                            st.error(f"Erro ao registrar solicitação: {ex}")
-
-            st.markdown("<hr style='margin: 30px 0 20px 0; opacity: 0.2;'>", unsafe_allow_html=True)
-            st.subheader("📋 Minhas Solicitações Realizadas")
-
-            df_minhas_sol = pd.read_sql_query("""
-                SELECT 
-                    id AS "ID",
-                    item_nome AS "Material",
-                    quantidade AS "Qtd",
-                    coordenacao AS "Coordenação",
-                    to_char(data_solicitacao, 'DD/MM/YYYY') AS "Data Solicitação",
-                    status AS "Status",
-                    COALESCE(justificativa, '-') AS "Justificativa de Reprovação",
-                    COALESCE(to_char(data_resposta, 'DD/MM/YYYY'), '-') AS "Data Resposta"
-                FROM solicitacoes 
-                WHERE LOWER(usuario_email) = %s 
-                ORDER BY id DESC;
-            """, (st.session_state.EMAIL_USUARIO_LOGADO.lower(),), conn)
-
-            if df_minhas_sol.empty:
-                st.info("Você ainda não realizou nenhuma solicitação.")
-            else:
-                def destacar_status_sol(val):
-                    if val == 'PENDENTE':
-                        return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
-                    elif val == 'APROVADO':
-                        return 'background-color: #d4edda; color: #155724; font-weight: bold;'
-                    elif val == 'REPROVADO':
-                        return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
-                    return ''
-
-                st.dataframe(df_minhas_sol.style.map(destacar_status_sol, subset=['Status']), use_container_width=True, hide_index=True)
-
-        # ---------------------------------------------------------------------
-        # ABA 2: ANALISAR SOLICITAÇÕES (EXCLUSIVO ADMINISTRADOR)
-        # ---------------------------------------------------------------------
-        elif sub_sol == "Analisar Solicitações" and st.session_state.PERFIL_USUARIO_LOGADO == "Administrador":
-            st.subheader("🔍 Painel de Análise de Solicitações Pendentes")
-
-            cursor.execute("""
-                SELECT id, usuario_nome, usuario_email, codigo_produto, item_nome, quantidade, coordenacao, data_solicitacao 
-                FROM solicitacoes 
-                WHERE status = 'PENDENTE' 
-                ORDER BY id ASC;
-            """)
-            pendentes = cursor.fetchall()
-
-            if not pendentes:
-                st.success("Não existem solicitações pendentes de análise no momento.")
-            else:
-                mapa_pendentes = {
-                    f"ID #{p[0]} - {p[1]} ({p[6]}) solicitou {p[5]} un. de '{p[4]}' em {p[7].strftime('%d/%m/%Y')}": p
-                    for p in pendentes
-                }
-
-                sol_sel_label = st.selectbox("Selecione a solicitação para analisar:", list(mapa_pendentes.keys()))
-                p_id, p_nome, p_email, p_cod_prod, p_item_nome, p_qtd, p_coord, p_data = mapa_pendentes[sol_sel_label]
-
-                # Verifica saldo atual do produto em estoque
-                cursor.execute("SELECT quantidade FROM produtos WHERE codigo = %s;", (p_cod_prod,))
-                res_prod = cursor.fetchone()
-                saldo_atual = res_prod[0] if res_prod else 0
-
-                st.info(f"👤 **Solicitante**: {p_nome} ({p_email}) | 🏢 **Coordenação**: {p_coord}\n\n📦 **Material**: {p_item_nome} (Código: {p_cod_prod}) | 🔢 **Qtd Solicitada**: {p_qtd} | 📊 **Saldo em Estoque**: {saldo_atual}")
-
-                col_ap1, col_ap2 = st.columns(2)
-
-                # BOTAO APROVAR
-                with col_ap1:
-                    st.markdown("#### ✅ Aprovar Solicitação")
-                    if st.button("Aprovar Solicitação", type="primary", key="btn_aprovar_sol"):
-                        if saldo_atual < p_qtd:
-                            st.error(f"Saldo insuficiente em estoque! O material possui apenas {saldo_atual} un.")
-                        else:
-                            try:
-                                # Update status da solicitação
-                                cursor.execute("""
-                                    UPDATE solicitacoes 
-                                    SET status = 'APROVADO', data_resposta = %s, justificativa = NULL 
-                                    WHERE id = %s;
-                                """, (date.today(), p_id))
-
-                                # Debita do estoque de produtos
-                                novo_saldo = saldo_atual - p_qtd
-                                cursor.execute("UPDATE produtos SET quantidade = %s WHERE codigo = %s;", (novo_saldo, p_cod_prod))
-
-                                # Registra movimentação de saída
-                                cursor.execute("""
-                                    INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s);
-                                """, (date.today().strftime("%Y-%m-%d"), "Saída", p_cod_prod, p_item_nome, p_qtd, p_nome, p_coord))
-
-                                conn.commit()
-
-                                # Envia e-mail de notificação ao usuário
-                                enviou_email = enviar_notificacao_aprovacao(p_email, p_nome, p_item_nome, p_qtd)
-                                
-                                st.success(f"Solicitação #{p_id} APROVADA com sucesso! O estoque foi atualizado.")
-                                if enviou_email:
-                                    st.info("E-mail de notificação enviado ao usuário solicitante.")
-                                st.rerun()
-                            except Exception as ex:
-                                conn.rollback()
-                                st.error(f"Erro ao aprovar solicitação: {ex}")
-
-                # BOTAO REPROVAR
-                with col_ap2:
-                    st.markdown("#### ❌ Reprovar Solicitação")
-                    justificativa_input = st.text_area("Justificativa da Reprovação*", placeholder="Informe o motivo da reprovação para o usuário...")
-                    if st.button("Reprovar Solicitação", key="btn_reprovar_sol"):
-                        if not justificativa_input.strip():
-                            st.error("Por favor, preencha a justificativa para reprovar a solicitação.")
-                        else:
-                            try:
-                                cursor.execute("""
-                                    UPDATE solicitacoes 
-                                    SET status = 'REPROVADO', justificativa = %s, data_resposta = %s 
-                                    WHERE id = %s;
-                                """, (justificativa_input.strip(), date.today(), p_id))
-                                conn.commit()
-                                st.warning(f"Solicitação #{p_id} REPROVADA. Justificativa registrada.")
-                                st.rerun()
-                            except Exception as ex:
-                                conn.rollback()
-                                st.error(f"Erro ao reprovar solicitação: {ex}")
-
-            st.markdown("<hr style='margin: 30px 0 20px 0; opacity: 0.2;'>", unsafe_allow_html=True)
-            st.subheader("📜 Histórico Geral de Solicitações")
-
-            df_hist_sol = pd.read_sql_query("""
-                SELECT 
-                    id AS "ID",
-                    usuario_nome AS "Solicitante",
-                    usuario_email AS "E-mail",
-                    item_nome AS "Material",
-                    quantidade AS "Qtd",
-                    coordenacao AS "Coordenação",
-                    to_char(data_solicitacao, 'DD/MM/YYYY') AS "Data Solicitada",
-                    status AS "Status",
-                    COALESCE(justificativa, '-') AS "Justificativa",
-                    COALESCE(to_char(data_resposta, 'DD/MM/YYYY'), '-') AS "Data Resposta"
-                FROM solicitacoes 
-                ORDER BY id DESC;
-            """, conn)
-
-            if df_hist_sol.empty:
-                st.info("Nenhuma solicitação analisada até o momento.")
-            else:
-                def destacar_status_sol_adm(val):
-                    if val == 'PENDENTE':
-                        return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
-                    elif val == 'APROVADO':
-                        return 'background-color: #d4edda; color: #155724; font-weight: bold;'
-                    elif val == 'REPROVADO':
-                        return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
-                    return ''
-
-                st.dataframe(df_hist_sol.style.map(destacar_status_sol_adm, subset=['Status']), use_container_width=True, hide_index=True)
 
     # =========================================================================
     # NOVA TELA: EMPRÉSTIMO DE MATERIAL (INDEPENDENTE)
@@ -1041,6 +849,312 @@ else:
 
                 st.dataframe(df_hist_emp.style.map(destacar_status, subset=['Status']), use_container_width=True, hide_index=True)
 
+    # =========================================================================
+    # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL USUÁRIO): MATERIAIS DISPONÍVEIS
+    # =========================================================================
+    elif escolha == "Materiais Disponíveis":
+        st.markdown("""
+            <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+                <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+                    Materiais Disponíveis no Almoxarifado
+                </h1>
+                <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                    Consulte os itens em estoque e solicite a retirada de materiais
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+
+        df_disp_material = df_produtos[df_produtos["Quantidade"] > 0].copy() if not df_produtos.empty else pd.DataFrame()
+
+        if df_disp_material.empty:
+            st.info("Nenhum material disponível em estoque no momento.")
+        else:
+            st.dataframe(df_disp_material, use_container_width=True, hide_index=True)
+
+            st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+            st.markdown("### Nova Solicitação de Material")
+
+            df_raw_prod_user = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos WHERE quantidade > 0 ORDER BY item ASC;", conn)
+            lista_siglas_coord_user = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
+
+            with st.form("form_solicitar_material", clear_on_submit=True):
+                opcao_sol_mat = st.selectbox(
+                    "Selecione o Material:",
+                    df_raw_prod_user.index,
+                    format_func=lambda x: f"{df_raw_prod_user.loc[x, 'codigo']} - {df_raw_prod_user.loc[x, 'item']} (Saldo: {df_raw_prod_user.loc[x, 'quantidade']})"
+                )
+                qtd_sol_mat = st.number_input("Quantidade Desejada:", min_value=1, max_value=int(df_raw_prod_user.loc[opcao_sol_mat, "quantidade"]), value=1, step=1)
+                coord_sol_mat = st.selectbox("Coordenação:", lista_siglas_coord_user)
+                obs_sol_mat = st.text_area("Observações (opcional):")
+
+                if st.form_submit_button("Enviar Solicitação", type="primary"):
+                    cod_sel = df_raw_prod_user.loc[opcao_sol_mat, "codigo"]
+                    nome_sel = df_raw_prod_user.loc[opcao_sol_mat, "item"]
+                    try:
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            INSERT INTO solicitacoes 
+                            (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, status, observacao)
+                            VALUES ('MATERIAL', %s, %s, %s, %s, %s, %s, 'PENDENTE', %s);
+                        """, (cod_sel, nome_sel, qtd_sol_mat, st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_mat, obs_sol_mat.strip()))
+                        conn.commit()
+                        st.success("Solicitação enviada! Aguarde a aprovação do administrador.")
+                        st.rerun()
+                    except Exception as ex:
+                        conn.rollback()
+                        st.error(f"Erro ao enviar solicitação: {ex}")
+
+    # =========================================================================
+    # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL USUÁRIO): EMPRÉSTIMO DISPONÍVEL
+    # =========================================================================
+    elif escolha == "Empréstimo Disponível":
+        st.markdown("""
+            <div style="background-color: #2E7D32; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+                <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+                    Itens Disponíveis para Empréstimo
+                </h1>
+                <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                    Consulte os itens do catálogo de empréstimo e solicite a retirada
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+
+        df_emp_disp_user = pd.read_sql_query("""
+            SELECT 
+                codigo AS "Código", 
+                item AS "Item / Equipamento", 
+                quantidade_disponivel AS "Qtd Disponível",
+                observacao AS "Observações"
+            FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY item ASC;
+        """, conn)
+
+        if df_emp_disp_user.empty:
+            st.info("Nenhum item disponível para empréstimo no momento.")
+        else:
+            st.dataframe(df_emp_disp_user, use_container_width=True, hide_index=True)
+
+            st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+            st.markdown("### Nova Solicitação de Empréstimo")
+
+            df_raw_emp_user = pd.read_sql_query("SELECT id, codigo, item, quantidade_disponivel FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY item ASC;", conn)
+            lista_siglas_coord_emp_user = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
+
+            with st.form("form_solicitar_emprestimo", clear_on_submit=True):
+                opcao_sol_emp = st.selectbox(
+                    "Selecione o Item:",
+                    df_raw_emp_user.index,
+                    format_func=lambda x: f"{df_raw_emp_user.loc[x, 'item']} (Disponível: {df_raw_emp_user.loc[x, 'quantidade_disponivel']})"
+                )
+                qtd_sol_emp = st.number_input("Quantidade Desejada:", min_value=1, max_value=int(df_raw_emp_user.loc[opcao_sol_emp, "quantidade_disponivel"]), value=1, step=1)
+                coord_sol_emp = st.selectbox("Coordenação:", lista_siglas_coord_emp_user)
+                data_prev_sol = st.date_input("Data Prevista para Devolução:", value=date.today())
+                obs_sol_emp = st.text_area("Observações (opcional):")
+
+                if st.form_submit_button("Enviar Solicitação", type="primary"):
+                    item_id_sel = int(df_raw_emp_user.loc[opcao_sol_emp, "id"])
+                    nome_sel_emp = df_raw_emp_user.loc[opcao_sol_emp, "item"]
+                    try:
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            INSERT INTO solicitacoes 
+                            (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_prevista, status, observacao)
+                            VALUES ('EMPRESTIMO', %s, %s, %s, %s, %s, %s, %s, 'PENDENTE', %s);
+                        """, (str(item_id_sel), nome_sel_emp, qtd_sol_emp, st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_emp, data_prev_sol, obs_sol_emp.strip()))
+                        conn.commit()
+                        st.success("Solicitação de empréstimo enviada! Aguarde a aprovação do administrador.")
+                        st.rerun()
+                    except Exception as ex:
+                        conn.rollback()
+                        st.error(f"Erro ao enviar solicitação: {ex}")
+
+    # =========================================================================
+    # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL USUÁRIO): MINHAS SOLICITAÇÕES
+    # =========================================================================
+    elif escolha == "Minhas Solicitações":
+        st.title("Minhas Solicitações")
+
+        df_minhas_sol = pd.read_sql_query("""
+            SELECT 
+                tipo AS "Tipo",
+                item_nome AS "Item",
+                quantidade AS "Quantidade",
+                to_char(data_solicitacao, 'DD/MM/YYYY HH24:MI') AS "Data da Solicitação",
+                status AS "Status",
+                COALESCE(to_char(data_decisao, 'DD/MM/YYYY HH24:MI'), '-') AS "Data da Decisão"
+            FROM solicitacoes
+            WHERE solicitante_email = %(email_usuario)s
+            ORDER BY id DESC;
+        """, conn, params={"email_usuario": st.session_state.EMAIL_USUARIO_LOGADO})
+
+        if df_minhas_sol.empty:
+            st.info("Você ainda não realizou nenhuma solicitação.")
+        else:
+            def destacar_status_sol(val):
+                if val == 'PENDENTE':
+                    return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
+                elif val == 'APROVADA':
+                    return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+                elif val == 'REJEITADA':
+                    return 'background-color: rgba(198, 40, 40, 0.12); color: #c62828; font-weight: bold;'
+                return ''
+
+            st.dataframe(df_minhas_sol.style.map(destacar_status_sol, subset=['Status']), use_container_width=True, hide_index=True)
+
+    # =========================================================================
+    # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL ADMINISTRADOR): SOLICITAÇÕES
+    # =========================================================================
+    elif escolha == "Solicitações":
+        st.markdown("""
+            <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+                <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+                    Solicitações de Usuários
+                </h1>
+                <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                    Analise, aprove ou rejeite as solicitações de materiais e empréstimos
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+
+        aba_solicitacao = option_menu(
+            menu_title=None,
+            options=["Pendentes", "Histórico"],
+            icons=["hourglass-split", "journal-text"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+
+        cursor = conn.cursor()
+
+        if aba_solicitacao == "Pendentes":
+            df_pendentes = pd.read_sql_query("""
+                SELECT id, tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_prevista, observacao
+                FROM solicitacoes WHERE status = 'PENDENTE' ORDER BY id ASC;
+            """, conn)
+
+            if df_pendentes.empty:
+                st.info("Nenhuma solicitação pendente no momento.")
+            else:
+                for _, sol in df_pendentes.iterrows():
+                    tipo_label = "Material (Almoxarifado)" if sol["tipo"] == "MATERIAL" else "Empréstimo"
+                    linha_devolucao = f"Devolução prevista: {sol['data_prevista'].strftime('%d/%m/%Y')}<br>" if sol["data_prevista"] is not None and sol["tipo"] == "EMPRESTIMO" else ""
+                    linha_obs = f"Observações: {sol['observacao']}" if sol["observacao"] else ""
+
+                    st.markdown(f"""
+                        <div style="border: 1px solid rgba(76, 175, 80, 0.3); border-radius: 8px; padding: 15px; margin-bottom: 12px;">
+                            <b>#{sol['id']} — {tipo_label}</b><br>
+                            Item: {sol['item_nome']} | Quantidade: {sol['quantidade']}<br>
+                            Solicitante: {sol['solicitante_nome']} ({sol['solicitante_email']}) | Coordenação: {sol['coordenacao'] or '-'}<br>
+                            {linha_devolucao}{linha_obs}
+                        </div>
+                    """, unsafe_allow_html=True)
+
+                    col_ap1, col_ap2, col_ap3 = st.columns([1, 1, 4])
+                    with col_ap1:
+                        if st.button("✅ Aprovar", key=f"aprovar_{sol['id']}", type="primary"):
+                            try:
+                                if sol["tipo"] == "MATERIAL":
+                                    cursor.execute("SELECT quantidade FROM produtos WHERE codigo = %s;", (sol["referencia_codigo"],))
+                                    res_prod = cursor.fetchone()
+                                    if not res_prod or res_prod[0] < sol["quantidade"]:
+                                        st.error("Saldo insuficiente em estoque para aprovar esta solicitação.")
+                                    else:
+                                        cursor.execute("UPDATE produtos SET quantidade = quantidade - %s WHERE codigo = %s;", (sol["quantidade"], sol["referencia_codigo"]))
+                                        cursor.execute("""
+                                            INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                            VALUES (%s, %s, %s, %s, %s, %s, %s);
+                                        """, (date.today().strftime("%Y-%m-%d"), "Saída", sol["referencia_codigo"], sol["item_nome"], sol["quantidade"], sol["solicitante_nome"], sol["coordenacao"]))
+                                        cursor.execute("""
+                                            UPDATE solicitacoes SET status = 'APROVADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s 
+                                            WHERE id = %s;
+                                        """, (st.session_state.NOME_USUARIO_LOGADO, sol["id"]))
+                                        conn.commit()
+
+                                        enviar_email_notificacao(
+                                            sol["solicitante_email"],
+                                            "Solicitação de Material Aprovada",
+                                            f"""
+                                            <p>Olá, {sol['solicitante_nome']},</p>
+                                            <p>Sua solicitação do item <b>{sol['item_nome']}</b> (Quantidade: {sol['quantidade']}) foi <b>aprovada</b>.</p>
+                                            <p>O material já está disponível para retirada no Almoxarifado.</p>
+                                            <p>Atenciosamente,<br>Gestão de Almoxarifado NGI Carajás</p>
+                                            """
+                                        )
+                                        st.success("Solicitação aprovada e usuário notificado por e-mail!")
+                                        st.rerun()
+                                else:
+                                    cursor.execute("SELECT quantidade_disponivel FROM emprestimo_itens WHERE id = %s;", (int(sol["referencia_codigo"]),))
+                                    res_emp = cursor.fetchone()
+                                    if not res_emp or res_emp[0] < sol["quantidade"]:
+                                        st.error("Saldo insuficiente disponível para aprovar este empréstimo.")
+                                    else:
+                                        cursor.execute("""
+                                            INSERT INTO emprestimo_registros 
+                                            (item_id, item_nome, quantidade, pessoa, coordenacao, data_retirada, data_prevista, status)
+                                            VALUES (%s, %s, %s, %s, %s, %s, %s, 'EMPRESTADO');
+                                        """, (int(sol["referencia_codigo"]), sol["item_nome"], sol["quantidade"], sol["solicitante_nome"], sol["coordenacao"], date.today(), sol["data_prevista"]))
+                                        cursor.execute("""
+                                            UPDATE emprestimo_itens SET quantidade_disponivel = quantidade_disponivel - %s WHERE id = %s;
+                                        """, (sol["quantidade"], int(sol["referencia_codigo"])))
+                                        cursor.execute("""
+                                            UPDATE solicitacoes SET status = 'APROVADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s 
+                                            WHERE id = %s;
+                                        """, (st.session_state.NOME_USUARIO_LOGADO, sol["id"]))
+                                        conn.commit()
+
+                                        enviar_email_notificacao(
+                                            sol["solicitante_email"],
+                                            "Solicitação de Empréstimo Aprovada",
+                                            f"""
+                                            <p>Olá, {sol['solicitante_nome']},</p>
+                                            <p>Sua solicitação de empréstimo do item <b>{sol['item_nome']}</b> (Quantidade: {sol['quantidade']}) foi <b>aprovada</b>.</p>
+                                            <p>O item já está disponível para retirada no Almoxarifado.</p>
+                                            <p>Atenciosamente,<br>Gestão de Almoxarifado NGI Carajás</p>
+                                            """
+                                        )
+                                        st.success("Empréstimo aprovado e usuário notificado por e-mail!")
+                                        st.rerun()
+                            except Exception as ex:
+                                conn.rollback()
+                                st.error(f"Erro ao aprovar solicitação: {ex}")
+
+                    with col_ap2:
+                        if st.button("❌ Rejeitar", key=f"rejeitar_{sol['id']}"):
+                            cursor.execute("""
+                                UPDATE solicitacoes SET status = 'REJEITADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s 
+                                WHERE id = %s;
+                            """, (st.session_state.NOME_USUARIO_LOGADO, sol["id"]))
+                            conn.commit()
+                            st.warning("Solicitação rejeitada.")
+                            st.rerun()
+
+        elif aba_solicitacao == "Histórico":
+            df_hist_sol = pd.read_sql_query("""
+                SELECT 
+                    tipo AS "Tipo",
+                    item_nome AS "Item",
+                    quantidade AS "Quantidade",
+                    solicitante_nome AS "Solicitante",
+                    solicitante_email AS "E-mail",
+                    coordenacao AS "Coordenação",
+                    to_char(data_solicitacao, 'DD/MM/YYYY HH24:MI') AS "Data Solicitação",
+                    status AS "Status",
+                    COALESCE(aprovador, '-') AS "Decidido Por",
+                    COALESCE(to_char(data_decisao, 'DD/MM/YYYY HH24:MI'), '-') AS "Data Decisão"
+                FROM solicitacoes WHERE status != 'PENDENTE' ORDER BY id DESC;
+            """, conn)
+
+            if df_hist_sol.empty:
+                st.info("Nenhuma solicitação decidida até o momento.")
+            else:
+                def destacar_status_hist(val):
+                    if val == 'APROVADA':
+                        return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+                    elif val == 'REJEITADA':
+                        return 'background-color: rgba(198, 40, 40, 0.12); color: #c62828; font-weight: bold;'
+                    return ''
+
+                st.dataframe(df_hist_sol.style.map(destacar_status_hist, subset=['Status']), use_container_width=True, hide_index=True)
+
     # --- TELA: CADASTRAR PRODUTO ---
     elif escolha == "Cadastrar Produto":
         st.title("Gerenciamento de Produtos")
@@ -1288,14 +1402,15 @@ else:
                         st.warning("Removida.")
                         st.rerun()
 
-    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE ---
+  
+    # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (3 ABAS CONFORME SOLICITADO) ---
     elif escolha == "Movimentação de Estoque":
         st.title("Movimentação de Estoque")
         
         aba_movimentacao = option_menu(
             menu_title=None,
             options=["Registro de Entrada", "Registro de Saída", "Histórico de Movimentação"],
-            icons=["arrow-down-circle", "arrow-up-circle", ""],
+            icons=["arrow-down-circle", "arrow-up-circle", ""], # Ícone de histórico removido completamente para não parecer IA
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
