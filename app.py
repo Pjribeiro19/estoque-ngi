@@ -137,6 +137,22 @@ def inicializar_banco_automatico():
         );
     """)
 
+    # Migração idempotente: garante que a tabela 'solicitacoes' tenha todas as
+    # colunas necessárias, mesmo que já existisse anteriormente com outro schema.
+    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS tipo TEXT;")
+    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS referencia_codigo TEXT;")
+    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS item_nome TEXT;")
+    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS quantidade INTEGER;")
+    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS solicitante_nome TEXT;")
+    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS solicitante_email TEXT;")
+    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS coordenacao TEXT;")
+    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS data_solicitacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
+    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS data_prevista DATE;")
+    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'PENDENTE';")
+    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS data_decisao TIMESTAMP;")
+    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS aprovador TEXT;")
+    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS observacao TEXT;")
+
     conn.commit()
 
     # Verifica se a carga inicial (seed) já foi realizada no passado
