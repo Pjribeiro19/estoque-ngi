@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -9,6 +9,14 @@ from psycopg2.extras import DictCursor
 from streamlit_option_menu import option_menu
 import os
 import threading
+import uuid
+
+# =============================================================================
+# CONFIGURAÇÃO DE TEMPO DE SESSÃO (LOGIN PERSISTE APÓS ATUALIZAR A PÁGINA)
+# =============================================================================
+# O usuário só é desconectado automaticamente após ficar esse tempo (em
+# minutos) sem interagir com o sistema. Qualquer clique/ação renova o prazo.
+SESSAO_DURACAO_MINUTOS = 60
 
 # =============================================================================
 # CONEXÃO E INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (Neon Postgres)
@@ -147,6 +155,20 @@ def inicializar_banco_automatico():
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS data_retirada DATE;")
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS atividade_associada TEXT;")
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS justificativa_rejeicao TEXT;")
+
+    # =========================================================================
+    # NOVA TABELA: SESSÕES DE LOGIN ATIVAS (mantém o login após atualizar a
+    # página / F5; a sessão só expira de fato após período de inatividade)
+    # =========================================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS sessoes_login (
+            token TEXT PRIMARY KEY,
+            email TEXT NOT NULL,
+            nome TEXT NOT NULL,
+            perfil TEXT NOT NULL,
+            expira_em TIMESTAMP NOT NULL
+        );
+    """)
 
     conn.commit()
 
@@ -350,6 +372,50 @@ if "PERFIL_USUARIO_LOGADO" not in st.session_state:
 if "EMAIL_USUARIO_LOGADO" not in st.session_state:
     st.session_state.EMAIL_USUARIO_LOGADO = ""
 
+if "SESSION_TOKEN" not in st.session_state:
+    st.session_state.SESSION_TOKEN = ""
+
+# =============================================================================
+# RESTAURAÇÃO AUTOMÁTICA DE SESSÃO (mantém o login após atualizar a página)
+# =============================================================================
+# Se o navegador ainda tem o token da sessão na URL e ele não expirou no
+# banco, o usuário é reconectado automaticamente sem precisar logar de novo.
+if not st.session_state.autenticado:
+    token_url = st.query_params.get("session")
+    if token_url:
+        try:
+            cursor_sessao = conn.cursor()
+            cursor_sessao.execute(
+                "SELECT email, nome, perfil, expira_em FROM sessoes_login WHERE token = %s;",
+                (token_url,)
+            )
+            sessao_encontrada = cursor_sessao.fetchone()
+
+            if sessao_encontrada:
+                email_sessao, nome_sessao, perfil_sessao, expira_em_sessao = sessao_encontrada
+
+                if expira_em_sessao > datetime.now():
+                    # Sessão válida: reconecta o usuário e renova o prazo (sliding expiration)
+                    st.session_state.autenticado = True
+                    st.session_state.NOME_USUARIO_LOGADO = nome_sessao
+                    st.session_state.PERFIL_USUARIO_LOGADO = perfil_sessao
+                    st.session_state.EMAIL_USUARIO_LOGADO = email_sessao
+                    st.session_state.SESSION_TOKEN = token_url
+
+                    nova_expiracao = datetime.now() + timedelta(minutes=SESSAO_DURACAO_MINUTOS)
+                    cursor_sessao.execute(
+                        "UPDATE sessoes_login SET expira_em = %s WHERE token = %s;",
+                        (nova_expiracao, token_url)
+                    )
+                    conn.commit()
+                else:
+                    # Sessão expirada por inatividade: remove do banco e da URL
+                    cursor_sessao.execute("DELETE FROM sessoes_login WHERE token = %s;", (token_url,))
+                    conn.commit()
+                    st.query_params.clear()
+        except Exception:
+            pass
+
 # =============================================================================
 # FLUXO 1: TELA DE LOGIN / RECUPERAÇÃO
 # =============================================================================
@@ -383,6 +449,21 @@ if not st.session_state.autenticado:
                             st.session_state.NOME_USUARIO_LOGADO = nome_banco
                             st.session_state.PERFIL_USUARIO_LOGADO = perfil_banco
                             st.session_state.EMAIL_USUARIO_LOGADO = email_banco
+
+                            # Cria uma sessão persistente (mantém o login após atualizar a página)
+                            novo_token = str(uuid.uuid4())
+                            expira_em_novo = datetime.now() + timedelta(minutes=SESSAO_DURACAO_MINUTOS)
+                            try:
+                                cursor.execute("""
+                                    INSERT INTO sessoes_login (token, email, nome, perfil, expira_em)
+                                    VALUES (%s, %s, %s, %s, %s);
+                                """, (novo_token, email_banco, nome_banco, perfil_banco, expira_em_novo))
+                                conn.commit()
+                                st.session_state.SESSION_TOKEN = novo_token
+                                st.query_params["session"] = novo_token
+                            except Exception:
+                                conn.rollback()
+
                             st.rerun()
                         else:
                             st.error("❌ Senha incorreta!")
@@ -525,10 +606,19 @@ else:
             )
 
     if escolha == "Sair do Sistema":
+        if st.session_state.SESSION_TOKEN:
+            try:
+                cursor_logout = conn.cursor()
+                cursor_logout.execute("DELETE FROM sessoes_login WHERE token = %s;", (st.session_state.SESSION_TOKEN,))
+                conn.commit()
+            except Exception:
+                conn.rollback()
+        st.query_params.clear()
         st.session_state.autenticado = False
         st.session_state.NOME_USUARIO_LOGADO = ""
         st.session_state.PERFIL_USUARIO_LOGADO = ""
         st.session_state.EMAIL_USUARIO_LOGADO = ""
+        st.session_state.SESSION_TOKEN = ""
         st.rerun()
 
     # --- TELA: PAINEL GERAL ---
