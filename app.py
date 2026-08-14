@@ -118,9 +118,10 @@ def inicializar_banco_automatico():
     # =========================================================================
     # NOVA TABELA PARA O MÓDULO DE SOLICITAÇÕES (USUÁRIO / ADMINISTRADOR)
     # =========================================================================
-    # 8. Tabela de Solicitações
+    # 8. Tabela de Solicitações (nome exclusivo para não colidir com uma
+    # tabela "solicitacoes" pré-existente no banco, de outra origem/schema)
     cursor.execute("""
-        CREATE TABLE IF NOT EXISTS solicitacoes (
+        CREATE TABLE IF NOT EXISTS solicitacoes_almoxarifado (
             id SERIAL PRIMARY KEY,
             tipo TEXT NOT NULL, -- 'MATERIAL' ou 'EMPRESTIMO'
             referencia_codigo TEXT,
@@ -137,22 +138,6 @@ def inicializar_banco_automatico():
             observacao TEXT
         );
     """)
-
-    # Migração idempotente: garante que a tabela 'solicitacoes' tenha todas as
-    # colunas necessárias, mesmo que já existisse anteriormente com outro schema.
-    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS tipo TEXT;")
-    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS referencia_codigo TEXT;")
-    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS item_nome TEXT;")
-    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS quantidade INTEGER;")
-    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS solicitante_nome TEXT;")
-    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS solicitante_email TEXT;")
-    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS coordenacao TEXT;")
-    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS data_solicitacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
-    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS data_prevista DATE;")
-    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'PENDENTE';")
-    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS data_decisao TIMESTAMP;")
-    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS aprovador TEXT;")
-    cursor.execute("ALTER TABLE solicitacoes ADD COLUMN IF NOT EXISTS observacao TEXT;")
 
     conn.commit()
 
@@ -910,7 +895,7 @@ else:
                     try:
                         cursor = conn.cursor()
                         cursor.execute("""
-                            INSERT INTO solicitacoes 
+                            INSERT INTO solicitacoes_almoxarifado 
                             (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, status, observacao)
                             VALUES ('MATERIAL', %s, %s, %s, %s, %s, %s, 'PENDENTE', %s);
                         """, (cod_sel, nome_sel, qtd_sol_mat, st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_mat, obs_sol_mat.strip()))
@@ -973,7 +958,7 @@ else:
                     try:
                         cursor = conn.cursor()
                         cursor.execute("""
-                            INSERT INTO solicitacoes 
+                            INSERT INTO solicitacoes_almoxarifado 
                             (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_prevista, status, observacao)
                             VALUES ('EMPRESTIMO', %s, %s, %s, %s, %s, %s, %s, 'PENDENTE', %s);
                         """, (str(item_id_sel), nome_sel_emp, qtd_sol_emp, st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_emp, data_prev_sol, obs_sol_emp.strip()))
@@ -998,7 +983,7 @@ else:
                 to_char(data_solicitacao, 'DD/MM/YYYY HH24:MI') AS "Data da Solicitação",
                 status AS "Status",
                 COALESCE(to_char(data_decisao, 'DD/MM/YYYY HH24:MI'), '-') AS "Data da Decisão"
-            FROM solicitacoes
+            FROM solicitacoes_almoxarifado
             WHERE solicitante_email = %(email_usuario)s
             ORDER BY id DESC;
         """, conn, params={"email_usuario": st.session_state.EMAIL_USUARIO_LOGADO})
@@ -1045,7 +1030,7 @@ else:
         if aba_solicitacao == "Pendentes":
             df_pendentes = pd.read_sql_query("""
                 SELECT id, tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_prevista, observacao
-                FROM solicitacoes WHERE status = 'PENDENTE' ORDER BY id ASC;
+                FROM solicitacoes_almoxarifado WHERE status = 'PENDENTE' ORDER BY id ASC;
             """, conn)
 
             if df_pendentes.empty:
@@ -1081,7 +1066,7 @@ else:
                                             VALUES (%s, %s, %s, %s, %s, %s, %s);
                                         """, (date.today().strftime("%Y-%m-%d"), "Saída", sol["referencia_codigo"], sol["item_nome"], sol["quantidade"], sol["solicitante_nome"], sol["coordenacao"]))
                                         cursor.execute("""
-                                            UPDATE solicitacoes SET status = 'APROVADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s 
+                                            UPDATE solicitacoes_almoxarifado SET status = 'APROVADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s 
                                             WHERE id = %s;
                                         """, (st.session_state.NOME_USUARIO_LOGADO, sol["id"]))
                                         conn.commit()
@@ -1113,7 +1098,7 @@ else:
                                             UPDATE emprestimo_itens SET quantidade_disponivel = quantidade_disponivel - %s WHERE id = %s;
                                         """, (sol["quantidade"], int(sol["referencia_codigo"])))
                                         cursor.execute("""
-                                            UPDATE solicitacoes SET status = 'APROVADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s 
+                                            UPDATE solicitacoes_almoxarifado SET status = 'APROVADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s 
                                             WHERE id = %s;
                                         """, (st.session_state.NOME_USUARIO_LOGADO, sol["id"]))
                                         conn.commit()
@@ -1137,7 +1122,7 @@ else:
                     with col_ap2:
                         if st.button("❌ Rejeitar", key=f"rejeitar_{sol['id']}"):
                             cursor.execute("""
-                                UPDATE solicitacoes SET status = 'REJEITADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s 
+                                UPDATE solicitacoes_almoxarifado SET status = 'REJEITADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s 
                                 WHERE id = %s;
                             """, (st.session_state.NOME_USUARIO_LOGADO, sol["id"]))
                             conn.commit()
@@ -1157,7 +1142,7 @@ else:
                     status AS "Status",
                     COALESCE(aprovador, '-') AS "Decidido Por",
                     COALESCE(to_char(data_decisao, 'DD/MM/YYYY HH24:MI'), '-') AS "Data Decisão"
-                FROM solicitacoes WHERE status != 'PENDENTE' ORDER BY id DESC;
+                FROM solicitacoes_almoxarifado WHERE status != 'PENDENTE' ORDER BY id DESC;
             """, conn)
 
             if df_hist_sol.empty:
