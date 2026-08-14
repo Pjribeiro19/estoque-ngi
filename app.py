@@ -268,6 +268,16 @@ st.markdown("""
         letter-spacing: -0.01em;
     }
 
+    /* Preserva a fonte de ícones do Streamlit (Material Symbols), que a regra
+       acima sobrescrevia e fazia aparecer o nome do ícone em texto. */
+    [data-testid="stIconMaterial"],
+    span[data-testid="stIconMaterial"],
+    .material-symbols-rounded,
+    .material-symbols-outlined,
+    .material-icons {
+        font-family: 'Material Symbols Rounded', 'Material Symbols Outlined', 'Material Icons' !important;
+    }
+
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
     
