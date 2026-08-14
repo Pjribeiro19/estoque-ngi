@@ -8,6 +8,7 @@ import psycopg2
 from psycopg2.extras import DictCursor
 from streamlit_option_menu import option_menu
 import os
+import threading
 
 # =============================================================================
 # CONEXÃO E INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (Neon Postgres)
@@ -874,6 +875,10 @@ else:
             </div>
         """, unsafe_allow_html=True)
 
+        if st.session_state.get("msg_sucesso_material"):
+            st.success("Sua solicitação foi encaminhada com sucesso!")
+            del st.session_state["msg_sucesso_material"]
+
         df_disp_material = df_produtos[df_produtos["Quantidade"] > 0].copy() if not df_produtos.empty else pd.DataFrame()
 
         if df_disp_material.empty:
@@ -908,7 +913,7 @@ else:
                             VALUES ('MATERIAL', %s, %s, %s, %s, %s, %s, 'PENDENTE', %s);
                         """, (cod_sel, nome_sel, qtd_sol_mat, st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_mat, obs_sol_mat.strip()))
                         conn.commit()
-                        st.success("Sua solicitação foi encaminhada com sucesso!")
+                        st.session_state["msg_sucesso_material"] = True
                         st.rerun()
                     except Exception as ex:
                         conn.rollback()
@@ -928,6 +933,10 @@ else:
                 </p>
             </div>
         """, unsafe_allow_html=True)
+
+        if st.session_state.get("msg_sucesso_emprestimo"):
+            st.success("Sua solicitação foi encaminhada com sucesso!")
+            del st.session_state["msg_sucesso_emprestimo"]
 
         df_emp_disp_user = pd.read_sql_query("""
             SELECT 
@@ -981,7 +990,7 @@ else:
                                 VALUES ('EMPRESTIMO', %s, %s, %s, %s, %s, %s, %s, %s, %s, 'PENDENTE', %s);
                             """, (str(item_id_sel), nome_sel_emp, qtd_sol_emp, st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_emp, data_retirada_sol, data_prev_sol, atividade_sol_emp.strip(), obs_sol_emp.strip()))
                             conn.commit()
-                            st.success("Sua solicitação foi encaminhada com sucesso!")
+                            st.session_state["msg_sucesso_emprestimo"] = True
                             st.rerun()
                         except Exception as ex:
                             conn.rollback()
@@ -1104,16 +1113,20 @@ else:
                                         """, (st.session_state.NOME_USUARIO_LOGADO, sol["id"]))
                                         conn.commit()
 
-                                        enviar_email_notificacao(
-                                            sol["solicitante_email"],
-                                            "Solicitação de Material Aprovada",
-                                            f"""
-                                            <p>Olá, {sol['solicitante_nome']},</p>
-                                            <p>Sua solicitação do item <b>{sol['item_nome']}</b> (Quantidade: {sol['quantidade']}) foi <b>aprovada</b>.</p>
-                                            <p>O material já está disponível para retirada no Almoxarifado.</p>
-                                            <p>Atenciosamente,<br>Gestão de Almoxarifado NGI Carajás</p>
-                                            """
-                                        )
+                                        threading.Thread(
+                                            target=enviar_email_notificacao,
+                                            args=(
+                                                sol["solicitante_email"],
+                                                "Solicitação de Material Aprovada",
+                                                f"""
+                                                <p>Olá, {sol['solicitante_nome']},</p>
+                                                <p>Sua solicitação do item <b>{sol['item_nome']}</b> (Quantidade: {sol['quantidade']}) foi <b>aprovada</b>.</p>
+                                                <p>O material já está disponível para retirada no Almoxarifado.</p>
+                                                <p>Atenciosamente,<br>Gestão de Almoxarifado NGI Carajás</p>
+                                                """
+                                            ),
+                                            daemon=True
+                                        ).start()
                                         st.success("Solicitação aprovada e usuário notificado por e-mail!")
                                         st.rerun()
                                 else:
@@ -1136,16 +1149,20 @@ else:
                                         """, (st.session_state.NOME_USUARIO_LOGADO, sol["id"]))
                                         conn.commit()
 
-                                        enviar_email_notificacao(
-                                            sol["solicitante_email"],
-                                            "Solicitação de Empréstimo Aprovada",
-                                            f"""
-                                            <p>Olá, {sol['solicitante_nome']},</p>
-                                            <p>Sua solicitação de empréstimo do item <b>{sol['item_nome']}</b> (Quantidade: {sol['quantidade']}) foi <b>aprovada</b>.</p>
-                                            <p>O item já está disponível para retirada no Almoxarifado.</p>
-                                            <p>Atenciosamente,<br>Gestão de Almoxarifado NGI Carajás</p>
-                                            """
-                                        )
+                                        threading.Thread(
+                                            target=enviar_email_notificacao,
+                                            args=(
+                                                sol["solicitante_email"],
+                                                "Solicitação de Empréstimo Aprovada",
+                                                f"""
+                                                <p>Olá, {sol['solicitante_nome']},</p>
+                                                <p>Sua solicitação de empréstimo do item <b>{sol['item_nome']}</b> (Quantidade: {sol['quantidade']}) foi <b>aprovada</b>.</p>
+                                                <p>O item já está disponível para retirada no Almoxarifado.</p>
+                                                <p>Atenciosamente,<br>Gestão de Almoxarifado NGI Carajás</p>
+                                                """
+                                            ),
+                                            daemon=True
+                                        ).start()
                                         st.success("Empréstimo aprovado e usuário notificado por e-mail!")
                                         st.rerun()
                             except Exception as ex:
@@ -1164,16 +1181,20 @@ else:
                                 """, (st.session_state.NOME_USUARIO_LOGADO, just_rejeicao.strip(), sol["id"]))
                                 conn.commit()
 
-                                enviar_email_notificacao(
-                                    sol["solicitante_email"],
-                                    "Solicitação Reprovada",
-                                    f"""
-                                    <p>Olá, {sol['solicitante_nome']},</p>
-                                    <p>Sua solicitação do item <b>{sol['item_nome']}</b> (Quantidade: {sol['quantidade']}) foi <b>reprovada</b>.</p>
-                                    <p><b>Justificativa:</b> {just_rejeicao.strip()}</p>
-                                    <p>Atenciosamente,<br>Gestão de Almoxarifado NGI Carajás</p>
-                                    """
-                                )
+                                threading.Thread(
+                                    target=enviar_email_notificacao,
+                                    args=(
+                                        sol["solicitante_email"],
+                                        "Solicitação Reprovada",
+                                        f"""
+                                        <p>Olá, {sol['solicitante_nome']},</p>
+                                        <p>Sua solicitação do item <b>{sol['item_nome']}</b> (Quantidade: {sol['quantidade']}) foi <b>reprovada</b>.</p>
+                                        <p><b>Justificativa:</b> {just_rejeicao.strip()}</p>
+                                        <p>Atenciosamente,<br>Gestão de Almoxarifado NGI Carajás</p>
+                                        """
+                                    ),
+                                    daemon=True
+                                ).start()
                                 st.warning("Solicitação rejeitada e usuário notificado por e-mail!")
                                 st.rerun()
 
