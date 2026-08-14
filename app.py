@@ -131,13 +131,20 @@ def inicializar_banco_automatico():
             solicitante_email TEXT NOT NULL,
             coordenacao TEXT,
             data_solicitacao TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            data_retirada DATE,
             data_prevista DATE,
+            atividade_associada TEXT,
             status TEXT NOT NULL DEFAULT 'PENDENTE', -- 'PENDENTE', 'APROVADA' ou 'REJEITADA'
             data_decisao TIMESTAMP,
             aprovador TEXT,
             observacao TEXT
         );
     """)
+
+    # Migração idempotente: garante as colunas novas em bancos que já tinham
+    # a tabela 'solicitacoes_almoxarifado' criada em uma versão anterior.
+    cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS data_retirada DATE;")
+    cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS atividade_associada TEXT;")
 
     conn.commit()
 
@@ -226,7 +233,7 @@ def enviar_email_notificacao(destinatario, assunto, corpo_html):
         msg["Subject"] = assunto
         msg.attach(MIMEText(corpo_html, "html"))
 
-        servidor = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
+        servidor = smtplib.SMTP(SMTP_HOST, SMTP_PORTA, timeout=10)
         servidor.starttls()
         servidor.login(EMAIL_REMETENTE, SENHA_REMETENTE)
         servidor.sendmail(EMAIL_REMETENTE, destinatario, msg.as_string())
@@ -949,25 +956,35 @@ else:
                 )
                 qtd_sol_emp = st.number_input("Quantidade Desejada:", min_value=1, max_value=int(df_raw_emp_user.loc[opcao_sol_emp, "quantidade_disponivel"]), value=1, step=1)
                 coord_sol_emp = st.selectbox("Coordenação:", lista_siglas_coord_emp_user)
-                data_prev_sol = st.date_input("Data Prevista para Devolução:", value=date.today())
+
+                col_dt1, col_dt2 = st.columns(2)
+                data_retirada_sol = col_dt1.date_input("Data de Retirada: *", value=date.today())
+                data_prev_sol = col_dt2.date_input("Data de Devolução: *", value=date.today())
+
+                atividade_sol_emp = st.text_input("Atividade Associada: *", placeholder="Ex: Vistoria de campo na trilha X")
                 obs_sol_emp = st.text_area("Observações (opcional):")
 
                 if st.form_submit_button("Enviar Solicitação", type="primary"):
-                    item_id_sel = int(df_raw_emp_user.loc[opcao_sol_emp, "id"])
-                    nome_sel_emp = df_raw_emp_user.loc[opcao_sol_emp, "item"]
-                    try:
-                        cursor = conn.cursor()
-                        cursor.execute("""
-                            INSERT INTO solicitacoes_almoxarifado 
-                            (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_prevista, status, observacao)
-                            VALUES ('EMPRESTIMO', %s, %s, %s, %s, %s, %s, %s, 'PENDENTE', %s);
-                        """, (str(item_id_sel), nome_sel_emp, qtd_sol_emp, st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_emp, data_prev_sol, obs_sol_emp.strip()))
-                        conn.commit()
-                        st.success("Sua solicitação foi encaminhada com sucesso!")
-                        st.rerun()
-                    except Exception as ex:
-                        conn.rollback()
-                        st.error(f"Erro ao enviar solicitação: {ex}")
+                    if not atividade_sol_emp.strip():
+                        st.error("O campo 'Atividade Associada' é obrigatório!")
+                    elif data_prev_sol < data_retirada_sol:
+                        st.error("A Data de Devolução não pode ser anterior à Data de Retirada!")
+                    else:
+                        item_id_sel = int(df_raw_emp_user.loc[opcao_sol_emp, "id"])
+                        nome_sel_emp = df_raw_emp_user.loc[opcao_sol_emp, "item"]
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                INSERT INTO solicitacoes_almoxarifado 
+                                (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_retirada, data_prevista, atividade_associada, status, observacao)
+                                VALUES ('EMPRESTIMO', %s, %s, %s, %s, %s, %s, %s, %s, %s, 'PENDENTE', %s);
+                            """, (str(item_id_sel), nome_sel_emp, qtd_sol_emp, st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_emp, data_retirada_sol, data_prev_sol, atividade_sol_emp.strip(), obs_sol_emp.strip()))
+                            conn.commit()
+                            st.success("Sua solicitação foi encaminhada com sucesso!")
+                            st.rerun()
+                        except Exception as ex:
+                            conn.rollback()
+                            st.error(f"Erro ao enviar solicitação: {ex}")
 
     # =========================================================================
     # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL USUÁRIO): MINHAS SOLICITAÇÕES
@@ -980,6 +997,9 @@ else:
                 tipo AS "Tipo",
                 item_nome AS "Item",
                 quantidade AS "Quantidade",
+                COALESCE(atividade_associada, '-') AS "Atividade Associada",
+                COALESCE(to_char(data_retirada, 'DD/MM/YYYY'), '-') AS "Data de Retirada",
+                COALESCE(to_char(data_prevista, 'DD/MM/YYYY'), '-') AS "Data de Devolução",
                 to_char(data_solicitacao, 'DD/MM/YYYY HH24:MI') AS "Data da Solicitação",
                 status AS "Status",
                 COALESCE(to_char(data_decisao, 'DD/MM/YYYY HH24:MI'), '-') AS "Data da Decisão"
@@ -1029,7 +1049,7 @@ else:
 
         if aba_solicitacao == "Pendentes":
             df_pendentes = pd.read_sql_query("""
-                SELECT id, tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_prevista, observacao
+                SELECT id, tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_retirada, data_prevista, atividade_associada, observacao
                 FROM solicitacoes_almoxarifado WHERE status = 'PENDENTE' ORDER BY id ASC;
             """, conn)
 
@@ -1038,7 +1058,12 @@ else:
             else:
                 for _, sol in df_pendentes.iterrows():
                     tipo_label = "Material (Almoxarifado)" if sol["tipo"] == "MATERIAL" else "Empréstimo"
-                    linha_devolucao = f"Devolução prevista: {sol['data_prevista'].strftime('%d/%m/%Y')}<br>" if sol["data_prevista"] is not None and sol["tipo"] == "EMPRESTIMO" else ""
+                    linha_datas = ""
+                    if sol["tipo"] == "EMPRESTIMO":
+                        ret_fmt = sol["data_retirada"].strftime('%d/%m/%Y') if sol["data_retirada"] is not None else "-"
+                        dev_fmt = sol["data_prevista"].strftime('%d/%m/%Y') if sol["data_prevista"] is not None else "-"
+                        linha_datas = f"Retirada: {ret_fmt} | Devolução: {dev_fmt}<br>"
+                    linha_atividade = f"Atividade Associada: {sol['atividade_associada']}<br>" if sol["atividade_associada"] else ""
                     linha_obs = f"Observações: {sol['observacao']}" if sol["observacao"] else ""
 
                     st.markdown(f"""
@@ -1046,7 +1071,7 @@ else:
                             <b>#{sol['id']} — {tipo_label}</b><br>
                             Item: {sol['item_nome']} | Quantidade: {sol['quantidade']}<br>
                             Solicitante: {sol['solicitante_nome']} ({sol['solicitante_email']}) | Coordenação: {sol['coordenacao'] or '-'}<br>
-                            {linha_devolucao}{linha_obs}
+                            {linha_datas}{linha_atividade}{linha_obs}
                         </div>
                     """, unsafe_allow_html=True)
 
@@ -1093,7 +1118,7 @@ else:
                                             INSERT INTO emprestimo_registros 
                                             (item_id, item_nome, quantidade, pessoa, coordenacao, data_retirada, data_prevista, status)
                                             VALUES (%s, %s, %s, %s, %s, %s, %s, 'EMPRESTADO');
-                                        """, (int(sol["referencia_codigo"]), sol["item_nome"], sol["quantidade"], sol["solicitante_nome"], sol["coordenacao"], date.today(), sol["data_prevista"]))
+                                        """, (int(sol["referencia_codigo"]), sol["item_nome"], sol["quantidade"], sol["solicitante_nome"], sol["coordenacao"], sol["data_retirada"] if sol["data_retirada"] is not None else date.today(), sol["data_prevista"]))
                                         cursor.execute("""
                                             UPDATE emprestimo_itens SET quantidade_disponivel = quantidade_disponivel - %s WHERE id = %s;
                                         """, (sol["quantidade"], int(sol["referencia_codigo"])))
@@ -1138,6 +1163,9 @@ else:
                     solicitante_nome AS "Solicitante",
                     solicitante_email AS "E-mail",
                     coordenacao AS "Coordenação",
+                    COALESCE(atividade_associada, '-') AS "Atividade Associada",
+                    COALESCE(to_char(data_retirada, 'DD/MM/YYYY'), '-') AS "Data de Retirada",
+                    COALESCE(to_char(data_prevista, 'DD/MM/YYYY'), '-') AS "Data de Devolução",
                     to_char(data_solicitacao, 'DD/MM/YYYY HH24:MI') AS "Data Solicitação",
                     status AS "Status",
                     COALESCE(aprovador, '-') AS "Decidido Por",
