@@ -871,7 +871,7 @@ else:
         if df_disp_material.empty:
             st.info("Nenhum material disponível em estoque no momento.")
         else:
-            st.dataframe(df_disp_material, use_container_width=True, hide_index=True)
+            st.dataframe(df_disp_material.drop(columns=["Valor Unitário"]), use_container_width=True, hide_index=True)
 
             st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
             st.markdown("### Nova Solicitação de Material")
@@ -900,7 +900,7 @@ else:
                             VALUES ('MATERIAL', %s, %s, %s, %s, %s, %s, 'PENDENTE', %s);
                         """, (cod_sel, nome_sel, qtd_sol_mat, st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_mat, obs_sol_mat.strip()))
                         conn.commit()
-                        st.success("Solicitação enviada! Aguarde a aprovação do administrador.")
+                        st.success("Sua solicitação foi encaminhada com sucesso!")
                         st.rerun()
                     except Exception as ex:
                         conn.rollback()
@@ -963,7 +963,7 @@ else:
                             VALUES ('EMPRESTIMO', %s, %s, %s, %s, %s, %s, %s, 'PENDENTE', %s);
                         """, (str(item_id_sel), nome_sel_emp, qtd_sol_emp, st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_emp, data_prev_sol, obs_sol_emp.strip()))
                         conn.commit()
-                        st.success("Solicitação de empréstimo enviada! Aguarde a aprovação do administrador.")
+                        st.success("Sua solicitação foi encaminhada com sucesso!")
                         st.rerun()
                     except Exception as ex:
                         conn.rollback()
