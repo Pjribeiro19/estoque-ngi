@@ -145,6 +145,7 @@ def inicializar_banco_automatico():
     # a tabela 'solicitacoes_almoxarifado' criada em uma versão anterior.
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS data_retirada DATE;")
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS atividade_associada TEXT;")
+    cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS justificativa_rejeicao TEXT;")
 
     conn.commit()
 
@@ -1002,7 +1003,8 @@ else:
                 COALESCE(to_char(data_prevista, 'DD/MM/YYYY'), '-') AS "Data de Devolução",
                 to_char(data_solicitacao, 'DD/MM/YYYY HH24:MI') AS "Data da Solicitação",
                 status AS "Status",
-                COALESCE(to_char(data_decisao, 'DD/MM/YYYY HH24:MI'), '-') AS "Data da Decisão"
+                COALESCE(to_char(data_decisao, 'DD/MM/YYYY HH24:MI'), '-') AS "Data da Decisão",
+                COALESCE(justificativa_rejeicao, '-') AS "Justificativa da Reprovação"
             FROM solicitacoes_almoxarifado
             WHERE solicitante_email = %(email_usuario)s
             ORDER BY id DESC;
@@ -1075,6 +1077,12 @@ else:
                         </div>
                     """, unsafe_allow_html=True)
 
+                    just_rejeicao = st.text_area(
+                        "Justificativa da Reprovação (obrigatória caso vá rejeitar):",
+                        key=f"just_rejeitar_{sol['id']}",
+                        placeholder="Descreva o motivo da reprovação desta solicitação..."
+                    )
+
                     col_ap1, col_ap2, col_ap3 = st.columns([1, 1, 4])
                     with col_ap1:
                         if st.button("✅ Aprovar", key=f"aprovar_{sol['id']}", type="primary"):
@@ -1146,13 +1154,28 @@ else:
 
                     with col_ap2:
                         if st.button("❌ Rejeitar", key=f"rejeitar_{sol['id']}"):
-                            cursor.execute("""
-                                UPDATE solicitacoes_almoxarifado SET status = 'REJEITADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s 
-                                WHERE id = %s;
-                            """, (st.session_state.NOME_USUARIO_LOGADO, sol["id"]))
-                            conn.commit()
-                            st.warning("Solicitação rejeitada.")
-                            st.rerun()
+                            if not just_rejeicao.strip():
+                                st.error("Para rejeitar, é obrigatório informar a Justificativa da Reprovação!")
+                            else:
+                                cursor.execute("""
+                                    UPDATE solicitacoes_almoxarifado 
+                                    SET status = 'REJEITADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s, justificativa_rejeicao = %s 
+                                    WHERE id = %s;
+                                """, (st.session_state.NOME_USUARIO_LOGADO, just_rejeicao.strip(), sol["id"]))
+                                conn.commit()
+
+                                enviar_email_notificacao(
+                                    sol["solicitante_email"],
+                                    "Solicitação Reprovada",
+                                    f"""
+                                    <p>Olá, {sol['solicitante_nome']},</p>
+                                    <p>Sua solicitação do item <b>{sol['item_nome']}</b> (Quantidade: {sol['quantidade']}) foi <b>reprovada</b>.</p>
+                                    <p><b>Justificativa:</b> {just_rejeicao.strip()}</p>
+                                    <p>Atenciosamente,<br>Gestão de Almoxarifado NGI Carajás</p>
+                                    """
+                                )
+                                st.warning("Solicitação rejeitada e usuário notificado por e-mail!")
+                                st.rerun()
 
         elif aba_solicitacao == "Histórico":
             df_hist_sol = pd.read_sql_query("""
@@ -1169,7 +1192,8 @@ else:
                     to_char(data_solicitacao, 'DD/MM/YYYY HH24:MI') AS "Data Solicitação",
                     status AS "Status",
                     COALESCE(aprovador, '-') AS "Decidido Por",
-                    COALESCE(to_char(data_decisao, 'DD/MM/YYYY HH24:MI'), '-') AS "Data Decisão"
+                    COALESCE(to_char(data_decisao, 'DD/MM/YYYY HH24:MI'), '-') AS "Data Decisão",
+                    COALESCE(justificativa_rejeicao, '-') AS "Justificativa da Reprovação"
                 FROM solicitacoes_almoxarifado WHERE status != 'PENDENTE' ORDER BY id DESC;
             """, conn)
 
