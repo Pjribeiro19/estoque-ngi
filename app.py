@@ -406,6 +406,18 @@ if "SESSION_TOKEN" not in st.session_state:
 # o usuário é reconectado automaticamente sem precisar logar de novo.
 if not st.session_state.autenticado:
     token_cookie = cookie_controller.get("session")
+
+    # Na primeiríssima execução após abrir/atualizar a página, o componente
+    # de cookies ainda pode não ter tido tempo de entregar o valor ao Python
+    # (token_cookie viria vazio mesmo com o cookie presente no navegador).
+    # Para evitar mostrar a tela de login por engano nesse instante, aguarda
+    # um instante e tenta novamente antes de decidir.
+    if token_cookie is None and not st.session_state.get("verificacao_cookie_feita"):
+        st.session_state.verificacao_cookie_feita = True
+        with st.spinner("Verificando sessão..."):
+            time.sleep(0.6)
+        st.rerun()
+
     if token_cookie:
         try:
             cursor_sessao = conn.cursor()
@@ -1745,3 +1757,4 @@ else:
                     st.dataframe(df_movimentacoes.sort_index(ascending=False), use_container_width=True, hide_index=True)
                 else:
                     st.info("Nenhuma movimentação registrada até o momento.")
+                    
