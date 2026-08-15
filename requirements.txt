@@ -4,3 +4,5 @@ psycopg2-binary
 streamlit-option-menu
 streamlit-cookies-controller
 requests
+openpyxl
+plotly
