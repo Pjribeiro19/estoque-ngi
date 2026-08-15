@@ -23,6 +23,11 @@ from streamlit_cookies_controller import CookieController
 # minutos) sem interagir com o sistema. Qualquer clique/ação renova o prazo.
 SESSAO_DURACAO_MINUTOS = 60
 
+# URL pública do sistema, usada para montar o link de redefinição de senha
+# enviado por e-mail. Ajuste aqui caso o domínio mude no futuro.
+URL_BASE_SISTEMA = "https://almoxarifadocarajas.com.br"
+REDEFINICAO_SENHA_DURACAO_MINUTOS = 60
+
 # Controlador de cookies do navegador (mantém o login sem sujar a URL)
 cookie_controller = CookieController(key="cookie_controller_almoxarifado")
 
@@ -175,6 +180,18 @@ def inicializar_banco_automatico():
             nome TEXT NOT NULL,
             perfil TEXT NOT NULL,
             expira_em TIMESTAMP NOT NULL
+        );
+    """)
+
+    # =========================================================================
+    # NOVA TABELA: TOKENS DE REDEFINIÇÃO DE SENHA (link único enviado por e-mail)
+    # =========================================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS recuperacoes_senha (
+            token TEXT PRIMARY KEY,
+            email TEXT NOT NULL,
+            expira_em TIMESTAMP NOT NULL,
+            usado BOOLEAN NOT NULL DEFAULT FALSE
         );
     """)
 
@@ -504,6 +521,85 @@ if not st.session_state.autenticado:
             pass
 
 # =============================================================================
+# FLUXO 0: REDEFINIÇÃO DE SENHA (via link único enviado por e-mail)
+# =============================================================================
+token_redefinicao_url = st.query_params.get("reset")
+
+if token_redefinicao_url and not st.session_state.autenticado:
+    col_rd1, col_rd2, col_rd3 = st.columns([1, 1.2, 1])
+    with col_rd2:
+        st.write("<br><br>", unsafe_allow_html=True)
+        st.markdown("""
+            <div class="img-container">
+                <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="280">
+            </div>
+        """, unsafe_allow_html=True)
+        st.markdown("### 🔒 Criar Nova Senha")
+
+        try:
+            cursor_reset = conn.cursor()
+            cursor_reset.execute(
+                "SELECT email, expira_em, usado FROM recuperacoes_senha WHERE token = %s;",
+                (token_redefinicao_url,)
+            )
+            registro_reset = cursor_reset.fetchone()
+        except Exception:
+            registro_reset = None
+
+        if not registro_reset:
+            st.error("Link de redefinição inválido.")
+            if st.button("Solicitar novo link", use_container_width=True):
+                st.query_params.clear()
+                st.session_state.sub_tela_login = "esqueci"
+                st.rerun()
+        else:
+            email_reset, expira_em_reset, usado_reset = registro_reset
+            if usado_reset:
+                st.error("Este link já foi utilizado. Solicite um novo.")
+                if st.button("Solicitar novo link", use_container_width=True):
+                    st.query_params.clear()
+                    st.session_state.sub_tela_login = "esqueci"
+                    st.rerun()
+            elif expira_em_reset <= datetime.now():
+                st.error("Este link expirou. Solicite um novo.")
+                if st.button("Solicitar novo link", use_container_width=True):
+                    st.query_params.clear()
+                    st.session_state.sub_tela_login = "esqueci"
+                    st.rerun()
+            else:
+                st.write(f"Definindo nova senha para: **{email_reset}**")
+                nova_senha_reset = st.text_input("Nova senha", type="password")
+                confirmar_senha_reset = st.text_input("Confirmar nova senha", type="password")
+
+                if st.button("Salvar Nova Senha", type="primary", use_container_width=True):
+                    if not nova_senha_reset or not confirmar_senha_reset:
+                        st.warning("Preencha os dois campos de senha.")
+                    elif nova_senha_reset != confirmar_senha_reset:
+                        st.error("As senhas não coincidem.")
+                    elif len(nova_senha_reset) < 4:
+                        st.warning("A senha deve ter pelo menos 4 caracteres.")
+                    else:
+                        try:
+                            cursor_reset.execute(
+                                "UPDATE usuarios SET senha = %s WHERE LOWER(email) = %s;",
+                                (nova_senha_reset, email_reset)
+                            )
+                            cursor_reset.execute(
+                                "UPDATE recuperacoes_senha SET usado = TRUE WHERE token = %s;",
+                                (token_redefinicao_url,)
+                            )
+                            conn.commit()
+                            st.query_params.clear()
+                            st.success("Senha redefinida com sucesso! Você já pode fazer login com a nova senha.")
+                            if st.button("Ir para o Login", use_container_width=True):
+                                st.session_state.sub_tela_login = "login"
+                                st.rerun()
+                        except Exception as ex_reset:
+                            conn.rollback()
+                            st.error(f"Erro ao redefinir a senha: {ex_reset}")
+    st.stop()
+
+# =============================================================================
 # FLUXO 1: TELA DE LOGIN / RECUPERAÇÃO
 # =============================================================================
 if not st.session_state.autenticado:
@@ -585,18 +681,45 @@ if not st.session_state.autenticado:
             if st.button("Enviar Instruções", type="primary", use_container_width=True):
                 if email_recuperar.strip():
                     cursor = conn.cursor()
-                    cursor.execute("SELECT COUNT(*) FROM usuarios WHERE LOWER(email) = %s;", (email_recuperar.strip().lower(),))
-                    if cursor.fetchone()[0] > 0:
-                        with st.spinner("Enviando..."):
-                            sucesso_recup, erro_recup = enviar_email_notificacao(
-                                email_recuperar.strip(),
-                                "Recuperação de Senha - Sistema de Almoxarifado NGI Carajás",
-                                "<p>Sua senha provisória de contingência é: <b>123</b></p>"
-                            )
-                        if sucesso_recup:
-                            st.success(f"Sucesso! Instruções enviadas para {email_recuperar}")
-                        else:
-                            st.error(f"Erro ao tentar enviar o e-mail: {erro_recup}")
+                    cursor.execute("SELECT nome FROM usuarios WHERE LOWER(email) = %s;", (email_recuperar.strip().lower(),))
+                    resultado_recup = cursor.fetchone()
+                    if resultado_recup:
+                        nome_usuario_recup = resultado_recup[0]
+                        email_normalizado = email_recuperar.strip().lower()
+
+                        token_redefinicao = str(uuid.uuid4())
+                        expira_redefinicao = datetime.now() + timedelta(minutes=REDEFINICAO_SENHA_DURACAO_MINUTOS)
+                        try:
+                            cursor.execute("""
+                                INSERT INTO recuperacoes_senha (token, email, expira_em, usado)
+                                VALUES (%s, %s, %s, FALSE);
+                            """, (token_redefinicao, email_normalizado, expira_redefinicao))
+                            conn.commit()
+
+                            link_redefinicao = f"{URL_BASE_SISTEMA}/?reset={token_redefinicao}"
+
+                            with st.spinner("Enviando..."):
+                                sucesso_recup, erro_recup = enviar_email_notificacao(
+                                    email_normalizado,
+                                    "Redefinição de Senha - Sistema de Almoxarifado NGI Carajás",
+                                    f"""
+                                    <p>Olá, {nome_usuario_recup},</p>
+                                    <p>Recebemos uma solicitação para redefinir a senha da sua conta no Sistema de Gestão de Almoxarifado.</p>
+                                    <p>Para criar sua nova senha, clique no botão abaixo:</p>
+                                    <p style="text-align: center; margin: 24px 0;">
+                                        <a href="{link_redefinicao}" style="background-color: #4CAF50; color: #ffffff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Criar Nova Senha</a>
+                                    </p>
+                                    <p>Ou copie e cole este link no seu navegador:<br>{link_redefinicao}</p>
+                                    <p>Este link é válido por {REDEFINICAO_SENHA_DURACAO_MINUTOS} minutos. Se você não solicitou essa redefinição, pode ignorar este e-mail com segurança.</p>
+                                    """
+                                )
+                            if sucesso_recup:
+                                st.success(f"Sucesso! Enviamos um link de redefinição de senha para {email_normalizado}")
+                            else:
+                                st.error(f"Erro ao tentar enviar o e-mail: {erro_recup}")
+                        except Exception as ex_recup:
+                            conn.rollback()
+                            st.error(f"Erro ao gerar o link de redefinição: {ex_recup}")
                     else:
                         st.error("Este e-mail não foi encontrado no sistema.")
                 else:
