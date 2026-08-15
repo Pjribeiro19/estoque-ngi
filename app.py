@@ -273,7 +273,8 @@ except Exception as e:
 # =============================================================================
 def enviar_email_notificacao(destinatario, assunto, corpo_html):
     if EMAIL_REMETENTE == "configurar_no_secrets@email.com" or not destinatario:
-        return False
+        print(f"[EMAIL] Envio ignorado - remetente não configurado ou destinatário vazio (destino={destinatario})")
+        return False, "Remetente de e-mail não configurado no sistema (variáveis GMAIL_* ausentes)."
     try:
         msg = MIMEMultipart()
         msg["From"] = EMAIL_REMETENTE
@@ -286,9 +287,11 @@ def enviar_email_notificacao(destinatario, assunto, corpo_html):
         servidor.login(EMAIL_REMETENTE, SENHA_REMETENTE)
         servidor.sendmail(EMAIL_REMETENTE, destinatario, msg.as_string())
         servidor.quit()
-        return True
-    except Exception:
-        return False
+        print(f"[EMAIL] Enviado com sucesso para {destinatario} - Assunto: {assunto}")
+        return True, None
+    except Exception as e:
+        print(f"[EMAIL] ERRO ao enviar para {destinatario}: {repr(e)}")
+        return False, str(e)
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
@@ -556,7 +559,7 @@ if not st.session_state.autenticado:
                                 corpo_email = f"Sua senha provisória de contingência é: 123"
                                 msg.attach(MIMEText(corpo_email, 'plain'))
                                 
-                                server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA)
+                                server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA, timeout=10)
                                 server.starttls()
                                 server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
                                 server.sendmail(EMAIL_REMETENTE, email_recuperar.strip(), msg.as_string())
@@ -1230,6 +1233,20 @@ else:
             </div>
         """, unsafe_allow_html=True)
 
+        with st.expander("🔧 Testar Envio de E-mail (diagnóstico)"):
+            st.caption("Envia um e-mail de teste para o seu próprio e-mail de administrador, mostrando o erro exato caso falhe.")
+            if st.button("Enviar E-mail de Teste"):
+                with st.spinner("Enviando..."):
+                    sucesso_teste, erro_teste = enviar_email_notificacao(
+                        st.session_state.EMAIL_USUARIO_LOGADO,
+                        "Teste de E-mail - Gestão de Almoxarifado",
+                        "<p>Este é um e-mail de teste. Se você recebeu esta mensagem, o envio de e-mails está funcionando corretamente.</p>"
+                    )
+                if sucesso_teste:
+                    st.success(f"✅ E-mail de teste enviado com sucesso para {st.session_state.EMAIL_USUARIO_LOGADO}! Verifique a caixa de entrada (e o Spam/Lixo Eletrônico).")
+                else:
+                    st.error(f"❌ Falha ao enviar o e-mail de teste. Erro técnico: {erro_teste}")
+
         aba_solicitacao = option_menu(
             menu_title=None,
             options=["Pendentes", "Histórico"],
@@ -1757,4 +1774,3 @@ else:
                     st.dataframe(df_movimentacoes.sort_index(ascending=False), use_container_width=True, hide_index=True)
                 else:
                     st.info("Nenhuma movimentação registrada até o momento.")
-                    
