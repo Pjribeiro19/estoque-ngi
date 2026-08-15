@@ -10,6 +10,7 @@ from streamlit_option_menu import option_menu
 import os
 import threading
 import uuid
+from streamlit_cookies_controller import CookieController
 
 # =============================================================================
 # CONFIGURAÇÃO DE TEMPO DE SESSÃO (LOGIN PERSISTE APÓS ATUALIZAR A PÁGINA)
@@ -17,6 +18,9 @@ import uuid
 # O usuário só é desconectado automaticamente após ficar esse tempo (em
 # minutos) sem interagir com o sistema. Qualquer clique/ação renova o prazo.
 SESSAO_DURACAO_MINUTOS = 60
+
+# Controlador de cookies do navegador (mantém o login sem sujar a URL)
+cookie_controller = CookieController(key="cookie_controller_almoxarifado")
 
 # =============================================================================
 # CONEXÃO E INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (Neon Postgres)
@@ -397,16 +401,16 @@ if "SESSION_TOKEN" not in st.session_state:
 # =============================================================================
 # RESTAURAÇÃO AUTOMÁTICA DE SESSÃO (mantém o login após atualizar a página)
 # =============================================================================
-# Se o navegador ainda tem o token da sessão na URL e ele não expirou no
-# banco, o usuário é reconectado automaticamente sem precisar logar de novo.
+# Se o navegador ainda tem o cookie da sessão e ele não expirou no banco,
+# o usuário é reconectado automaticamente sem precisar logar de novo.
 if not st.session_state.autenticado:
-    token_url = st.query_params.get("session")
-    if token_url:
+    token_cookie = cookie_controller.get("session")
+    if token_cookie:
         try:
             cursor_sessao = conn.cursor()
             cursor_sessao.execute(
                 "SELECT email, nome, perfil, expira_em FROM sessoes_login WHERE token = %s;",
-                (token_url,)
+                (token_cookie,)
             )
             sessao_encontrada = cursor_sessao.fetchone()
 
@@ -419,19 +423,19 @@ if not st.session_state.autenticado:
                     st.session_state.NOME_USUARIO_LOGADO = nome_sessao
                     st.session_state.PERFIL_USUARIO_LOGADO = perfil_sessao
                     st.session_state.EMAIL_USUARIO_LOGADO = email_sessao
-                    st.session_state.SESSION_TOKEN = token_url
+                    st.session_state.SESSION_TOKEN = token_cookie
 
                     nova_expiracao = datetime.now() + timedelta(minutes=SESSAO_DURACAO_MINUTOS)
                     cursor_sessao.execute(
                         "UPDATE sessoes_login SET expira_em = %s WHERE token = %s;",
-                        (nova_expiracao, token_url)
+                        (nova_expiracao, token_cookie)
                     )
                     conn.commit()
                 else:
-                    # Sessão expirada por inatividade: remove do banco e da URL
-                    cursor_sessao.execute("DELETE FROM sessoes_login WHERE token = %s;", (token_url,))
+                    # Sessão expirada por inatividade: remove do banco e do cookie
+                    cursor_sessao.execute("DELETE FROM sessoes_login WHERE token = %s;", (token_cookie,))
                     conn.commit()
-                    st.query_params.clear()
+                    cookie_controller.remove("session")
         except Exception:
             pass
 
@@ -479,7 +483,10 @@ if not st.session_state.autenticado:
                                 """, (novo_token, email_banco, nome_banco, perfil_banco, expira_em_novo))
                                 conn.commit()
                                 st.session_state.SESSION_TOKEN = novo_token
-                                st.query_params["session"] = novo_token
+                                try:
+                                    cookie_controller.set("session", novo_token, max_age=SESSAO_DURACAO_MINUTOS * 60)
+                                except TypeError:
+                                    cookie_controller.set("session", novo_token)
                             except Exception:
                                 conn.rollback()
 
@@ -632,7 +639,7 @@ else:
                 conn.commit()
             except Exception:
                 conn.rollback()
-        st.query_params.clear()
+        cookie_controller.remove("session")
         st.session_state.autenticado = False
         st.session_state.NOME_USUARIO_LOGADO = ""
         st.session_state.PERFIL_USUARIO_LOGADO = ""
