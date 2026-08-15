@@ -685,7 +685,7 @@ if not st.session_state.autenticado:
                 </div>
             """, unsafe_allow_html=True)
             
-            st.markdown("<h2 style='text-align: center; color: #4CAF50; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
+            st.markdown("<h2 style='text-align: center; color: #0B552B; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
             
             usuario_input = st.text_input("Usuário / E-mail")
             senha_input = st.text_input("Senha", type="password")
