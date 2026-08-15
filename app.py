@@ -2089,10 +2089,10 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
         st.markdown(f"""
             <div style="background-color: {COR_CARD_FUNDO}; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
-                <h1 style="color: {COR_ACCENT_LIMAO}; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 700;">
-                    📊 Relatórios e Dashboard
+                <h1 class="kpi-valor-limao" style="margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 700;">
+                    Relatórios e Dashboard
                 </h1>
-                <p style="color: {COR_TEXTO_CLARO}; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                <p class="kpi-titulo-branco" style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                     Visão consolidada de Estoque, Solicitações, Movimentações e Empréstimos
                 </p>
             </div>
@@ -2246,7 +2246,6 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 fig_coord.update_layout(title=dict(text="SOLICITAÇÕES POR COORDENAÇÃO", font=dict(color=COR_ACCENT_LIMAO, size=14)), bargap=0.6)
                 fig_coord = estilizar_grafico(fig_coord)
                 st.plotly_chart(fig_coord, use_container_width=True, config={"displayModeBar": False})
-                st.caption("Inclui solicitações do sistema + saídas de estoque registradas por coordenação (histórico de entregas anterior ao módulo de Solicitações).")
             else:
                 st.info("Nenhuma solicitação ou saída no período selecionado.")
 
@@ -2284,7 +2283,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Exportar Relatório Geral</h3>', unsafe_allow_html=True)
         st.caption("Gera uma planilha Excel com abas separadas: Estoque, Movimentações, Solicitações e Empréstimos.")
 
-        if st.button("📥 Gerar Relatório em Excel", type="primary"):
+        if st.button("Gerar Relatório em Excel", type="primary", icon=":material/table_view:"):
             with st.spinner("Gerando planilha..."):
                 buffer_excel = io.BytesIO()
                 with pd.ExcelWriter(buffer_excel, engine="openpyxl") as writer:
@@ -2321,8 +2320,9 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
         if st.session_state.get("excel_relatorio_gerado"):
             st.download_button(
-                label="⬇️ Baixar Relatorio_Almoxarifado.xlsx",
+                label="Baixar Relatorio_Almoxarifado.xlsx",
                 data=st.session_state["excel_relatorio_gerado"],
                 file_name=f"Relatorio_Almoxarifado_{date.today().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                icon=":material/download:"
             )
