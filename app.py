@@ -2137,9 +2137,15 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
         if data_inicio_rel:
             cursor_rel.execute("SELECT COUNT(*) FROM solicitacoes_almoxarifado WHERE data_solicitacao >= %s;", (data_inicio_rel,))
+            total_sol_modulo = cursor_rel.fetchone()[0]
+            cursor_rel.execute("SELECT COUNT(*) FROM movimentacoes WHERE tipo = 'Saída' AND data::date >= %s;", (data_inicio_rel,))
+            total_saidas_como_sol = cursor_rel.fetchone()[0]
         else:
             cursor_rel.execute("SELECT COUNT(*) FROM solicitacoes_almoxarifado;")
-        total_solicitacoes_rel = cursor_rel.fetchone()[0]
+            total_sol_modulo = cursor_rel.fetchone()[0]
+            cursor_rel.execute("SELECT COUNT(*) FROM movimentacoes WHERE tipo = 'Saída';")
+            total_saidas_como_sol = cursor_rel.fetchone()[0]
+        total_solicitacoes_rel = total_sol_modulo + total_saidas_como_sol
 
         if data_inicio_rel:
             cursor_rel.execute("SELECT COUNT(*) FROM movimentacoes WHERE data::date >= %s;", (data_inicio_rel,))
@@ -2178,8 +2184,8 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         col_k1, col_k2, col_k3, col_k4 = st.columns(4)
         renderizar_kpi(col_k1, "Itens em Estoque", f"{total_itens_estoque_rel:,}".replace(",", "."))
         renderizar_kpi(col_k2, "Valor Total em Estoque", formatar_moeda_br(valor_total_estoque_rel))
-        renderizar_kpi(col_k3, "Solicitações no Período", str(total_solicitacoes_rel))
-        renderizar_kpi(col_k4, "Movimentações no Período", str(total_movimentacoes_rel))
+        renderizar_kpi(col_k3, "Total de Solicitações", str(total_solicitacoes_rel))
+        renderizar_kpi(col_k4, "Total de Movimentações", str(total_movimentacoes_rel))
 
         st.markdown("<br>", unsafe_allow_html=True)
 
