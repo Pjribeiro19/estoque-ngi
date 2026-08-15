@@ -9,6 +9,7 @@ from psycopg2.extras import DictCursor
 from streamlit_option_menu import option_menu
 import os
 import threading
+import time
 import uuid
 from streamlit_cookies_controller import CookieController
 
@@ -431,6 +432,15 @@ if not st.session_state.autenticado:
                         (nova_expiracao, token_cookie)
                     )
                     conn.commit()
+                    try:
+                        cookie_controller.set(
+                            "session", token_cookie,
+                            max_age=SESSAO_DURACAO_MINUTOS * 60,
+                            expires=nova_expiracao,
+                            same_site="lax"
+                        )
+                    except Exception:
+                        pass
                 else:
                     # Sessão expirada por inatividade: remove do banco e do cookie
                     cursor_sessao.execute("DELETE FROM sessoes_login WHERE token = %s;", (token_cookie,))
@@ -484,9 +494,18 @@ if not st.session_state.autenticado:
                                 conn.commit()
                                 st.session_state.SESSION_TOKEN = novo_token
                                 try:
-                                    cookie_controller.set("session", novo_token, max_age=SESSAO_DURACAO_MINUTOS * 60)
-                                except TypeError:
+                                    cookie_controller.set(
+                                        "session", novo_token,
+                                        max_age=SESSAO_DURACAO_MINUTOS * 60,
+                                        expires=expira_em_novo,
+                                        same_site="lax"
+                                    )
+                                except Exception:
                                     cookie_controller.set("session", novo_token)
+                                # Dá tempo do navegador de fato gravar o cookie
+                                # antes da tela recarregar (evita corrida entre
+                                # o componente de cookie e o rerun).
+                                time.sleep(0.4)
                             except Exception:
                                 conn.rollback()
 
