@@ -433,13 +433,19 @@ st.markdown("""
         border-radius: 8px;
     }
 
-    .kpi-titulo-branco, .kpi-titulo-branco * {
+    .kpi-titulo-branco, .kpi-titulo-branco *,
+    .stMarkdown .kpi-titulo-branco, .stMarkdown .kpi-titulo-branco *,
+    .stMarkdown p.kpi-titulo-branco {
         color: #ffffff !important;
     }
-    .kpi-valor-branco, .kpi-valor-branco * {
+    .kpi-valor-branco, .kpi-valor-branco *,
+    .stMarkdown .kpi-valor-branco, .stMarkdown .kpi-valor-branco *,
+    .stMarkdown p.kpi-valor-branco {
         color: #ffffff !important;
     }
-    .kpi-valor-limao, .kpi-valor-limao * {
+    .kpi-valor-limao, .kpi-valor-limao *,
+    .stMarkdown .kpi-valor-limao, .stMarkdown .kpi-valor-limao *,
+    .stMarkdown h1.kpi-valor-limao {
         color: #C7E36B !important;
     }
     </style>
@@ -2194,6 +2200,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             return fig
 
         col_g1, col_g2 = st.columns(2)
+        altura_categoria = 300
 
         with col_g1:
             if not df_produtos.empty:
@@ -2244,7 +2251,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                     width=0.25 if len(df_coord_rel) <= 2 else None
                 ))
                 fig_coord.update_layout(title=dict(text="SOLICITAÇÕES POR COORDENAÇÃO", font=dict(color=COR_ACCENT_LIMAO, size=14)), bargap=0.6)
-                fig_coord = estilizar_grafico(fig_coord)
+                fig_coord = estilizar_grafico(fig_coord, altura=altura_categoria)
                 st.plotly_chart(fig_coord, use_container_width=True, config={"displayModeBar": False})
             else:
                 st.info("Nenhuma solicitação ou saída no período selecionado.")
