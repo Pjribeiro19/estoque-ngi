@@ -11,6 +11,7 @@ import psycopg2
 from psycopg2.extras import DictCursor
 from streamlit_option_menu import option_menu
 import os
+import streamlit.components.v1 as components
 import threading
 import time
 import uuid
@@ -422,6 +423,66 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+# =============================================================================
+# TRADUÇÃO DO CALENDÁRIO (st.date_input) PARA PORTUGUÊS
+# =============================================================================
+# O Streamlit não tem suporte nativo a idioma no calendário (limitação
+# conhecida e documentada da própria ferramenta). Este script traduz os
+# nomes de mês/dia visualmente, sem alterar o funcionamento do widget.
+components.html("""
+<script>
+(function() {
+    const traducaoMeses = {
+        "January": "Janeiro", "February": "Fevereiro", "March": "Março",
+        "April": "Abril", "May": "Maio", "June": "Junho",
+        "July": "Julho", "August": "Agosto", "September": "Setembro",
+        "October": "Outubro", "November": "Novembro", "December": "Dezembro"
+    };
+    const traducaoDiasAbrev = {
+        "Su": "Dom", "Mo": "Seg", "Tu": "Ter", "We": "Qua",
+        "Th": "Qui", "Fr": "Sex", "Sa": "Sáb"
+    };
+    const traducaoRotulos = { "Today": "Hoje", "Clear": "Limpar" };
+
+    function traduzirTexto(texto) {
+        if (traducaoMeses[texto]) return traducaoMeses[texto];
+        if (traducaoDiasAbrev[texto]) return traducaoDiasAbrev[texto];
+        if (traducaoRotulos[texto]) return traducaoRotulos[texto];
+        return null;
+    }
+
+    function traduzirContainer(container) {
+        const caminhador = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+        let no;
+        while ((no = caminhador.nextNode())) {
+            const original = no.nodeValue.trim();
+            if (!original) continue;
+            const traduzido = traduzirTexto(original);
+            if (traduzido) {
+                no.nodeValue = no.nodeValue.replace(original, traduzido);
+            }
+        }
+    }
+
+    function verificarCalendarios(doc) {
+        const calendarios = doc.querySelectorAll('[data-baseweb="calendar"]');
+        calendarios.forEach(traduzirContainer);
+    }
+
+    try {
+        const docPai = window.parent.document;
+        const observer = new MutationObserver(function() {
+            verificarCalendarios(docPai);
+        });
+        observer.observe(docPai.body, { childList: true, subtree: true });
+        verificarCalendarios(docPai);
+    } catch (e) {
+        // Ignora silenciosamente se não conseguir acessar o documento principal
+    }
+})();
+</script>
+""", height=0, width=0)
 
 # Dicionário de estilo adaptativo para os menus horizontais
 ESTILO_MENU_HORIZONTAL = {
