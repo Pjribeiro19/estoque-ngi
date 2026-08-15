@@ -215,7 +215,26 @@ def inicializar_banco_automatico():
     
     return conn
 
-conn = inicializar_banco_automatico()
+def obter_conexao_saudavel():
+    """Reaproveita a conexão cacheada, mas testa se ela ainda está viva.
+    O Neon (Postgres serverless) fecha conexões ociosas automaticamente;
+    se isso acontecer, reconecta do zero sem exigir ação manual."""
+    conexao = inicializar_banco_automatico()
+    try:
+        cur_teste = conexao.cursor()
+        cur_teste.execute("SELECT 1;")
+        cur_teste.fetchone()
+        cur_teste.close()
+    except Exception:
+        try:
+            conexao.close()
+        except Exception:
+            pass
+        inicializar_banco_automatico.clear()
+        conexao = inicializar_banco_automatico()
+    return conexao
+
+conn = obter_conexao_saudavel()
 
 # Carregamento seguro e global dos dados
 try:
