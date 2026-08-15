@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
 import smtplib
+import requests
 import socket
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -256,54 +257,47 @@ except Exception as e:
     lista_categorias = []
 
 # =============================================================================
-# CONFIGURAÇÕES SEGURAS DE E-MAIL
+# CONFIGURAÇÕES SEGURAS DE E-MAIL (via API HTTP da Resend)
 # =============================================================================
+# O Railway bloqueia conexões SMTP tradicionais (portas 25/465/587) fora do
+# plano Pro. Por isso o envio de e-mail é feito via API HTTP da Resend
+# (porta 443, nunca bloqueada), em vez de smtplib.
 try:
-    EMAIL_REMETENTE = os.environ.get("GMAIL_EMAIL") or st.secrets["gmail"]["email"]
-    SENHA_REMETENTE = os.environ.get("GMAIL_SENHA") or st.secrets["gmail"]["senha"]
-    SMTP_HOST = os.environ.get("GMAIL_SMTP_SERVER") or st.secrets["gmail"]["smtp_server"]
-    SMTP_PORTA = int(os.environ.get("GMAIL_SMTP_PORT") or st.secrets["gmail"]["smtp_port"])
-except Exception as e:
-    EMAIL_REMETENTE = "configurar_no_secrets@email.com"
-    SENHA_REMETENTE = "configurar_no_secrets"
-    SMTP_HOST = "smtp.gmail.com"
-    SMTP_PORTA = 587
+    RESEND_API_KEY = os.environ.get("RESEND_API_KEY") or st.secrets["resend"]["api_key"]
+    RESEND_REMETENTE = os.environ.get("RESEND_FROM_EMAIL") or st.secrets["resend"]["from_email"]
+except Exception:
+    RESEND_API_KEY = ""
+    RESEND_REMETENTE = ""
 
 # =============================================================================
 # FUNÇÃO AUXILIAR: ENVIO DE E-MAIL DE NOTIFICAÇÃO (MÓDULO DE SOLICITAÇÃO)
 # =============================================================================
-class SMTPForcaIPv4(smtplib.SMTP):
-    """Alguns ambientes de hospedagem (como o Railway) não têm rota de
-    rede IPv6 configurada. O smtplib pode tentar conectar via IPv6 por
-    padrão e falhar com '[Errno 101] Network is unreachable'. Esta classe
-    força a conexão a usar IPv4, mantendo o hostname original (smtp.gmail.com)
-    para a validação correta do certificado TLS no STARTTLS."""
-    def _get_socket(self, host, port, timeout):
-        addrinfo = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
-        sock = socket.socket(addrinfo[0][0], addrinfo[0][1], addrinfo[0][2])
-        if timeout is not None:
-            sock.settimeout(timeout)
-        sock.connect(addrinfo[0][4])
-        return sock
-
 def enviar_email_notificacao(destinatario, assunto, corpo_html):
-    if EMAIL_REMETENTE == "configurar_no_secrets@email.com" or not destinatario:
-        print(f"[EMAIL] Envio ignorado - remetente não configurado ou destinatário vazio (destino={destinatario})")
-        return False, "Remetente de e-mail não configurado no sistema (variáveis GMAIL_* ausentes)."
+    if not RESEND_API_KEY or not RESEND_REMETENTE or not destinatario:
+        print(f"[EMAIL] Envio ignorado - Resend não configurado ou destinatário vazio (destino={destinatario})")
+        return False, "Envio de e-mail não configurado no sistema (variáveis RESEND_API_KEY / RESEND_FROM_EMAIL ausentes)."
     try:
-        msg = MIMEMultipart()
-        msg["From"] = EMAIL_REMETENTE
-        msg["To"] = destinatario
-        msg["Subject"] = assunto
-        msg.attach(MIMEText(corpo_html, "html"))
-
-        servidor = SMTPForcaIPv4(SMTP_HOST, SMTP_PORTA, timeout=10)
-        servidor.starttls()
-        servidor.login(EMAIL_REMETENTE, SENHA_REMETENTE)
-        servidor.sendmail(EMAIL_REMETENTE, destinatario, msg.as_string())
-        servidor.quit()
-        print(f"[EMAIL] Enviado com sucesso para {destinatario} - Assunto: {assunto}")
-        return True, None
+        resposta = requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "from": RESEND_REMETENTE,
+                "to": [destinatario],
+                "subject": assunto,
+                "html": corpo_html
+            },
+            timeout=10
+        )
+        if resposta.status_code in (200, 201):
+            print(f"[EMAIL] Enviado com sucesso para {destinatario} - Assunto: {assunto}")
+            return True, None
+        else:
+            erro_msg = resposta.text
+            print(f"[EMAIL] ERRO ao enviar para {destinatario}: {resposta.status_code} - {erro_msg}")
+            return False, f"HTTP {resposta.status_code}: {erro_msg}"
     except Exception as e:
         print(f"[EMAIL] ERRO ao enviar para {destinatario}: {repr(e)}")
         return False, str(e)
@@ -563,25 +557,16 @@ if not st.session_state.autenticado:
                     cursor = conn.cursor()
                     cursor.execute("SELECT COUNT(*) FROM usuarios WHERE LOWER(email) = %s;", (email_recuperar.strip().lower(),))
                     if cursor.fetchone()[0] > 0:
-                        if EMAIL_REMETENTE == "configurar_no_secrets@email.com":
-                            st.error("Erro de configuração nos Secrets do Streamlit / Railway Variables.")
+                        with st.spinner("Enviando..."):
+                            sucesso_recup, erro_recup = enviar_email_notificacao(
+                                email_recuperar.strip(),
+                                "Recuperação de Senha - Sistema de Almoxarifado NGI Carajás",
+                                "<p>Sua senha provisória de contingência é: <b>123</b></p>"
+                            )
+                        if sucesso_recup:
+                            st.success(f"Sucesso! Instruções enviadas para {email_recuperar}")
                         else:
-                            try:
-                                msg = MIMEMultipart()
-                                msg['From'] = EMAIL_REMETENTE
-                                msg['To'] = email_recuperar.strip()
-                                msg['Subject'] = "Recuperação de Senha - Sistema de Almoxarifado NGI Carajás"
-                                corpo_email = f"Sua senha provisória de contingência é: 123"
-                                msg.attach(MIMEText(corpo_email, 'plain'))
-                                
-                                server = SMTPForcaIPv4(SMTP_HOST, SMTP_PORTA, timeout=10)
-                                server.starttls()
-                                server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
-                                server.sendmail(EMAIL_REMETENTE, email_recuperar.strip(), msg.as_string())
-                                server.quit()
-                                st.success(f"Sucesso! Instruções enviadas para {email_recuperar}")
-                            except Exception as e:
-                                st.error(f"Erro ao tentar enviar o e-mail: {e}")
+                            st.error(f"Erro ao tentar enviar o e-mail: {erro_recup}")
                     else:
                         st.error("Este e-mail não foi encontrado no sistema.")
                 else:
