@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
+import io
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 import smtplib
@@ -867,9 +869,10 @@ else:
                     "Cadastrar Coordenação",
                     "Movimentação de Estoque",
                     label_solicitacoes,
+                    "Relatórios",
                     "Sair do Sistema"
                 ],
-                icons=["grid", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "bell", "box-arrow-right"],
+                icons=["grid", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "box-arrow-right"],
                 menu_icon="cast",
                 default_index=0,
                 styles={
@@ -948,30 +951,6 @@ else:
             </div>
         """, unsafe_allow_html=True)
         
-        st.markdown("<br><hr style='margin: 10px 0 25px 0; opacity: 0.15;'>", unsafe_allow_html=True)
-        st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Distribuição por Categoria</h3>', unsafe_allow_html=True)
-
-        if df_produtos.empty:
-            st.info("Nenhum material cadastrado para exibir o gráfico.")
-        else:
-            df_categoria = df_produtos.copy()
-            df_categoria["Valor Unitário"] = df_categoria["Valor Unitário"].astype(float)
-            df_categoria["Valor Total"] = df_categoria["Quantidade"] * df_categoria["Valor Unitário"]
-
-            resumo_categoria = (
-                df_categoria.groupby("Categoria")
-                .agg(Quantidade=("Quantidade", "sum"), Valor_Total=("Valor Total", "sum"))
-                .sort_values("Quantidade", ascending=False)
-            )
-
-            col_g1, col_g2 = st.columns(2)
-            with col_g1:
-                st.markdown("<p style='font-size: 13px; font-weight: 600; color: #555;'>QUANTIDADE TOTAL POR CATEGORIA</p>", unsafe_allow_html=True)
-                st.bar_chart(resumo_categoria["Quantidade"], color="#4CAF50", height=280)
-            with col_g2:
-                st.markdown("<p style='font-size: 13px; font-weight: 600; color: #555;'>VALOR TOTAL POR CATEGORIA (R$)</p>", unsafe_allow_html=True)
-                st.bar_chart(resumo_categoria["Valor_Total"], color="#2196F3", height=280)
-
         st.markdown("<br><hr style='margin: 10px 0 25px 0; opacity: 0.15;'>", unsafe_allow_html=True)
         st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
         
@@ -2087,3 +2066,219 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                     st.dataframe(df_movimentacoes.sort_index(ascending=False), use_container_width=True, hide_index=True)
                 else:
                     st.info("Nenhuma movimentação registrada até o momento.")
+
+    # =========================================================================
+    # NOVO MÓDULO: RELATÓRIOS / DASHBOARD (PERFIL ADMINISTRADOR)
+    # =========================================================================
+    elif escolha == "Relatórios":
+        COR_CARD_FUNDO = "#0F3D1E"
+        COR_ACCENT_LIMAO = "#C7E36B"
+        COR_BARRA_LIMAO = "#9ACD32"
+        COR_BARRA_AZUL = "#5DADE2"
+        COR_TEXTO_CLARO = "#e8f0d8"
+
+        st.markdown(f"""
+            <div style="background-color: {COR_CARD_FUNDO}; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+                <h1 style="color: {COR_ACCENT_LIMAO}; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 700;">
+                    📊 Relatórios e Dashboard
+                </h1>
+                <p style="color: {COR_TEXTO_CLARO}; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                    Visão consolidada de Estoque, Solicitações, Movimentações e Empréstimos
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+
+        # ---------------------------------------------------------------
+        # FILTRO DE PERÍODO (aplica-se a Solicitações e Movimentações)
+        # ---------------------------------------------------------------
+        col_filtro_rel, _ = st.columns([1, 2])
+        filtro_periodo_rel = col_filtro_rel.selectbox(
+            "Filtrar Solicitações e Movimentações por período:",
+            ["Todo o Período", "Este Mês", "Este Trimestre", "Este Ano"]
+        )
+
+        hoje_rel = date.today()
+        if filtro_periodo_rel == "Este Mês":
+            data_inicio_rel = hoje_rel.replace(day=1)
+        elif filtro_periodo_rel == "Este Trimestre":
+            mes_inicio_trim = ((hoje_rel.month - 1) // 3) * 3 + 1
+            data_inicio_rel = hoje_rel.replace(month=mes_inicio_trim, day=1)
+        elif filtro_periodo_rel == "Este Ano":
+            data_inicio_rel = hoje_rel.replace(month=1, day=1)
+        else:
+            data_inicio_rel = None
+
+        cursor_rel = conn.cursor()
+
+        # ---------------------------------------------------------------
+        # CARTÕES DE KPI
+        # ---------------------------------------------------------------
+        total_itens_estoque_rel = int(df_produtos["Quantidade"].sum()) if not df_produtos.empty else 0
+        if not df_produtos.empty:
+            valor_total_estoque_rel = float((df_produtos["Quantidade"] * df_produtos["Valor Unitário"].astype(float)).sum())
+        else:
+            valor_total_estoque_rel = 0.0
+
+        if data_inicio_rel:
+            cursor_rel.execute("SELECT COUNT(*) FROM solicitacoes_almoxarifado WHERE data_solicitacao >= %s;", (data_inicio_rel,))
+        else:
+            cursor_rel.execute("SELECT COUNT(*) FROM solicitacoes_almoxarifado;")
+        total_solicitacoes_rel = cursor_rel.fetchone()[0]
+
+        if data_inicio_rel:
+            cursor_rel.execute("SELECT COUNT(*) FROM movimentacoes WHERE data::date >= %s;", (data_inicio_rel,))
+        else:
+            cursor_rel.execute("SELECT COUNT(*) FROM movimentacoes;")
+        total_movimentacoes_rel = cursor_rel.fetchone()[0]
+
+        def formatar_moeda_br(valor):
+            return "R$ " + f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+        def renderizar_kpi(coluna, titulo, valor):
+            coluna.markdown(f"""
+                <div style="background-color: {COR_CARD_FUNDO}; border-radius: 10px; padding: 18px; text-align: center; height: 100px;">
+                    <span style="font-size: 12px; font-weight: 600; color: {COR_ACCENT_LIMAO}; text-transform: uppercase; letter-spacing: 0.5px;">{titulo}</span>
+                    <h2 style="color: #ffffff; margin: 8px 0 0 0; font-size: 26px; font-weight: 700;">{valor}</h2>
+                </div>
+            """, unsafe_allow_html=True)
+
+        col_k1, col_k2, col_k3, col_k4 = st.columns(4)
+        renderizar_kpi(col_k1, "Itens em Estoque", f"{total_itens_estoque_rel:,}".replace(",", "."))
+        renderizar_kpi(col_k2, "Valor Total em Estoque", formatar_moeda_br(valor_total_estoque_rel))
+        renderizar_kpi(col_k3, "Solicitações no Período", str(total_solicitacoes_rel))
+        renderizar_kpi(col_k4, "Movimentações no Período", str(total_movimentacoes_rel))
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ---------------------------------------------------------------
+        # GRÁFICOS: MATERIAL POR CATEGORIA / SOLICITAÇÕES POR COORDENAÇÃO
+        # ---------------------------------------------------------------
+        def estilizar_grafico(fig):
+            fig.update_layout(
+                paper_bgcolor=COR_CARD_FUNDO,
+                plot_bgcolor=COR_CARD_FUNDO,
+                font=dict(color=COR_TEXTO_CLARO, size=12),
+                margin=dict(l=10, r=10, t=40, b=10),
+                height=300,
+                xaxis=dict(showgrid=False, tickfont=dict(color=COR_TEXTO_CLARO)),
+                yaxis=dict(showgrid=True, gridcolor="#1a5c2e", tickfont=dict(color=COR_TEXTO_CLARO)),
+                showlegend=False
+            )
+            return fig
+
+        col_g1, col_g2 = st.columns(2)
+
+        with col_g1:
+            if not df_produtos.empty:
+                resumo_cat_rel = df_produtos.groupby("Categoria")["Quantidade"].sum().sort_values(ascending=False)
+                fig_categoria = go.Figure(go.Bar(
+                    x=resumo_cat_rel.index, y=resumo_cat_rel.values,
+                    marker_color=COR_BARRA_LIMAO,
+                    text=resumo_cat_rel.values, textposition="outside", textfont=dict(color=COR_TEXTO_CLARO)
+                ))
+                fig_categoria.update_layout(title=dict(text="MATERIAL POR CATEGORIA", font=dict(color=COR_ACCENT_LIMAO, size=14)))
+                fig_categoria = estilizar_grafico(fig_categoria)
+                st.plotly_chart(fig_categoria, use_container_width=True, config={"displayModeBar": False})
+            else:
+                st.info("Sem dados de estoque para exibir.")
+
+        with col_g2:
+            query_coord_rel = "SELECT COALESCE(coordenacao, 'Não informado') AS coordenacao, COUNT(*) AS total FROM solicitacoes_almoxarifado"
+            params_coord_rel = []
+            if data_inicio_rel:
+                query_coord_rel += " WHERE data_solicitacao >= %s"
+                params_coord_rel.append(data_inicio_rel)
+            query_coord_rel += " GROUP BY coordenacao ORDER BY total DESC;"
+            df_coord_rel = pd.read_sql_query(query_coord_rel, conn, params=tuple(params_coord_rel) if params_coord_rel else None)
+
+            if not df_coord_rel.empty:
+                fig_coord = go.Figure(go.Bar(
+                    x=df_coord_rel["coordenacao"], y=df_coord_rel["total"],
+                    marker_color=COR_BARRA_AZUL,
+                    text=df_coord_rel["total"], textposition="outside", textfont=dict(color=COR_TEXTO_CLARO)
+                ))
+                fig_coord.update_layout(title=dict(text="SOLICITAÇÕES POR COORDENAÇÃO", font=dict(color=COR_ACCENT_LIMAO, size=14)))
+                fig_coord = estilizar_grafico(fig_coord)
+                st.plotly_chart(fig_coord, use_container_width=True, config={"displayModeBar": False})
+            else:
+                st.info("Nenhuma solicitação no período selecionado.")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # ---------------------------------------------------------------
+        # MOVIMENTAÇÕES (ENTRADA X SAÍDA) E EMPRÉSTIMOS
+        # ---------------------------------------------------------------
+        query_mov_tipo = "SELECT tipo, COUNT(*) AS total FROM movimentacoes"
+        params_mov_tipo = []
+        if data_inicio_rel:
+            query_mov_tipo += " WHERE data::date >= %s"
+            params_mov_tipo.append(data_inicio_rel)
+        query_mov_tipo += " GROUP BY tipo;"
+        cursor_rel.execute(query_mov_tipo, tuple(params_mov_tipo))
+        resultado_mov_tipo = dict(cursor_rel.fetchall())
+        total_entradas_rel = resultado_mov_tipo.get("Entrada", 0)
+        total_saidas_rel = resultado_mov_tipo.get("Saída", 0)
+
+        cursor_rel.execute("SELECT COALESCE(SUM(quantidade), 0), COALESCE(SUM(quantidade_disponivel), 0) FROM emprestimo_itens;")
+        total_catalogo_emp, total_disponivel_emp = cursor_rel.fetchone()
+        total_catalogo_emp = int(total_catalogo_emp)
+        total_disponivel_emp = int(total_disponivel_emp)
+        total_emprestado_emp = total_catalogo_emp - total_disponivel_emp
+
+        col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
+        renderizar_kpi(col_m1, "Entradas no Período", str(total_entradas_rel))
+        renderizar_kpi(col_m2, "Saídas no Período", str(total_saidas_rel))
+        renderizar_kpi(col_m3, "Itens no Catálogo (Empréstimo)", f"{total_catalogo_emp:,}".replace(",", "."))
+        renderizar_kpi(col_m4, "Atualmente Emprestado", f"{total_emprestado_emp:,}".replace(",", "."))
+        renderizar_kpi(col_m5, "Disponível p/ Empréstimo", f"{total_disponivel_emp:,}".replace(",", "."))
+
+        st.markdown("<br><hr style='margin: 10px 0 20px 0; opacity: 0.15;'>", unsafe_allow_html=True)
+
+        # ---------------------------------------------------------------
+        # EXPORTAÇÃO EM EXCEL
+        # ---------------------------------------------------------------
+        st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Exportar Relatório Geral</h3>', unsafe_allow_html=True)
+        st.caption("Gera uma planilha Excel com abas separadas: Estoque, Movimentações, Solicitações e Empréstimos.")
+
+        if st.button("📥 Gerar Relatório em Excel", type="primary"):
+            with st.spinner("Gerando planilha..."):
+                buffer_excel = io.BytesIO()
+                with pd.ExcelWriter(buffer_excel, engine="openpyxl") as writer:
+                    if not df_produtos.empty:
+                        df_produtos.to_excel(writer, sheet_name="Estoque", index=False)
+                    if not df_movimentacoes.empty:
+                        df_movimentacoes.to_excel(writer, sheet_name="Movimentações", index=False)
+
+                    df_export_sol = pd.read_sql_query("""
+                        SELECT tipo AS "Tipo", item_nome AS "Item", quantidade AS "Quantidade",
+                               solicitante_nome AS "Solicitante", solicitante_email AS "E-mail",
+                               coordenacao AS "Coordenação", atividade_associada AS "Atividade",
+                               to_char(data_solicitacao AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') AS "Data Solicitação",
+                               status AS "Status",
+                               COALESCE(aprovador, '-') AS "Decidido Por",
+                               COALESCE(justificativa_rejeicao, '-') AS "Justificativa Reprovação"
+                        FROM solicitacoes_almoxarifado ORDER BY id DESC;
+                    """, conn)
+                    if not df_export_sol.empty:
+                        df_export_sol.to_excel(writer, sheet_name="Solicitações", index=False)
+
+                    df_export_emp = pd.read_sql_query("""
+                        SELECT item_nome AS "Item", quantidade AS "Quantidade", pessoa AS "Pessoa",
+                               coordenacao AS "Coordenação", data_retirada AS "Data Retirada",
+                               data_prevista AS "Previsão Devolução", data_devolucao AS "Devolução Real",
+                               status AS "Status"
+                        FROM emprestimo_registros ORDER BY id DESC;
+                    """, conn)
+                    if not df_export_emp.empty:
+                        df_export_emp.to_excel(writer, sheet_name="Empréstimos", index=False)
+
+                st.session_state["excel_relatorio_gerado"] = buffer_excel.getvalue()
+                st.success("Planilha gerada com sucesso! Clique abaixo para baixar.")
+
+        if st.session_state.get("excel_relatorio_gerado"):
+            st.download_button(
+                label="⬇️ Baixar Relatorio_Almoxarifado.xlsx",
+                data=st.session_state["excel_relatorio_gerado"],
+                file_name=f"Relatorio_Almoxarifado_{date.today().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
