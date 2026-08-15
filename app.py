@@ -432,6 +432,16 @@ st.markdown("""
         padding: 15px;
         border-radius: 8px;
     }
+
+    .kpi-titulo-branco, .kpi-titulo-branco * {
+        color: #ffffff !important;
+    }
+    .kpi-valor-branco, .kpi-valor-branco * {
+        color: #ffffff !important;
+    }
+    .kpi-valor-limao, .kpi-valor-limao * {
+        color: #C7E36B !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -2137,23 +2147,23 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         def renderizar_kpi(coluna, titulo, valor):
             coluna.markdown(f"""
                 <div style="background-color: {COR_CARD_FUNDO}; border-radius: 10px; padding: 18px; text-align: center; min-height: 100px;">
-                    <span style="font-size: 12px; font-weight: 600; color: #ffffff !important; text-transform: uppercase; letter-spacing: 0.5px;">{titulo}</span>
-                    <h2 style="color: #ffffff !important; margin: 8px 0 0 0; font-size: 26px; font-weight: 700;">{valor}</h2>
+                    <span class="kpi-titulo-branco" style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">{titulo}</span>
+                    <h2 class="kpi-valor-branco" style="margin: 8px 0 0 0; font-size: 26px; font-weight: 700;">{valor}</h2>
                 </div>
             """, unsafe_allow_html=True)
 
         def renderizar_kpi_duplo(coluna, titulo, rotulo1, valor1, rotulo2, valor2):
             coluna.markdown(f"""
                 <div style="background-color: {COR_CARD_FUNDO}; border-radius: 10px; padding: 18px; text-align: center; min-height: 100px;">
-                    <span style="font-size: 12px; font-weight: 600; color: #ffffff !important; text-transform: uppercase; letter-spacing: 0.5px;">{titulo}</span>
+                    <span class="kpi-titulo-branco" style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">{titulo}</span>
                     <div style="display: flex; justify-content: center; gap: 32px; margin-top: 10px;">
                         <div>
-                            <div style="color: {COR_ACCENT_LIMAO} !important; font-size: 22px; font-weight: 700;">{valor1}</div>
-                            <div style="color: #ffffff !important; font-size: 11px; opacity: 0.85;">{rotulo1}</div>
+                            <div class="kpi-valor-limao" style="font-size: 22px; font-weight: 700;">{valor1}</div>
+                            <div class="kpi-valor-branco" style="font-size: 11px; opacity: 0.85;">{rotulo1}</div>
                         </div>
                         <div>
-                            <div style="color: #ffffff !important; font-size: 22px; font-weight: 700;">{valor2}</div>
-                            <div style="color: #ffffff !important; font-size: 11px; opacity: 0.85;">{rotulo2}</div>
+                            <div class="kpi-valor-branco" style="font-size: 22px; font-weight: 700;">{valor2}</div>
+                            <div class="kpi-valor-branco" style="font-size: 11px; opacity: 0.85;">{rotulo2}</div>
                         </div>
                     </div>
                 </div>
