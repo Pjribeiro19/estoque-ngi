@@ -1533,20 +1533,6 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             </div>
         """, unsafe_allow_html=True)
 
-        with st.expander("🔧 Testar Envio de E-mail (diagnóstico)"):
-            st.caption("Envia um e-mail de teste para o seu próprio e-mail de administrador, mostrando o erro exato caso falhe.")
-            if st.button("Enviar E-mail de Teste"):
-                with st.spinner("Enviando..."):
-                    sucesso_teste, erro_teste = enviar_email_notificacao(
-                        st.session_state.EMAIL_USUARIO_LOGADO,
-                        "Teste de E-mail - Gestão de Almoxarifado",
-                        "<p>Este é um e-mail de teste. Se você recebeu esta mensagem, o envio de e-mails está funcionando corretamente.</p>"
-                    )
-                if sucesso_teste:
-                    st.success(f"✅ E-mail de teste enviado com sucesso para {st.session_state.EMAIL_USUARIO_LOGADO}! Verifique a caixa de entrada (e o Spam/Lixo Eletrônico).")
-                else:
-                    st.error(f"❌ Falha ao enviar o e-mail de teste. Erro técnico: {erro_teste}")
-
         aba_solicitacao = option_menu(
             menu_title=None,
             options=["Pendentes", "Histórico"],
