@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
 import smtplib
+import socket
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import psycopg2
@@ -271,6 +272,20 @@ except Exception as e:
 # =============================================================================
 # FUNÇÃO AUXILIAR: ENVIO DE E-MAIL DE NOTIFICAÇÃO (MÓDULO DE SOLICITAÇÃO)
 # =============================================================================
+class SMTPForcaIPv4(smtplib.SMTP):
+    """Alguns ambientes de hospedagem (como o Railway) não têm rota de
+    rede IPv6 configurada. O smtplib pode tentar conectar via IPv6 por
+    padrão e falhar com '[Errno 101] Network is unreachable'. Esta classe
+    força a conexão a usar IPv4, mantendo o hostname original (smtp.gmail.com)
+    para a validação correta do certificado TLS no STARTTLS."""
+    def _get_socket(self, host, port, timeout):
+        addrinfo = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+        sock = socket.socket(addrinfo[0][0], addrinfo[0][1], addrinfo[0][2])
+        if timeout is not None:
+            sock.settimeout(timeout)
+        sock.connect(addrinfo[0][4])
+        return sock
+
 def enviar_email_notificacao(destinatario, assunto, corpo_html):
     if EMAIL_REMETENTE == "configurar_no_secrets@email.com" or not destinatario:
         print(f"[EMAIL] Envio ignorado - remetente não configurado ou destinatário vazio (destino={destinatario})")
@@ -282,7 +297,7 @@ def enviar_email_notificacao(destinatario, assunto, corpo_html):
         msg["Subject"] = assunto
         msg.attach(MIMEText(corpo_html, "html"))
 
-        servidor = smtplib.SMTP(SMTP_HOST, SMTP_PORTA, timeout=10)
+        servidor = SMTPForcaIPv4(SMTP_HOST, SMTP_PORTA, timeout=10)
         servidor.starttls()
         servidor.login(EMAIL_REMETENTE, SENHA_REMETENTE)
         servidor.sendmail(EMAIL_REMETENTE, destinatario, msg.as_string())
@@ -559,7 +574,7 @@ if not st.session_state.autenticado:
                                 corpo_email = f"Sua senha provisória de contingência é: 123"
                                 msg.attach(MIMEText(corpo_email, 'plain'))
                                 
-                                server = smtplib.SMTP(SMTP_HOST, SMTP_PORTA, timeout=10)
+                                server = SMTPForcaIPv4(SMTP_HOST, SMTP_PORTA, timeout=10)
                                 server.starttls()
                                 server.login(EMAIL_REMETENTE, SENHA_REMETENTE)
                                 server.sendmail(EMAIL_REMETENTE, email_recuperar.strip(), msg.as_string())
