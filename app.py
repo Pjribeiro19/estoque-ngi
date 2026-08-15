@@ -949,6 +949,30 @@ else:
         """, unsafe_allow_html=True)
         
         st.markdown("<br><hr style='margin: 10px 0 25px 0; opacity: 0.15;'>", unsafe_allow_html=True)
+        st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Distribuição por Categoria</h3>', unsafe_allow_html=True)
+
+        if df_produtos.empty:
+            st.info("Nenhum material cadastrado para exibir o gráfico.")
+        else:
+            df_categoria = df_produtos.copy()
+            df_categoria["Valor Unitário"] = df_categoria["Valor Unitário"].astype(float)
+            df_categoria["Valor Total"] = df_categoria["Quantidade"] * df_categoria["Valor Unitário"]
+
+            resumo_categoria = (
+                df_categoria.groupby("Categoria")
+                .agg(Quantidade=("Quantidade", "sum"), Valor_Total=("Valor Total", "sum"))
+                .sort_values("Quantidade", ascending=False)
+            )
+
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                st.markdown("<p style='font-size: 13px; font-weight: 600; color: #555;'>QUANTIDADE TOTAL POR CATEGORIA</p>", unsafe_allow_html=True)
+                st.bar_chart(resumo_categoria["Quantidade"], color="#4CAF50", height=280)
+            with col_g2:
+                st.markdown("<p style='font-size: 13px; font-weight: 600; color: #555;'>VALOR TOTAL POR CATEGORIA (R$)</p>", unsafe_allow_html=True)
+                st.bar_chart(resumo_categoria["Valor_Total"], color="#2196F3", height=280)
+
+        st.markdown("<br><hr style='margin: 10px 0 25px 0; opacity: 0.15;'>", unsafe_allow_html=True)
         st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
         
         col_filtro1, col_filtro2 = st.columns([2, 1])
