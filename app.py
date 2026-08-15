@@ -2074,7 +2074,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         COR_CARD_FUNDO = "#0F3D1E"
         COR_ACCENT_LIMAO = "#C7E36B"
         COR_BARRA_LIMAO = "#9ACD32"
-        COR_BARRA_AZUL = "#5DADE2"
+        COR_BARRA_VERDE_CLARO = "#7FB069"
         COR_TEXTO_CLARO = "#e8f0d8"
 
         st.markdown(f"""
@@ -2136,9 +2136,9 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
         def renderizar_kpi(coluna, titulo, valor):
             coluna.markdown(f"""
-                <div style="background-color: {COR_CARD_FUNDO}; border-radius: 10px; padding: 18px; text-align: center; height: 100px;">
-                    <span style="font-size: 12px; font-weight: 600; color: {COR_ACCENT_LIMAO}; text-transform: uppercase; letter-spacing: 0.5px;">{titulo}</span>
-                    <h2 style="color: #ffffff; margin: 8px 0 0 0; font-size: 26px; font-weight: 700;">{valor}</h2>
+                <div style="background-color: {COR_CARD_FUNDO}; border-radius: 10px; padding: 18px; text-align: center; min-height: 100px;">
+                    <span style="font-size: 12px; font-weight: 600; color: {COR_ACCENT_LIMAO} !important; text-transform: uppercase; letter-spacing: 0.5px;">{titulo}</span>
+                    <h2 style="color: #ffffff !important; margin: 8px 0 0 0; font-size: 26px; font-weight: 700;">{valor}</h2>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -2194,7 +2194,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             if not df_coord_rel.empty:
                 fig_coord = go.Figure(go.Bar(
                     x=df_coord_rel["coordenacao"], y=df_coord_rel["total"],
-                    marker_color=COR_BARRA_AZUL,
+                    marker_color=COR_BARRA_VERDE_CLARO,
                     text=df_coord_rel["total"], textposition="outside", textfont=dict(color=COR_TEXTO_CLARO)
                 ))
                 fig_coord.update_layout(title=dict(text="SOLICITAÇÕES POR COORDENAÇÃO", font=dict(color=COR_ACCENT_LIMAO, size=14)))
@@ -2219,7 +2219,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         total_entradas_rel = resultado_mov_tipo.get("Entrada", 0)
         total_saidas_rel = resultado_mov_tipo.get("Saída", 0)
 
-        cursor_rel.execute("SELECT COALESCE(SUM(quantidade), 0), COALESCE(SUM(quantidade_disponivel), 0) FROM emprestimo_itens;")
+        cursor_rel.execute("SELECT COALESCE(SUM(quantidade_total), 0), COALESCE(SUM(quantidade_disponivel), 0) FROM emprestimo_itens;")
         total_catalogo_emp, total_disponivel_emp = cursor_rel.fetchone()
         total_catalogo_emp = int(total_catalogo_emp)
         total_disponivel_emp = int(total_disponivel_emp)
