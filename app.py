@@ -25,7 +25,7 @@ SESSAO_DURACAO_MINUTOS = 60
 
 # URL pública do sistema, usada para montar o link de redefinição de senha
 # enviado por e-mail. Ajuste aqui caso o domínio mude no futuro.
-URL_BASE_SISTEMA = "https://almoxarifadocarajas.com.br"
+URL_BASE_SISTEMA = "https://www.almoxarifadocarajas.com.br"
 REDEFINICAO_SENHA_DURACAO_MINUTOS = 60
 
 # Controlador de cookies do navegador (mantém o login sem sujar a URL)
