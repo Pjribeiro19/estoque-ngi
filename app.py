@@ -2180,13 +2180,13 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         # ---------------------------------------------------------------
         # GRÁFICOS: MATERIAL POR CATEGORIA / SOLICITAÇÕES POR COORDENAÇÃO
         # ---------------------------------------------------------------
-        def estilizar_grafico(fig):
+        def estilizar_grafico(fig, altura=300):
             fig.update_layout(
                 paper_bgcolor=COR_CARD_FUNDO,
                 plot_bgcolor=COR_CARD_FUNDO,
                 font=dict(color=COR_TEXTO_CLARO, size=12),
                 margin=dict(l=10, r=10, t=40, b=10),
-                height=300,
+                height=altura,
                 xaxis=dict(showgrid=False, tickfont=dict(color=COR_TEXTO_CLARO)),
                 yaxis=dict(showgrid=True, gridcolor="#1a5c2e", tickfont=dict(color=COR_TEXTO_CLARO)),
                 showlegend=False
@@ -2198,37 +2198,57 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         with col_g1:
             if not df_produtos.empty:
                 resumo_cat_rel = df_produtos.groupby("Categoria")["Quantidade"].sum().sort_values(ascending=False)
+                altura_categoria = max(300, 42 * len(resumo_cat_rel))
                 fig_categoria = go.Figure(go.Bar(
-                    x=resumo_cat_rel.index, y=resumo_cat_rel.values,
+                    x=resumo_cat_rel.values, y=resumo_cat_rel.index,
+                    orientation="h",
                     marker_color=COR_BARRA_LIMAO,
                     text=resumo_cat_rel.values, textposition="outside", textfont=dict(color=COR_TEXTO_CLARO)
                 ))
                 fig_categoria.update_layout(title=dict(text="MATERIAL POR CATEGORIA", font=dict(color=COR_ACCENT_LIMAO, size=14)))
-                fig_categoria = estilizar_grafico(fig_categoria)
+                fig_categoria.update_yaxes(autorange="reversed")
+                fig_categoria.update_xaxes(showgrid=True, gridcolor="#1a5c2e")
+                fig_categoria = estilizar_grafico(fig_categoria, altura=altura_categoria)
                 st.plotly_chart(fig_categoria, use_container_width=True, config={"displayModeBar": False})
             else:
                 st.info("Sem dados de estoque para exibir.")
 
         with col_g2:
-            query_coord_rel = "SELECT COALESCE(coordenacao, 'Não informado') AS coordenacao, COUNT(*) AS total FROM solicitacoes_almoxarifado"
+            query_coord_rel = """
+                SELECT coordenacao, COUNT(*) AS total FROM (
+                    SELECT COALESCE(coordenacao, 'Não informado') AS coordenacao, data_solicitacao AS data_ref
+                    FROM solicitacoes_almoxarifado
+                    __FILTRO_SOLICITACAO__
+                    UNION ALL
+                    SELECT COALESCE(coordenacao, 'Não informado') AS coordenacao, data::date AS data_ref
+                    FROM movimentacoes
+                    WHERE tipo = 'Saída' __FILTRO_MOVIMENTACAO__
+                ) unificado
+                GROUP BY coordenacao ORDER BY total DESC;
+            """
             params_coord_rel = []
             if data_inicio_rel:
-                query_coord_rel += " WHERE data_solicitacao >= %s"
-                params_coord_rel.append(data_inicio_rel)
-            query_coord_rel += " GROUP BY coordenacao ORDER BY total DESC;"
+                query_coord_rel = query_coord_rel.replace("__FILTRO_SOLICITACAO__", "WHERE data_solicitacao >= %s")
+                query_coord_rel = query_coord_rel.replace("__FILTRO_MOVIMENTACAO__", "AND data::date >= %s")
+                params_coord_rel = [data_inicio_rel, data_inicio_rel]
+            else:
+                query_coord_rel = query_coord_rel.replace("__FILTRO_SOLICITACAO__", "")
+                query_coord_rel = query_coord_rel.replace("__FILTRO_MOVIMENTACAO__", "")
             df_coord_rel = pd.read_sql_query(query_coord_rel, conn, params=tuple(params_coord_rel) if params_coord_rel else None)
 
             if not df_coord_rel.empty:
                 fig_coord = go.Figure(go.Bar(
                     x=df_coord_rel["coordenacao"], y=df_coord_rel["total"],
                     marker_color=COR_BARRA_VERDE_CLARO,
-                    text=df_coord_rel["total"], textposition="outside", textfont=dict(color=COR_TEXTO_CLARO)
+                    text=df_coord_rel["total"], textposition="outside", textfont=dict(color=COR_TEXTO_CLARO),
+                    width=0.25 if len(df_coord_rel) <= 2 else None
                 ))
-                fig_coord.update_layout(title=dict(text="SOLICITAÇÕES POR COORDENAÇÃO", font=dict(color=COR_ACCENT_LIMAO, size=14)))
+                fig_coord.update_layout(title=dict(text="SOLICITAÇÕES POR COORDENAÇÃO", font=dict(color=COR_ACCENT_LIMAO, size=14)), bargap=0.6)
                 fig_coord = estilizar_grafico(fig_coord)
                 st.plotly_chart(fig_coord, use_container_width=True, config={"displayModeBar": False})
+                st.caption("Inclui solicitações do sistema + saídas de estoque registradas por coordenação (histórico de entregas anterior ao módulo de Solicitações).")
             else:
-                st.info("Nenhuma solicitação no período selecionado.")
+                st.info("Nenhuma solicitação ou saída no período selecionado.")
 
         st.markdown("<br>", unsafe_allow_html=True)
 
