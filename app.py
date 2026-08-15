@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
 import smtplib
 import requests
 import re
@@ -28,6 +29,14 @@ SESSAO_DURACAO_MINUTOS = 60
 # enviado por e-mail. Ajuste aqui caso o domínio mude no futuro.
 URL_BASE_SISTEMA = "https://www.almoxarifadocarajas.com.br"
 REDEFINICAO_SENHA_DURACAO_MINUTOS = 60
+
+def converter_para_horario_br(dt_utc):
+    """O banco de dados (Neon Postgres) e o servidor (Railway) guardam os
+    horários em UTC. Esta função converte para o horário de Brasília
+    (America/Sao_Paulo, UTC-3) antes de exibir na tela."""
+    if dt_utc is None:
+        return None
+    return dt_utc.replace(tzinfo=ZoneInfo("UTC")).astimezone(ZoneInfo("America/Sao_Paulo"))
 
 # Controlador de cookies do navegador (mantém o login sem sujar a URL)
 cookie_controller = CookieController(key="cookie_controller_almoxarifado")
@@ -1486,9 +1495,9 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 COALESCE(atividade_associada, '-') AS "Atividade Associada",
                 COALESCE(to_char(data_retirada, 'DD/MM/YYYY'), '-') AS "Data de Retirada",
                 COALESCE(to_char(data_prevista, 'DD/MM/YYYY'), '-') AS "Data de Devolução",
-                to_char(data_solicitacao, 'DD/MM/YYYY HH24:MI') AS "Data da Solicitação",
+                to_char(data_solicitacao AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') AS "Data da Solicitação",
                 status AS "Status",
-                COALESCE(to_char(data_decisao, 'DD/MM/YYYY HH24:MI'), '-') AS "Data da Decisão",
+                COALESCE(to_char(data_decisao AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI'), '-') AS "Data da Decisão",
                 COALESCE(justificativa_rejeicao, '-') AS "Justificativa da Reprovação"
             FROM solicitacoes_almoxarifado
             WHERE solicitante_email = %(email_usuario)s
@@ -1566,7 +1575,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                         dev_fmt = sol["data_prevista"].strftime('%d/%m/%Y') if sol["data_prevista"] is not None else "-"
                         linha_datas = f"Retirada: {ret_fmt} | Devolução: {dev_fmt}<br>"
                         if sol["termo_aceito"] and sol["data_aceite_termo"] is not None:
-                            linha_termo = f"✅ Termo de Responsabilidade aceito em {sol['data_aceite_termo'].strftime('%d/%m/%Y %H:%M')}<br>"
+                            linha_termo = f"✅ Termo de Responsabilidade aceito em {converter_para_horario_br(sol['data_aceite_termo']).strftime('%d/%m/%Y %H:%M')}<br>"
                     linha_atividade = f"Atividade Associada: {sol['atividade_associada']}<br>" if sol["atividade_associada"] else ""
                     linha_obs = f"Observações: {sol['observacao']}" if sol["observacao"] else ""
 
@@ -1703,10 +1712,10 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                     COALESCE(atividade_associada, '-') AS "Atividade Associada",
                     COALESCE(to_char(data_retirada, 'DD/MM/YYYY'), '-') AS "Data de Retirada",
                     COALESCE(to_char(data_prevista, 'DD/MM/YYYY'), '-') AS "Data de Devolução",
-                    to_char(data_solicitacao, 'DD/MM/YYYY HH24:MI') AS "Data Solicitação",
+                    to_char(data_solicitacao AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI') AS "Data Solicitação",
                     status AS "Status",
                     COALESCE(aprovador, '-') AS "Decidido Por",
-                    COALESCE(to_char(data_decisao, 'DD/MM/YYYY HH24:MI'), '-') AS "Data Decisão",
+                    COALESCE(to_char(data_decisao AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo', 'DD/MM/YYYY HH24:MI'), '-') AS "Data Decisão",
                     COALESCE(justificativa_rejeicao, '-') AS "Justificativa da Reprovação"
                 FROM solicitacoes_almoxarifado WHERE status != 'PENDENTE' ORDER BY id DESC;
             """, conn)
