@@ -168,6 +168,8 @@ def inicializar_banco_automatico():
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS data_retirada DATE;")
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS atividade_associada TEXT;")
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS justificativa_rejeicao TEXT;")
+    cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS termo_aceito BOOLEAN NOT NULL DEFAULT FALSE;")
+    cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS data_aceite_termo TIMESTAMP;")
 
     # =========================================================================
     # NOVA TABELA: SESSÕES DE LOGIN ATIVAS (mantém o login após atualizar a
@@ -1312,11 +1314,86 @@ else:
                 atividade_sol_emp = st.text_input("Atividade Associada: *", placeholder="Ex: Vistoria de campo na trilha X")
                 obs_sol_emp = st.text_area("Observações (opcional):")
 
+                st.markdown("<hr style='margin: 20px 0 10px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+                with st.expander("📄 Termo de Responsabilidade - clique para ler"):
+                    st.markdown("""
+### TERMO DE RESPONSABILIDADE PELO EMPRÉSTIMO DE MATERIAIS
+
+Ao solicitar o empréstimo de materiais por meio deste sistema, o(a) solicitante declara que leu, compreendeu e concorda com as condições estabelecidas neste Termo de Responsabilidade.
+
+**1. DA UTILIZAÇÃO DO MATERIAL**
+
+O material solicitado deverá ser utilizado exclusivamente para atividades institucionais e de acordo com sua finalidade, observando-se as orientações de utilização, segurança e conservação aplicáveis.
+
+O(A) solicitante compromete-se a utilizar o material de forma adequada, zelando por sua integridade, conservação e segurança durante todo o período em que estiver sob sua responsabilidade.
+
+**2. DAS RESPONSABILIDADES DO SOLICITANTE**
+
+Ao receber o material, o(a) solicitante compromete-se a:
+
+I – utilizar o material exclusivamente para a finalidade a que se destina;
+
+II – zelar pela guarda, conservação, integridade e segurança do material enquanto estiver sob sua responsabilidade;
+
+III – utilizar o material de acordo com suas características, finalidade e orientações fornecidas pela Administração;
+
+IV – não ceder, emprestar, transferir ou disponibilizar o material a terceiros sem autorização;
+
+V – devolver o material no prazo estabelecido e nas condições adequadas de uso, ressalvado o desgaste natural decorrente de sua utilização regular;
+
+VI – comunicar imediatamente à Coordenação de Operação e Suporte qualquer ocorrência relacionada ao material, incluindo dano, avaria, perda, extravio, furto, roubo, mau funcionamento ou qualquer outra eventualidade;
+
+VII – informar qualquer situação que possa comprometer a integridade, conservação ou funcionamento do material.
+
+**3. DA RESPONSABILIDADE POR DANOS E MAU USO**
+
+O(A) solicitante declara estar ciente de que será responsável pela adequada utilização, guarda e conservação do material durante o período em que estiver sob sua responsabilidade.
+
+Em caso de dano, avaria ou perda decorrente de mau uso, utilização inadequada, negligência, imprudência ou descumprimento das orientações de utilização, o(a) solicitante deverá comunicar imediatamente o ocorrido à Coordenação de Operação e Suporte, para registro e avaliação das providências administrativas cabíveis.
+
+A responsabilidade do(a) solicitante não se aplica a danos decorrentes do desgaste natural pelo uso regular, de defeitos preexistentes ou de falhas decorrentes do funcionamento normal do material.
+
+As ocorrências serão analisadas pela Administração, considerando as circunstâncias do fato, as condições em que o material foi disponibilizado e a forma de utilização, para definição das providências cabíveis.
+
+**4. DA COMUNICAÇÃO DE OCORRÊNCIAS**
+
+Qualquer eventualidade envolvendo o material deverá ser comunicada imediatamente à Coordenação de Operação e Suporte.
+
+A comunicação deverá ocorrer mesmo que o dano ou problema aparentemente não impeça a utilização do material, permitindo que a Administração registre a ocorrência e adote as providências necessárias.
+
+Em caso de perda, extravio, furto ou roubo, o(a) solicitante deverá comunicar o fato imediatamente e fornecer as informações necessárias para o devido registro e apuração da ocorrência.
+
+**5. DA DEVOLUÇÃO**
+
+O material deverá ser devolvido dentro do prazo estabelecido na solicitação ou sempre que solicitado pela Administração.
+
+No momento da devolução, o material poderá ser submetido à conferência quanto à sua integridade, funcionamento, conservação e demais condições de uso.
+
+Constatada alguma ocorrência, a Administração poderá realizar a avaliação das condições do material e registrar as informações no sistema.
+
+**6. DA CIÊNCIA E ACEITE**
+
+O(A) solicitante declara estar ciente de que a solicitação de empréstimo somente será efetivada após a leitura e aceitação deste Termo.
+
+Ao marcar a opção "Li e concordo com o Termo de Responsabilidade", o(a) solicitante declara que:
+
+- leu integralmente este Termo;
+- compreendeu suas responsabilidades;
+- compromete-se a utilizar e conservar adequadamente o material;
+- compromete-se a comunicar imediatamente qualquer eventualidade à Coordenação de Operação e Suporte;
+- está ciente de que poderá ser responsabilizado(a), nos termos aplicáveis, por danos decorrentes de mau uso, utilização inadequada, negligência, imprudência ou descumprimento das orientações de utilização.
+
+A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitação de empréstimo, juntamente com o registro do usuário, data e horário do aceite.
+                    """)
+                aceite_termo = st.checkbox("Li e concordo com o Termo de Responsabilidade pelo Empréstimo de Materiais. *")
+
                 if st.form_submit_button("Enviar Solicitação", type="primary"):
                     if not atividade_sol_emp.strip():
                         st.error("O campo 'Atividade Associada' é obrigatório!")
                     elif data_prev_sol < data_retirada_sol:
                         st.error("A Data de Devolução não pode ser anterior à Data de Retirada!")
+                    elif not aceite_termo:
+                        st.error("A solicitação de empréstimo somente será efetivada após a leitura e aceitação do Termo de Responsabilidade!")
                     else:
                         item_id_sel = int(df_raw_emp_user.loc[opcao_sol_emp, "id"])
                         nome_sel_emp = df_raw_emp_user.loc[opcao_sol_emp, "item"]
@@ -1324,8 +1401,8 @@ else:
                             cursor = conn.cursor()
                             cursor.execute("""
                                 INSERT INTO solicitacoes_almoxarifado 
-                                (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_retirada, data_prevista, atividade_associada, status, observacao)
-                                VALUES ('EMPRESTIMO', %s, %s, %s, %s, %s, %s, %s, %s, %s, 'PENDENTE', %s);
+                                (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_retirada, data_prevista, atividade_associada, status, observacao, termo_aceito, data_aceite_termo)
+                                VALUES ('EMPRESTIMO', %s, %s, %s, %s, %s, %s, %s, %s, %s, 'PENDENTE', %s, TRUE, CURRENT_TIMESTAMP);
                             """, (str(item_id_sel), nome_sel_emp, qtd_sol_emp, st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_emp, data_retirada_sol, data_prev_sol, atividade_sol_emp.strip(), obs_sol_emp.strip()))
                             conn.commit()
                             st.session_state["msg_sucesso_emprestimo"] = True
@@ -1412,7 +1489,7 @@ else:
 
         if aba_solicitacao == "Pendentes":
             df_pendentes = pd.read_sql_query("""
-                SELECT id, tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_retirada, data_prevista, atividade_associada, observacao
+                SELECT id, tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_retirada, data_prevista, atividade_associada, observacao, termo_aceito, data_aceite_termo
                 FROM solicitacoes_almoxarifado WHERE status = 'PENDENTE' ORDER BY id ASC;
             """, conn)
 
@@ -1422,10 +1499,13 @@ else:
                 for _, sol in df_pendentes.iterrows():
                     tipo_label = "Material (Almoxarifado)" if sol["tipo"] == "MATERIAL" else "Empréstimo"
                     linha_datas = ""
+                    linha_termo = ""
                     if sol["tipo"] == "EMPRESTIMO":
                         ret_fmt = sol["data_retirada"].strftime('%d/%m/%Y') if sol["data_retirada"] is not None else "-"
                         dev_fmt = sol["data_prevista"].strftime('%d/%m/%Y') if sol["data_prevista"] is not None else "-"
                         linha_datas = f"Retirada: {ret_fmt} | Devolução: {dev_fmt}<br>"
+                        if sol["termo_aceito"] and sol["data_aceite_termo"] is not None:
+                            linha_termo = f"✅ Termo de Responsabilidade aceito em {sol['data_aceite_termo'].strftime('%d/%m/%Y %H:%M')}<br>"
                     linha_atividade = f"Atividade Associada: {sol['atividade_associada']}<br>" if sol["atividade_associada"] else ""
                     linha_obs = f"Observações: {sol['observacao']}" if sol["observacao"] else ""
 
@@ -1434,7 +1514,7 @@ else:
                             <b>#{sol['id']} — {tipo_label}</b><br>
                             Item: {sol['item_nome']} | Quantidade: {sol['quantidade']}<br>
                             Solicitante: {sol['solicitante_nome']} ({sol['solicitante_email']}) | Coordenação: {sol['coordenacao'] or '-'}<br>
-                            {linha_datas}{linha_atividade}{linha_obs}
+                            {linha_datas}{linha_termo}{linha_atividade}{linha_obs}
                         </div>
                     """, unsafe_allow_html=True)
 
