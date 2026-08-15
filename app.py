@@ -3,6 +3,7 @@ import pandas as pd
 from datetime import datetime, date, timedelta
 import smtplib
 import requests
+import re
 import socket
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -272,11 +273,39 @@ except Exception:
 # =============================================================================
 # FUNÇÃO AUXILIAR: ENVIO DE E-MAIL DE NOTIFICAÇÃO (MÓDULO DE SOLICITAÇÃO)
 # =============================================================================
+def _gerar_texto_simples(html):
+    """Converte o HTML do corpo do e-mail em uma versão em texto puro.
+    E-mails que só têm HTML (sem versão em texto) são mais frequentemente
+    marcados como spam pelos filtros anti-spam."""
+    texto = re.sub(r"<br\s*/?>", "\n", html)
+    texto = re.sub(r"</p>", "\n\n", texto)
+    texto = re.sub(r"<[^>]+>", "", texto)
+    texto = texto.replace("&nbsp;", " ").strip()
+    return texto
+
 def enviar_email_notificacao(destinatario, assunto, corpo_html):
     if not RESEND_API_KEY or not RESEND_REMETENTE or not destinatario:
         print(f"[EMAIL] Envio ignorado - Resend não configurado ou destinatário vazio (destino={destinatario})")
         return False, "Envio de e-mail não configurado no sistema (variáveis RESEND_API_KEY / RESEND_FROM_EMAIL ausentes)."
     try:
+        # Envelope profissional com cabeçalho/rodapé institucional - reforça
+        # legitimidade do e-mail perante os filtros anti-spam.
+        corpo_html_completo = f"""
+        <div style="font-family: Arial, Helvetica, sans-serif; max-width: 560px; margin: 0 auto; color: #1a1a1a;">
+            <div style="background-color: #4CAF50; padding: 18px 24px; border-radius: 8px 8px 0 0;">
+                <h2 style="color: #ffffff; margin: 0; font-size: 17px; font-weight: 600;">Gestão de Almoxarifado NGI Carajás</h2>
+            </div>
+            <div style="padding: 24px; border: 1px solid #e5e5e5; border-top: none; font-size: 14px; line-height: 1.5;">
+                {corpo_html}
+            </div>
+            <div style="padding: 16px 24px; font-size: 11px; color: #888888; line-height: 1.5;">
+                <p style="margin: 0 0 4px 0;">Este é um e-mail automático do Sistema de Gestão de Almoxarifado. Por favor, não responda a esta mensagem.</p>
+                <p style="margin: 0;">ICMBio - Instituto Chico Mendes de Conservação da Biodiversidade | NGI Carajás</p>
+            </div>
+        </div>
+        """
+        corpo_texto = _gerar_texto_simples(corpo_html_completo)
+
         resposta = requests.post(
             "https://api.resend.com/emails",
             headers={
@@ -287,7 +316,8 @@ def enviar_email_notificacao(destinatario, assunto, corpo_html):
                 "from": RESEND_REMETENTE,
                 "to": [destinatario],
                 "subject": assunto,
-                "html": corpo_html
+                "html": corpo_html_completo,
+                "text": corpo_texto
             },
             timeout=10
         )
