@@ -2137,8 +2137,25 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         def renderizar_kpi(coluna, titulo, valor):
             coluna.markdown(f"""
                 <div style="background-color: {COR_CARD_FUNDO}; border-radius: 10px; padding: 18px; text-align: center; min-height: 100px;">
-                    <span style="font-size: 12px; font-weight: 600; color: {COR_ACCENT_LIMAO} !important; text-transform: uppercase; letter-spacing: 0.5px;">{titulo}</span>
+                    <span style="font-size: 12px; font-weight: 600; color: #ffffff !important; text-transform: uppercase; letter-spacing: 0.5px;">{titulo}</span>
                     <h2 style="color: #ffffff !important; margin: 8px 0 0 0; font-size: 26px; font-weight: 700;">{valor}</h2>
+                </div>
+            """, unsafe_allow_html=True)
+
+        def renderizar_kpi_duplo(coluna, titulo, rotulo1, valor1, rotulo2, valor2):
+            coluna.markdown(f"""
+                <div style="background-color: {COR_CARD_FUNDO}; border-radius: 10px; padding: 18px; text-align: center; min-height: 100px;">
+                    <span style="font-size: 12px; font-weight: 600; color: #ffffff !important; text-transform: uppercase; letter-spacing: 0.5px;">{titulo}</span>
+                    <div style="display: flex; justify-content: center; gap: 32px; margin-top: 10px;">
+                        <div>
+                            <div style="color: {COR_ACCENT_LIMAO} !important; font-size: 22px; font-weight: 700;">{valor1}</div>
+                            <div style="color: #ffffff !important; font-size: 11px; opacity: 0.85;">{rotulo1}</div>
+                        </div>
+                        <div>
+                            <div style="color: #ffffff !important; font-size: 22px; font-weight: 700;">{valor2}</div>
+                            <div style="color: #ffffff !important; font-size: 11px; opacity: 0.85;">{rotulo2}</div>
+                        </div>
+                    </div>
                 </div>
             """, unsafe_allow_html=True)
 
@@ -2225,12 +2242,9 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         total_disponivel_emp = int(total_disponivel_emp)
         total_emprestado_emp = total_catalogo_emp - total_disponivel_emp
 
-        col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
-        renderizar_kpi(col_m1, "Entradas no Período", str(total_entradas_rel))
-        renderizar_kpi(col_m2, "Saídas no Período", str(total_saidas_rel))
-        renderizar_kpi(col_m3, "Itens no Catálogo (Empréstimo)", f"{total_catalogo_emp:,}".replace(",", "."))
-        renderizar_kpi(col_m4, "Atualmente Emprestado", f"{total_emprestado_emp:,}".replace(",", "."))
-        renderizar_kpi(col_m5, "Disponível p/ Empréstimo", f"{total_disponivel_emp:,}".replace(",", "."))
+        col_m1, col_m2 = st.columns(2)
+        renderizar_kpi_duplo(col_m1, "Movimentações no Período", "Entradas", str(total_entradas_rel), "Saídas", str(total_saidas_rel))
+        renderizar_kpi_duplo(col_m2, "Situação do Empréstimo", "Emprestado", str(total_emprestado_emp), "Disponível", str(total_disponivel_emp))
 
         st.markdown("<br><hr style='margin: 10px 0 20px 0; opacity: 0.15;'>", unsafe_allow_html=True)
 
