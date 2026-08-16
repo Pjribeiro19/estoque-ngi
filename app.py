@@ -453,6 +453,12 @@ st.markdown("""
     [data-testid="stMainMenu"] {display: none;}
     [data-testid="stStatusWidget"] {display: none;}
     [data-testid="collapsedControl"] {display: flex !important; visibility: visible !important;}
+
+    /* Recolher a barra lateral só faz sentido no celular (tela estreita).
+       No computador, a barra fica sempre aberta - sem opção de recolher. */
+    @media (min-width: 641px) {
+        [data-testid*="ollapse"] {display: none !important;}
+    }
     
     html, body, [data-testid="stWidgetLabel"] p, .stMarkdown p, label, span {
         color: var(--text-color) !important;
