@@ -277,7 +277,7 @@ conn = obter_conexao_saudavel()
 
 # Carregamento seguro e global dos dados
 try:
-    df_produtos = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos', conn)
+    df_produtos = pd.read_sql_query('SELECT codigo AS "Código", item AS "Item", quantidade AS "Quantidade", categoria AS "Categoria", valor_unitario AS "Valor Unitário" FROM produtos ORDER BY codigo ASC', conn)
     df_movimentacoes = pd.read_sql_query('SELECT data AS "Data", tipo AS "Tipo", codigo AS "Código", item AS "Item", quantidade AS "Quantidade", responsavel AS "Responsável", coordenacao AS "Coordenação" FROM movimentacoes', conn)
     df_coordenacoes = pd.read_sql_query('SELECT sigla AS "Sigla", nome AS "Nome" FROM coordenacoes', conn)
     df_cat_bruto = pd.read_sql_query("SELECT nome FROM categorias", conn)
@@ -1043,7 +1043,7 @@ else:
                     quantidade_disponivel AS "Qtd Disponível",
                     (quantidade_total - quantidade_disponivel) AS "Emprestados",
                     observacao AS "Observações"
-                FROM emprestimo_itens ORDER BY item ASC;
+                FROM emprestimo_itens ORDER BY codigo ASC;
             """, conn)
 
             if df_emp_itens.empty:
@@ -1057,7 +1057,7 @@ else:
                 st.markdown("### Gerenciar / Editar / Excluir Item de Empréstimo")
 
                 # Seleção do item
-                df_raw_emp = pd.read_sql_query("SELECT id, codigo, item, quantidade_total, quantidade_disponivel, observacao FROM emprestimo_itens ORDER BY item ASC;", conn)
+                df_raw_emp = pd.read_sql_query("SELECT id, codigo, item, quantidade_total, quantidade_disponivel, observacao FROM emprestimo_itens ORDER BY codigo ASC;", conn)
                 
                 if not df_raw_emp.empty:
                     opcao_emp_sel = st.selectbox(
@@ -1160,7 +1160,7 @@ else:
         elif sub_emp == "Registrar Saída (Empréstimo)":
             st.subheader("Registrar Saída de Material Por Empréstimo")
 
-            cursor.execute("SELECT id, item, quantidade_disponivel FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY item ASC;")
+            cursor.execute("SELECT id, item, quantidade_disponivel FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY codigo ASC;")
             itens_disponiveis = cursor.fetchall()
 
             if not itens_disponiveis:
@@ -1318,7 +1318,7 @@ else:
             st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
             st.markdown("### Nova Solicitação de Material")
 
-            df_raw_prod_user = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos WHERE quantidade > 0 ORDER BY item ASC;", conn)
+            df_raw_prod_user = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos WHERE quantidade > 0 ORDER BY codigo ASC;", conn)
             lista_siglas_coord_user = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
 
             with st.form("form_solicitar_material", clear_on_submit=True):
@@ -1373,7 +1373,7 @@ else:
                 item AS "Item / Equipamento", 
                 quantidade_disponivel AS "Qtd Disponível",
                 observacao AS "Observações"
-            FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY item ASC;
+            FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY codigo ASC;
         """, conn)
 
         if df_emp_disp_user.empty:
@@ -1384,7 +1384,7 @@ else:
             st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
             st.markdown("### Nova Solicitação de Empréstimo")
 
-            df_raw_emp_user = pd.read_sql_query("SELECT id, codigo, item, quantidade_disponivel FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY item ASC;", conn)
+            df_raw_emp_user = pd.read_sql_query("SELECT id, codigo, item, quantidade_disponivel FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY codigo ASC;", conn)
             lista_siglas_coord_emp_user = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
 
             with st.form("form_solicitar_emprestimo", clear_on_submit=True):
@@ -2000,7 +2000,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         if df_produtos.empty:
             st.warning("Nenhum produto cadastrado para movimentar.")
         else:
-            df_raw_prod = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos ORDER BY item ASC", conn)
+            df_raw_prod = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos ORDER BY codigo ASC", conn)
             lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["N/A"]
             
             # 1. ABA: REGISTRO DE ENTRADA
