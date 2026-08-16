@@ -399,6 +399,7 @@ st.markdown("""
 
     [data-testid="stSidebarNav"] {display: none;}
     [data-testid="stMainMenu"] {display: none;}
+    [data-testid="stStatusWidget"] {display: none;}
     
     html, body, [data-testid="stWidgetLabel"] p, .stMarkdown p, label, span {
         color: var(--text-color) !important;
