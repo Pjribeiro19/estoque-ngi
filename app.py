@@ -8,6 +8,7 @@ import smtplib
 import requests
 import re
 import socket
+import base64
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import psycopg2
@@ -45,28 +46,25 @@ def personalizar_titulo_inicial_streamlit():
         ja_processado = f"<title>{titulo_novo}</title>" in conteudo
 
         conteudo_novo = re.sub(r"<title>.*?</title>", f"<title>{titulo_novo}</title>", conteudo, count=1)
-        if conteudo_novo != conteudo:
-            with open(caminho_index, "w", encoding="utf-8") as f:
-                f.write(conteudo_novo)
 
-        # Em vez de apontar o ícone para um link externo (que demora a
-        # carregar e deixa o ícone padrão do Streamlit aparecer primeiro),
-        # localiza o(s) arquivo(s) de ícone LOCAIS já referenciados no HTML
-        # e substitui o CONTEÚDO deles pela logo do ICMBio - assim o ícone
-        # carrega instantaneamente, do próprio servidor, sem demora de rede.
+        # Embute a logo diretamente no HTML como "data URI" (a imagem em
+        # forma de texto, dentro do próprio arquivo). Assim o ícone chega
+        # junto com a primeira resposta da página - não existe uma segunda
+        # requisição que possa demorar e deixar o ícone padrão aparecer.
         if not ja_processado:
             resposta_icone = requests.get(icone_url, timeout=10)
             if resposta_icone.status_code == 200:
-                hrefs_icone = re.findall(
-                    r'<link[^>]*rel=["\'][^"\']*icon[^"\']*["\'][^>]*href=["\']([^"\']+)["\']',
+                b64_icone = base64.b64encode(resposta_icone.content).decode("utf-8")
+                data_uri_icone = f"data:image/png;base64,{b64_icone}"
+                conteudo_novo = re.sub(
+                    r'<link[^>]*rel=["\'][^"\']*icon[^"\']*["\'][^>]*>',
+                    f'<link rel="icon" href="{data_uri_icone}">',
                     conteudo_novo, flags=re.IGNORECASE
                 )
-                for href in set(hrefs_icone):
-                    href_limpo = href.lstrip("./")
-                    caminho_arquivo = os.path.join(pasta_static, href_limpo)
-                    if os.path.isfile(caminho_arquivo):
-                        with open(caminho_arquivo, "wb") as f_icone:
-                            f_icone.write(resposta_icone.content)
+
+        if conteudo_novo != conteudo:
+            with open(caminho_index, "w", encoding="utf-8") as f:
+                f.write(conteudo_novo)
         return True
     except Exception as e:
         print(f"[TITULO INICIAL] Não foi possível personalizar: {e}")
