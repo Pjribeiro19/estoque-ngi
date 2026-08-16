@@ -34,22 +34,39 @@ from streamlit_cookies_controller import CookieController
 @st.cache_resource
 def personalizar_titulo_inicial_streamlit():
     try:
-        caminho_static = os.path.join(os.path.dirname(st.__file__), "static", "index.html")
-        with open(caminho_static, "r", encoding="utf-8") as f:
+        pasta_static = os.path.join(os.path.dirname(st.__file__), "static")
+        caminho_index = os.path.join(pasta_static, "index.html")
+        with open(caminho_index, "r", encoding="utf-8") as f:
             conteudo = f.read()
 
         titulo_novo = "Gestão de Almoxarifado NGI Carajás"
-        icone_novo = "https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png"
+        icone_url = "https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png"
 
-        if f"<title>{titulo_novo}</title>" not in conteudo:
-            conteudo = re.sub(r"<title>.*?</title>", f"<title>{titulo_novo}</title>", conteudo, count=1)
-            conteudo = re.sub(
-                r'<link[^>]*rel="shortcut icon"[^>]*>',
-                f'<link rel="shortcut icon" href="{icone_novo}">',
-                conteudo, count=1
-            )
-            with open(caminho_static, "w", encoding="utf-8") as f:
-                f.write(conteudo)
+        ja_processado = f"<title>{titulo_novo}</title>" in conteudo
+
+        conteudo_novo = re.sub(r"<title>.*?</title>", f"<title>{titulo_novo}</title>", conteudo, count=1)
+        if conteudo_novo != conteudo:
+            with open(caminho_index, "w", encoding="utf-8") as f:
+                f.write(conteudo_novo)
+
+        # Em vez de apontar o ícone para um link externo (que demora a
+        # carregar e deixa o ícone padrão do Streamlit aparecer primeiro),
+        # localiza o(s) arquivo(s) de ícone LOCAIS já referenciados no HTML
+        # e substitui o CONTEÚDO deles pela logo do ICMBio - assim o ícone
+        # carrega instantaneamente, do próprio servidor, sem demora de rede.
+        if not ja_processado:
+            resposta_icone = requests.get(icone_url, timeout=10)
+            if resposta_icone.status_code == 200:
+                hrefs_icone = re.findall(
+                    r'<link[^>]*rel=["\'][^"\']*icon[^"\']*["\'][^>]*href=["\']([^"\']+)["\']',
+                    conteudo_novo, flags=re.IGNORECASE
+                )
+                for href in set(hrefs_icone):
+                    href_limpo = href.lstrip("./")
+                    caminho_arquivo = os.path.join(pasta_static, href_limpo)
+                    if os.path.isfile(caminho_arquivo):
+                        with open(caminho_arquivo, "wb") as f_icone:
+                            f_icone.write(resposta_icone.content)
         return True
     except Exception as e:
         print(f"[TITULO INICIAL] Não foi possível personalizar: {e}")
