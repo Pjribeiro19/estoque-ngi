@@ -21,6 +21,128 @@ import time
 import uuid
 from streamlit_cookies_controller import CookieController
 
+# --- CONFIGURAÇÃO DA PÁGINA ---
+st.set_page_config(
+    page_title="SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS", 
+    page_icon="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png", 
+    layout="wide"
+)
+
+# --- ESTILIZAÇÃO CSS COMPATÍVEL ---
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    html, body, [class*="css"], .stMarkdown, .stMarkdown p, .stMarkdown li,
+    [data-testid="stWidgetLabel"] p, label, span, div, button,
+    input, textarea, select, .stDataFrame, [data-testid="stMetricValue"] {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif !important;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif !important;
+        font-weight: 600 !important;
+        letter-spacing: -0.01em;
+    }
+
+    /* Preserva a fonte de ícones do Streamlit (Material Symbols), que a regra
+       acima sobrescrevia e fazia aparecer o nome do ícone em texto. */
+    [data-testid="stIconMaterial"],
+    span[data-testid="stIconMaterial"],
+    .material-symbols-rounded,
+    .material-symbols-outlined,
+    .material-icons {
+        font-family: 'Material Symbols Rounded', 'Material Symbols Outlined', 'Material Icons' !important;
+    }
+
+    [data-testid="stSidebarNav"] {display: none;}
+    [data-testid="stMainMenu"] {display: none;}
+    [data-testid="stStatusWidget"] {display: none;}
+    [data-testid="collapsedControl"] {display: flex !important; visibility: visible !important;}
+
+    /* Recolher a barra lateral só faz sentido no celular (tela estreita).
+       No computador, a barra fica sempre aberta - sem opção de recolher. */
+    @media (min-width: 641px) {
+        [data-testid*="ollapse"] {display: none !important;}
+    }
+    
+    html, body, [data-testid="stWidgetLabel"] p, .stMarkdown p, label, span {
+        color: var(--text-color) !important;
+    }
+    
+    .nav-link span {
+        color: var(--text-color) !important;
+    }
+    
+    .nav-link.active span {
+        color: white !important;
+    }
+    
+    div.stButton > button:first-child[kind="primary"] {
+        background-color: #4CAF50 !important;
+        border-color: #4CAF50 !important;
+        color: white !important;
+    }
+    div.stButton > button:first-child[kind="primary"]:hover {
+        background-color: #43a047 !important;
+        border-color: #43a047 !important;
+    }
+    
+    .img-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 100%;
+        margin-bottom: 20px;
+        background-color: white; 
+        padding: 15px;
+        border-radius: 8px;
+    }
+
+    .kpi-titulo-branco, .kpi-titulo-branco *,
+    .stMarkdown .kpi-titulo-branco, .stMarkdown .kpi-titulo-branco *,
+    .stMarkdown p.kpi-titulo-branco {
+        color: #ffffff !important;
+    }
+    .kpi-valor-branco, .kpi-valor-branco *,
+    .stMarkdown .kpi-valor-branco, .stMarkdown .kpi-valor-branco *,
+    .stMarkdown p.kpi-valor-branco {
+        color: #ffffff !important;
+    }
+    .kpi-valor-limao, .kpi-valor-limao *,
+    .stMarkdown .kpi-valor-limao, .stMarkdown .kpi-valor-limao *,
+    .stMarkdown h1.kpi-valor-limao {
+        color: #C7E36B !important;
+    }
+
+    /* Cartões de indicadores (Painel Geral e Relatórios) - tamanho reduz
+       automaticamente em telas de celular para não ficarem gigantes */
+    .painel-kpi-card, .rel-kpi-card {
+        padding: 18px;
+    }
+    .painel-kpi-valor, .rel-kpi-valor {
+        font-size: 34px !important;
+        margin: 8px 0 0 0 !important;
+    }
+    .painel-kpi-label {
+        font-size: 13px;
+    }
+    @media (max-width: 640px) {
+        .painel-kpi-card, .rel-kpi-card {
+            padding: 12px !important;
+            min-height: unset !important;
+        }
+        .painel-kpi-valor, .rel-kpi-valor {
+            font-size: 20px !important;
+            margin: 4px 0 0 0 !important;
+        }
+        .painel-kpi-label {
+            font-size: 11px !important;
+        }
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 # =============================================================================
 # CONTORNO: TÍTULO/ÍCONE DA ABA MOSTRANDO "STREAMLIT" ANTES DO NOME CERTO
 # =============================================================================
@@ -415,127 +537,6 @@ def enviar_email_notificacao(destinatario, assunto, corpo_html):
         print(f"[EMAIL] ERRO ao enviar para {destinatario}: {repr(e)}")
         return False, str(e)
 
-# --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(
-    page_title="SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS", 
-    page_icon="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png", 
-    layout="wide"
-)
-
-# --- ESTILIZAÇÃO CSS COMPATÍVEL ---
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
-    html, body, [class*="css"], .stMarkdown, .stMarkdown p, .stMarkdown li,
-    [data-testid="stWidgetLabel"] p, label, span, div, button,
-    input, textarea, select, .stDataFrame, [data-testid="stMetricValue"] {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif !important;
-    }
-
-    h1, h2, h3, h4, h5, h6 {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif !important;
-        font-weight: 600 !important;
-        letter-spacing: -0.01em;
-    }
-
-    /* Preserva a fonte de ícones do Streamlit (Material Symbols), que a regra
-       acima sobrescrevia e fazia aparecer o nome do ícone em texto. */
-    [data-testid="stIconMaterial"],
-    span[data-testid="stIconMaterial"],
-    .material-symbols-rounded,
-    .material-symbols-outlined,
-    .material-icons {
-        font-family: 'Material Symbols Rounded', 'Material Symbols Outlined', 'Material Icons' !important;
-    }
-
-    [data-testid="stSidebarNav"] {display: none;}
-    [data-testid="stMainMenu"] {display: none;}
-    [data-testid="stStatusWidget"] {display: none;}
-    [data-testid="collapsedControl"] {display: flex !important; visibility: visible !important;}
-
-    /* Recolher a barra lateral só faz sentido no celular (tela estreita).
-       No computador, a barra fica sempre aberta - sem opção de recolher. */
-    @media (min-width: 641px) {
-        [data-testid*="ollapse"] {display: none !important;}
-    }
-    
-    html, body, [data-testid="stWidgetLabel"] p, .stMarkdown p, label, span {
-        color: var(--text-color) !important;
-    }
-    
-    .nav-link span {
-        color: var(--text-color) !important;
-    }
-    
-    .nav-link.active span {
-        color: white !important;
-    }
-    
-    div.stButton > button:first-child[kind="primary"] {
-        background-color: #4CAF50 !important;
-        border-color: #4CAF50 !important;
-        color: white !important;
-    }
-    div.stButton > button:first-child[kind="primary"]:hover {
-        background-color: #43a047 !important;
-        border-color: #43a047 !important;
-    }
-    
-    .img-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        width: 100%;
-        margin-bottom: 20px;
-        background-color: white; 
-        padding: 15px;
-        border-radius: 8px;
-    }
-
-    .kpi-titulo-branco, .kpi-titulo-branco *,
-    .stMarkdown .kpi-titulo-branco, .stMarkdown .kpi-titulo-branco *,
-    .stMarkdown p.kpi-titulo-branco {
-        color: #ffffff !important;
-    }
-    .kpi-valor-branco, .kpi-valor-branco *,
-    .stMarkdown .kpi-valor-branco, .stMarkdown .kpi-valor-branco *,
-    .stMarkdown p.kpi-valor-branco {
-        color: #ffffff !important;
-    }
-    .kpi-valor-limao, .kpi-valor-limao *,
-    .stMarkdown .kpi-valor-limao, .stMarkdown .kpi-valor-limao *,
-    .stMarkdown h1.kpi-valor-limao {
-        color: #C7E36B !important;
-    }
-
-    /* Cartões de indicadores (Painel Geral e Relatórios) - tamanho reduz
-       automaticamente em telas de celular para não ficarem gigantes */
-    .painel-kpi-card, .rel-kpi-card {
-        padding: 18px;
-    }
-    .painel-kpi-valor, .rel-kpi-valor {
-        font-size: 34px !important;
-        margin: 8px 0 0 0 !important;
-    }
-    .painel-kpi-label {
-        font-size: 13px;
-    }
-    @media (max-width: 640px) {
-        .painel-kpi-card, .rel-kpi-card {
-            padding: 12px !important;
-            min-height: unset !important;
-        }
-        .painel-kpi-valor, .rel-kpi-valor {
-            font-size: 20px !important;
-            margin: 4px 0 0 0 !important;
-        }
-        .painel-kpi-label {
-            font-size: 11px !important;
-        }
-    }
-    </style>
-""", unsafe_allow_html=True)
 
 # =============================================================================
 # TRADUÇÃO DO CALENDÁRIO (st.date_input) PARA PORTUGUÊS
