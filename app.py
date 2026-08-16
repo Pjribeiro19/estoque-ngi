@@ -21,6 +21,43 @@ import uuid
 from streamlit_cookies_controller import CookieController
 
 # =============================================================================
+# CONTORNO: TÍTULO/ÍCONE DA ABA MOSTRANDO "STREAMLIT" ANTES DO NOME CERTO
+# =============================================================================
+# Limitação conhecida do Streamlit: o page_title/page_icon definidos via
+# st.set_page_config só são aplicados por JavaScript DEPOIS que a página já
+# carregou, então aparece rapidamente o nome/ícone padrão do Streamlit antes
+# do nome do sistema. Isso edita o index.html interno do próprio Streamlit
+# para já vir com o nome/ícone certos desde o primeiro carregamento.
+# ATENÇÃO: mexe em arquivo interno da biblioteca. Se uma futura atualização
+# do Streamlit mudar a estrutura desse arquivo, este trecho pode parar de
+# funcionar (sem quebrar o sistema - só volta a mostrar "Streamlit" rapidamente).
+@st.cache_resource
+def personalizar_titulo_inicial_streamlit():
+    try:
+        caminho_static = os.path.join(os.path.dirname(st.__file__), "static", "index.html")
+        with open(caminho_static, "r", encoding="utf-8") as f:
+            conteudo = f.read()
+
+        titulo_novo = "Gestão de Almoxarifado NGI Carajás"
+        icone_novo = "https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png"
+
+        if f"<title>{titulo_novo}</title>" not in conteudo:
+            conteudo = re.sub(r"<title>.*?</title>", f"<title>{titulo_novo}</title>", conteudo, count=1)
+            conteudo = re.sub(
+                r'<link[^>]*rel="shortcut icon"[^>]*>',
+                f'<link rel="shortcut icon" href="{icone_novo}">',
+                conteudo, count=1
+            )
+            with open(caminho_static, "w", encoding="utf-8") as f:
+                f.write(conteudo)
+        return True
+    except Exception as e:
+        print(f"[TITULO INICIAL] Não foi possível personalizar: {e}")
+        return False
+
+personalizar_titulo_inicial_streamlit()
+
+# =============================================================================
 # CONFIGURAÇÃO DE TEMPO DE SESSÃO (LOGIN PERSISTE APÓS ATUALIZAR A PÁGINA)
 # =============================================================================
 # O usuário só é desconectado automaticamente após ficar esse tempo (em
