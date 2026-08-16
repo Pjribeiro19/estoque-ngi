@@ -32,7 +32,7 @@ from streamlit_cookies_controller import CookieController
 # ATENÇÃO: mexe em arquivo interno da biblioteca. Se uma futura atualização
 # do Streamlit mudar a estrutura desse arquivo, este trecho pode parar de
 # funcionar (sem quebrar o sistema - só volta a mostrar "Streamlit" rapidamente).
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def personalizar_titulo_inicial_streamlit():
     try:
         pasta_static = os.path.join(os.path.dirname(st.__file__), "static")
@@ -98,7 +98,7 @@ cookie_controller = CookieController(key="cookie_controller_almoxarifado")
 # =============================================================================
 # CONEXÃO E INICIALIZAÇÃO AUTOMÁTICA DO BANCO DE DADOS (Neon Postgres)
 # =============================================================================
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def inicializar_banco_automatico():
     conn = None
     try:
