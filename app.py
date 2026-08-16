@@ -501,6 +501,32 @@ st.markdown("""
     .stMarkdown h1.kpi-valor-limao {
         color: #C7E36B !important;
     }
+
+    /* Cartões de indicadores (Painel Geral e Relatórios) - tamanho reduz
+       automaticamente em telas de celular para não ficarem gigantes */
+    .painel-kpi-card, .rel-kpi-card {
+        padding: 18px;
+    }
+    .painel-kpi-valor, .rel-kpi-valor {
+        font-size: 34px !important;
+        margin: 8px 0 0 0 !important;
+    }
+    .painel-kpi-label {
+        font-size: 13px;
+    }
+    @media (max-width: 640px) {
+        .painel-kpi-card, .rel-kpi-card {
+            padding: 12px !important;
+            min-height: unset !important;
+        }
+        .painel-kpi-valor, .rel-kpi-valor {
+            font-size: 20px !important;
+            margin: 4px 0 0 0 !important;
+        }
+        .painel-kpi-label {
+            font-size: 11px !important;
+        }
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -997,9 +1023,9 @@ else:
         total_movimentacoes = len(df_movimentacoes) if not df_movimentacoes.empty else 0
         
         c1.markdown(f"""
-            <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 5px solid #4CAF50; padding: 18px; border-radius: 4px;">
-                <span style="font-size: 13px; font-weight: 600; text-transform: uppercase;">Total de Itens Cadastrados</span>
-                <h2 style="color: #4CAF50; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_itens}</h2>
+            <div class="painel-kpi-card" style="background-color: rgba(76, 175, 80, 0.08); border-left: 5px solid #4CAF50; border-radius: 4px;">
+                <span class="painel-kpi-label" style="font-weight: 600; text-transform: uppercase;">Total de Itens Cadastrados</span>
+                <h2 class="painel-kpi-valor" style="color: #4CAF50; font-weight: 700;">{total_itens}</h2>
             </div>
         """, unsafe_allow_html=True)
         
@@ -1007,16 +1033,16 @@ else:
         bg_esgotados = "rgba(198, 40, 40, 0.08)" if produtos_esgotados > 0 else "rgba(76, 175, 80, 0.08)"
         
         c2.markdown(f"""
-            <div style="background-color: {bg_esgotados}; border-left: 5px solid {cor_esgotados}; padding: 18px; border-radius: 4px;">
-                <span style="font-size: 13px; font-weight: 600; text-transform: uppercase;">Produtos Esgotados</span>
-                <h2 style="color: {cor_esgotados}; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{produtos_esgotados}</h2>
+            <div class="painel-kpi-card" style="background-color: {bg_esgotados}; border-left: 5px solid {cor_esgotados}; border-radius: 4px;">
+                <span class="painel-kpi-label" style="font-weight: 600; text-transform: uppercase;">Produtos Esgotados</span>
+                <h2 class="painel-kpi-valor" style="color: {cor_esgotados}; font-weight: 700;">{produtos_esgotados}</h2>
             </div>
         """, unsafe_allow_html=True)
         
         c3.markdown(f"""
-            <div style="background-color: rgba(33, 150, 243, 0.08); border-left: 5px solid #2196F3; padding: 18px; border-radius: 4px;">
-                <span style="font-size: 13px; font-weight: 600; text-transform: uppercase;">Movimentações Realizadas</span>
-                <h2 style="color: #2196F3; margin: 8px 0 0 0; font-size: 34px; font-weight: 700;">{total_movimentacoes}</h2>
+            <div class="painel-kpi-card" style="background-color: rgba(33, 150, 243, 0.08); border-left: 5px solid #2196F3; border-radius: 4px;">
+                <span class="painel-kpi-label" style="font-weight: 600; text-transform: uppercase;">Movimentações Realizadas</span>
+                <h2 class="painel-kpi-valor" style="color: #2196F3; font-weight: 700;">{total_movimentacoes}</h2>
             </div>
         """, unsafe_allow_html=True)
         
@@ -2211,7 +2237,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
         def renderizar_kpi(coluna, titulo, valor):
             coluna.markdown(f"""
-                <div style="background-color: {COR_CARD_FUNDO}; border-radius: 10px; padding: 18px; text-align: center; min-height: 100px;">
+                <div class="rel-kpi-card" style="background-color: {COR_CARD_FUNDO}; border-radius: 10px; text-align: center; min-height: 100px;">
                     <span class="kpi-titulo-branco" style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">{titulo}</span>
                     <h2 class="kpi-valor-branco" style="margin: 8px 0 0 0; font-size: 26px; font-weight: 700;">{valor}</h2>
                 </div>
@@ -2219,7 +2245,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
         def renderizar_kpi_duplo(coluna, titulo, rotulo1, valor1, rotulo2, valor2):
             coluna.markdown(f"""
-                <div style="background-color: {COR_CARD_FUNDO}; border-radius: 10px; padding: 18px; text-align: center; min-height: 100px;">
+                <div class="rel-kpi-card" style="background-color: {COR_CARD_FUNDO}; border-radius: 10px; text-align: center; min-height: 100px;">
                     <span class="kpi-titulo-branco" style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">{titulo}</span>
                     <div style="display: flex; justify-content: center; gap: 32px; margin-top: 10px;">
                         <div>
