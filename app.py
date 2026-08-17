@@ -641,7 +641,10 @@ if "SESSION_TOKEN" not in st.session_state:
 # Se o navegador ainda tem o cookie da sessão e ele não expirou no banco,
 # o usuário é reconectado automaticamente sem precisar logar de novo.
 if not st.session_state.autenticado:
-    token_cookie = cookie_controller.get("session")
+    try:
+        token_cookie = cookie_controller.get("session")
+    except Exception:
+        token_cookie = None
 
     # Na primeiríssima execução após abrir/atualizar a página, o componente
     # de cookies ainda pode não ter tido tempo de entregar o valor ao Python
@@ -1009,7 +1012,10 @@ else:
                 conn.commit()
             except Exception:
                 conn.rollback()
-        cookie_controller.remove("session")
+        try:
+            cookie_controller.remove("session")
+        except Exception:
+            pass
         st.session_state.autenticado = False
         st.session_state.NOME_USUARIO_LOGADO = ""
         st.session_state.PERFIL_USUARIO_LOGADO = ""
