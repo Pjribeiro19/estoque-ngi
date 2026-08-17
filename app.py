@@ -1411,7 +1411,27 @@ else:
         if df_disp_material.empty:
             st.info("Nenhum material disponível em estoque no momento.")
         else:
-            st.dataframe(df_disp_material.drop(columns=["Valor Unitário"]), use_container_width=True, hide_index=True)
+            st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
+
+            lista_categorias_user = sorted(df_disp_material["Categoria"].dropna().unique().tolist())
+            col_filtro_u1, col_filtro_u2 = st.columns([2, 1])
+            termo_busca_user = col_filtro_u1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...", key="busca_material_user")
+            categoria_selecionada_user = col_filtro_u2.selectbox("Filtrar por Categoria:", ["Todas"] + lista_categorias_user, key="categoria_material_user")
+
+            df_disp_material_filtrado = df_disp_material.copy()
+            if termo_busca_user:
+                df_disp_material_filtrado = df_disp_material_filtrado[
+                    df_disp_material_filtrado['Item'].str.contains(termo_busca_user, case=False, na=False) |
+                    df_disp_material_filtrado['Código'].str.contains(termo_busca_user, case=False, na=False)
+                ]
+            if categoria_selecionada_user != "Todas":
+                df_disp_material_filtrado = df_disp_material_filtrado[df_disp_material_filtrado['Categoria'] == categoria_selecionada_user]
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            if df_disp_material_filtrado.empty:
+                st.info("Nenhum material encontrado com os filtros aplicados.")
+            else:
+                st.dataframe(df_disp_material_filtrado.drop(columns=["Valor Unitário"]), use_container_width=True, hide_index=True)
 
             st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
             st.markdown("### Nova Solicitação de Material")
@@ -1986,30 +2006,42 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                             """, (n.strip(), e.strip().lower(), senha_final, p))
                             conn.commit()
 
-                            threading.Thread(
-                                target=enviar_email_notificacao,
-                                args=(
+                            if p == "Administrador":
+                                lista_funcionalidades = """
+                                • Acessar todas as funcionalidades do sistema;<br>
+                                • Cadastrar e gerenciar produtos, categorias, usuários e coordenações;<br>
+                                • Registrar movimentações de estoque (entradas e saídas);<br>
+                                • Gerenciar empréstimos de materiais;<br>
+                                • Aprovar ou rejeitar solicitações de usuários;<br>
+                                • Acessar relatórios e dashboards completos do sistema.
+                                """
+                            else:
+                                lista_funcionalidades = """
+                                • Realizar solicitações de itens disponíveis no estoque do Almoxarifado;<br>
+                                • Solicitar o empréstimo de materiais disponíveis;<br>
+                                • Acompanhar suas solicitações diretamente pelo sistema.
+                                """
+
+                            with st.spinner("Enviando e-mail de boas-vindas..."):
+                                sucesso_boas_vindas, erro_boas_vindas = enviar_email_notificacao(
                                     e.strip().lower(),
                                     "Seu acesso ao Sistema de Gestão de Almoxarifado NGI Carajás",
                                     f"""
                                     <p>Olá, {n.strip()}! 👋</p>
                                     <p>Seja bem-vindo(a)!</p>
                                     <p>Seu acesso ao sistema foi criado com sucesso. A partir de agora, você poderá:</p>
-                                    <p>
-                                    • Realizar solicitações de itens disponíveis no estoque do Almoxarifado;<br>
-                                    • Solicitar o empréstimo de materiais disponíveis;<br>
-                                    • Acompanhar suas solicitações diretamente pelo sistema.
-                                    </p>
+                                    <p>{lista_funcionalidades}</p>
                                     <p><b>Login:</b> {e.strip().lower()}<br><b>Senha:</b> {senha_final}</p>
                                     <p>Acesse o sistema pelo link: <a href="{URL_BASE_SISTEMA}">{URL_BASE_SISTEMA}</a></p>
                                     <p>Recomendamos que altere sua senha no primeiro acesso.</p>
                                     <p>Em caso de dúvidas, estamos à disposição. Seja bem-vindo(a)! 😊</p>
                                     """
-                                ),
-                                daemon=True
-                            ).start()
+                                )
 
-                            st.success("Usuário registrado com sucesso! Um e-mail de boas-vindas foi enviado.")
+                            if sucesso_boas_vindas:
+                                st.success("Usuário registrado com sucesso! E-mail de boas-vindas enviado.")
+                            else:
+                                st.warning(f"Usuário registrado, mas o e-mail de boas-vindas falhou. Erro técnico: {erro_boas_vindas}")
                             st.rerun()
                         except psycopg2.IntegrityError:
                             conn.rollback()
