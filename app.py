@@ -913,7 +913,12 @@ else:
     label_solicitacoes = "Solicitações"
 
     with st.sidebar:
-        st.markdown(f"#### 👤 Olá, {st.session_state.NOME_USUARIO_LOGADO}")
+        st.markdown(f"""
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; margin-bottom: 4px;">
+                <span class="material-symbols-rounded" style="font-size: 20px; color: #4CAF50;">account_circle</span>
+                Olá, {st.session_state.NOME_USUARIO_LOGADO}
+            </div>
+        """, unsafe_allow_html=True)
         st.write("---")
         
         if st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
