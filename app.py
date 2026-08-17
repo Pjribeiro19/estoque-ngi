@@ -1626,6 +1626,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
         df_minhas_sol = pd.read_sql_query("""
             SELECT 
+                id,
                 tipo AS "Tipo",
                 item_nome AS "Item",
                 quantidade AS "Quantidade",
@@ -1644,6 +1645,34 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         if df_minhas_sol.empty:
             st.info("Você ainda não realizou nenhuma solicitação.")
         else:
+            df_pendentes_usuario = df_minhas_sol[df_minhas_sol["Status"] == "PENDENTE"]
+
+            if not df_pendentes_usuario.empty:
+                st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 4px;">Solicitações Pendentes</h3>', unsafe_allow_html=True)
+                st.caption("Você pode cancelar uma solicitação enquanto ela ainda estiver pendente de aprovação.")
+                for _, sol_u in df_pendentes_usuario.iterrows():
+                    col_su1, col_su2 = st.columns([5, 1])
+                    with col_su1:
+                        st.markdown(f"**#{int(sol_u['id'])} — {sol_u['Tipo']}** · {sol_u['Item']} (Qtd: {sol_u['Quantidade']}) · Solicitado em {sol_u['Data da Solicitação']}")
+                    with col_su2:
+                        if st.button("Cancelar", key=f"cancelar_sol_{int(sol_u['id'])}"):
+                            try:
+                                cursor = conn.cursor()
+                                cursor.execute("""
+                                    UPDATE solicitacoes_almoxarifado
+                                    SET status = 'CANCELADA', data_decisao = CURRENT_TIMESTAMP
+                                    WHERE id = %s AND solicitante_email = %s AND status = 'PENDENTE';
+                                """, (int(sol_u['id']), st.session_state.EMAIL_USUARIO_LOGADO))
+                                conn.commit()
+                                st.success("Solicitação cancelada com sucesso.")
+                                st.rerun()
+                            except Exception as ex_cancel:
+                                conn.rollback()
+                                st.error(f"Erro ao cancelar: {ex_cancel}")
+                st.markdown("<hr style='margin: 15px 0 20px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+
+            st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px;">Histórico Completo</h3>', unsafe_allow_html=True)
+
             def destacar_status_sol(val):
                 if val == 'PENDENTE':
                     return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
@@ -1651,9 +1680,11 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                     return 'background-color: #d4edda; color: #155724; font-weight: bold;'
                 elif val == 'REJEITADA':
                     return 'background-color: rgba(198, 40, 40, 0.12); color: #c62828; font-weight: bold;'
+                elif val == 'CANCELADA':
+                    return 'background-color: rgba(120, 120, 120, 0.12); color: #555555; font-weight: bold;'
                 return ''
 
-            st.dataframe(df_minhas_sol.style.map(destacar_status_sol, subset=['Status']), use_container_width=True, hide_index=True)
+            st.dataframe(df_minhas_sol.drop(columns=["id"]).style.map(destacar_status_sol, subset=['Status']), use_container_width=True, hide_index=True)
 
     # =========================================================================
     # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL ADMINISTRADOR): SOLICITAÇÕES
@@ -1851,6 +1882,8 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                         return 'background-color: #d4edda; color: #155724; font-weight: bold;'
                     elif val == 'REJEITADA':
                         return 'background-color: rgba(198, 40, 40, 0.12); color: #c62828; font-weight: bold;'
+                    elif val == 'CANCELADA':
+                        return 'background-color: rgba(120, 120, 120, 0.12); color: #555555; font-weight: bold;'
                     return ''
 
                 st.dataframe(df_hist_sol.style.map(destacar_status_hist, subset=['Status']), use_container_width=True, hide_index=True)
