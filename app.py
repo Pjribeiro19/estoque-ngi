@@ -1978,13 +1978,38 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 if st.form_submit_button("Salvar", type="primary"):
                     if n and e:
                         try:
+                            senha_final = s if s else "123"
                             cursor = conn.cursor()
                             cursor.execute("""
                                 INSERT INTO usuarios (nome, email, senha, perfil) 
                                 VALUES (%s, %s, %s, %s);
-                            """, (n.strip(), e.strip().lower(), s if s else "123", p))
+                            """, (n.strip(), e.strip().lower(), senha_final, p))
                             conn.commit()
-                            st.success("Usuário registrado com sucesso!")
+
+                            threading.Thread(
+                                target=enviar_email_notificacao,
+                                args=(
+                                    e.strip().lower(),
+                                    "Seu acesso ao Sistema de Gestão de Almoxarifado NGI Carajás",
+                                    f"""
+                                    <p>Olá, {n.strip()}! 👋</p>
+                                    <p>Seja bem-vindo(a)!</p>
+                                    <p>Seu acesso ao sistema foi criado com sucesso. A partir de agora, você poderá:</p>
+                                    <p>
+                                    • Realizar solicitações de itens disponíveis no estoque do Almoxarifado;<br>
+                                    • Solicitar o empréstimo de materiais disponíveis;<br>
+                                    • Acompanhar suas solicitações diretamente pelo sistema.
+                                    </p>
+                                    <p><b>Login:</b> {e.strip().lower()}<br><b>Senha:</b> {senha_final}</p>
+                                    <p>Acesse o sistema pelo link: <a href="{URL_BASE_SISTEMA}">{URL_BASE_SISTEMA}</a></p>
+                                    <p>Recomendamos que altere sua senha no primeiro acesso.</p>
+                                    <p>Em caso de dúvidas, estamos à disposição. Seja bem-vindo(a)! 😊</p>
+                                    """
+                                ),
+                                daemon=True
+                            ).start()
+
+                            st.success("Usuário registrado com sucesso! Um e-mail de boas-vindas foi enviado.")
                             st.rerun()
                         except psycopg2.IntegrityError:
                             conn.rollback()
