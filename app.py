@@ -2567,6 +2567,8 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         lista_coord_equip = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else []
 
         if aba_equipamento == "Novo Registro":
+            periodo_indeterminado_eq = st.checkbox("Período Indeterminado", key="periodo_indeterminado_novo_equip")
+
             with st.form("form_novo_equipamento", clear_on_submit=True):
                 col_eq1, col_eq2 = st.columns(2)
                 nome_item_eq = col_eq1.text_input("Nome do Item: *", placeholder="Ex: Notebook, Desktop completo, Apoio de punho")
@@ -2583,7 +2585,6 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 col_eq7, col_eq8 = st.columns(2)
                 data_retirada_eq = col_eq7.date_input("Data da Retirada:", value=date.today(), format="DD/MM/YYYY")
 
-                periodo_indeterminado_eq = col_eq8.checkbox("Período Indeterminado")
                 if periodo_indeterminado_eq:
                     col_eq8.date_input("Data de Devolução:", value=None, format="DD/MM/YYYY", disabled=True)
                     data_prevista_eq = "Indeterminado"
