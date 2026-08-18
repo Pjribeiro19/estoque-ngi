@@ -2580,14 +2580,16 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 solicitante_eq = col_eq5.text_input("Solicitante/Usuário: *")
                 coordenacao_eq = col_eq6.selectbox("Coordenação:", lista_coord_equip if lista_coord_equip else ["GERAL"])
 
+                periodo_indeterminado_eq = st.checkbox("Período Indeterminado")
+
                 col_eq7, col_eq8 = st.columns(2)
                 data_retirada_eq = col_eq7.date_input("Data da Retirada:", value=date.today(), format="DD/MM/YYYY")
-                data_prevista_eq_bruta = col_eq8.date_input("Data de Devolução:", value=date.today(), format="DD/MM/YYYY")
 
-                periodo_indeterminado_eq = st.checkbox("Período Indeterminado")
                 if periodo_indeterminado_eq:
+                    col_eq8.date_input("Data de Devolução:", value=None, format="DD/MM/YYYY", disabled=True)
                     data_prevista_eq = "Indeterminado"
                 else:
+                    data_prevista_eq_bruta = col_eq8.date_input("Data de Devolução:", value=date.today(), format="DD/MM/YYYY")
                     data_prevista_eq = data_prevista_eq_bruta.strftime("%d/%m/%Y")
 
                 data_devolucao_eq = None
