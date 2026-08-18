@@ -354,6 +354,28 @@ def inicializar_banco_automatico():
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS data_retirada DATE;")
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS atividade_associada TEXT;")
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS justificativa_rejeicao TEXT;")
+
+    # =========================================================================
+    # NOVA TABELA: CONTROLE DE EQUIPAMENTOS EMPRESTADOS (notebooks, desktops,
+    # acessórios atribuídos por tempo indeterminado - módulo admin)
+    # =========================================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS equipamentos_emprestados (
+            id SERIAL PRIMARY KEY,
+            nome_item TEXT NOT NULL,
+            marca_modelo TEXT,
+            numero_serie TEXT,
+            patrimonio TEXT,
+            solicitante_usuario TEXT NOT NULL,
+            coordenacao TEXT,
+            data_retirada DATE,
+            data_prevista_devolucao TEXT,
+            status TEXT NOT NULL DEFAULT 'Em uso',
+            observacao TEXT,
+            data_devolucao DATE,
+            criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS termo_aceito BOOLEAN NOT NULL DEFAULT FALSE;")
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS data_aceite_termo TIMESTAMP;")
 
@@ -981,9 +1003,10 @@ else:
                     "Movimentação de Estoque",
                     label_solicitacoes,
                     "Relatórios",
+                    "Controle de Equipamentos Emprestados",
                     "Sair do Sistema"
                 ],
-                icons=["grid", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "box-arrow-right"],
+                icons=["grid", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "laptop", "box-arrow-right"],
                 menu_icon="cast",
                 default_index=0,
                 styles={
@@ -2527,3 +2550,179 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 icon=":material/download:"
             )
+
+    # =========================================================================
+    # NOVO MÓDULO: CONTROLE DE EQUIPAMENTOS EMPRESTADOS (PERFIL ADMINISTRADOR)
+    # =========================================================================
+    elif escolha == "Controle de Equipamentos Emprestados":
+        st.title("Controle de Equipamentos Emprestados")
+        aba_equipamento = option_menu(
+            menu_title=None,
+            options=["Novo Registro", "Consultar / Editar / Excluir"],
+            icons=["plus-circle", "pencil-square"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+
+        lista_coord_equip = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else []
+
+        if aba_equipamento == "Novo Registro":
+            with st.form("form_novo_equipamento", clear_on_submit=True):
+                col_eq1, col_eq2 = st.columns(2)
+                nome_item_eq = col_eq1.text_input("Nome do Item: *", placeholder="Ex: Notebook, Desktop completo, Apoio de punho")
+                marca_modelo_eq = col_eq2.text_input("Marca/Modelo:")
+
+                col_eq3, col_eq4 = st.columns(2)
+                numero_serie_eq = col_eq3.text_input("Nº de Série:", placeholder="Ex: PE9013216028 (ou N/A)")
+                patrimonio_eq = col_eq4.text_input("Patrimônio:", placeholder="Ex: PA 100")
+
+                col_eq5, col_eq6 = st.columns(2)
+                solicitante_eq = col_eq5.text_input("Solicitante/Usuário: *")
+                coordenacao_eq = col_eq6.selectbox("Coordenação:", lista_coord_equip if lista_coord_equip else ["GERAL"])
+
+                col_eq7, col_eq8 = st.columns(2)
+                data_retirada_eq = col_eq7.date_input("Data da Retirada:", value=date.today(), format="DD/MM/YYYY")
+                devolucao_indeterminada_eq = col_eq8.checkbox("Devolução indeterminada", value=True)
+                if not devolucao_indeterminada_eq:
+                    data_prevista_eq_bruta = col_eq8.date_input("Data Prevista para Devolução:", value=date.today(), format="DD/MM/YYYY")
+                    data_prevista_eq = data_prevista_eq_bruta.strftime("%d/%m/%Y")
+                else:
+                    data_prevista_eq = "Indeterminado"
+
+                status_eq = st.selectbox("Status:", ["Em uso", "Entregue", "Devolvido"])
+                observacao_eq = st.text_area("Observação (opcional):", placeholder="Preencher se o material foi entregue ou devolvido com alguma avaria.")
+
+                if st.form_submit_button("Salvar Registro", type="primary"):
+                    if nome_item_eq.strip() and solicitante_eq.strip():
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                INSERT INTO equipamentos_emprestados
+                                (nome_item, marca_modelo, numero_serie, patrimonio, solicitante_usuario, coordenacao, data_retirada, data_prevista_devolucao, status, observacao)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                            """, (
+                                nome_item_eq.strip(), marca_modelo_eq.strip(), numero_serie_eq.strip(), patrimonio_eq.strip(),
+                                solicitante_eq.strip(), coordenacao_eq, data_retirada_eq, data_prevista_eq, status_eq, observacao_eq.strip()
+                            ))
+                            conn.commit()
+                            st.success(f"Registro de '{nome_item_eq.strip()}' salvo com sucesso!")
+                            st.rerun()
+                        except Exception as ex_equip:
+                            conn.rollback()
+                            st.error(f"Erro ao salvar registro: {ex_equip}")
+                    else:
+                        st.error("Preencha ao menos o Nome do Item e o Solicitante/Usuário!")
+
+        elif aba_equipamento == "Consultar / Editar / Excluir":
+            df_raw_equip = pd.read_sql_query("SELECT * FROM equipamentos_emprestados ORDER BY id DESC;", conn)
+
+            if df_raw_equip.empty:
+                st.info("Nenhum equipamento registrado até o momento.")
+            else:
+                st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
+
+                col_feq1, col_feq2, col_feq3 = st.columns(3)
+                busca_equip = col_feq1.text_input("Buscar por Item, Solicitante ou Patrimônio:", placeholder="Digite para pesquisar...")
+                filtro_coord_equip = col_feq2.selectbox("Filtrar por Coordenação:", ["Todas"] + sorted(df_raw_equip["coordenacao"].dropna().unique().tolist()))
+                filtro_status_equip = col_feq3.selectbox("Filtrar por Status:", ["Todos", "Em uso", "Entregue", "Devolvido"])
+
+                df_filtrado_equip = df_raw_equip.copy()
+                if busca_equip:
+                    df_filtrado_equip = df_filtrado_equip[
+                        df_filtrado_equip["nome_item"].str.contains(busca_equip, case=False, na=False) |
+                        df_filtrado_equip["solicitante_usuario"].str.contains(busca_equip, case=False, na=False) |
+                        df_filtrado_equip["patrimonio"].str.contains(busca_equip, case=False, na=False)
+                    ]
+                if filtro_coord_equip != "Todas":
+                    df_filtrado_equip = df_filtrado_equip[df_filtrado_equip["coordenacao"] == filtro_coord_equip]
+                if filtro_status_equip != "Todos":
+                    df_filtrado_equip = df_filtrado_equip[df_filtrado_equip["status"] == filtro_status_equip]
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                df_exibir_equip = df_filtrado_equip.rename(columns={
+                    "nome_item": "Nome do Item", "marca_modelo": "Marca/Modelo", "numero_serie": "Nº de Série",
+                    "patrimonio": "Patrimônio", "solicitante_usuario": "Solicitante/Usuário", "coordenacao": "Coordenação",
+                    "data_retirada": "Data da Retirada", "data_prevista_devolucao": "Data Prevista Devolução",
+                    "status": "Status", "observacao": "Observação", "data_devolucao": "Data da Devolução"
+                })[["id", "Nome do Item", "Marca/Modelo", "Nº de Série", "Patrimônio", "Solicitante/Usuário", "Coordenação", "Data da Retirada", "Data Prevista Devolução", "Status", "Data da Devolução", "Observação"]]
+
+                def destacar_status_equip(val):
+                    if val == 'Em uso':
+                        return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+                    elif val == 'Entregue':
+                        return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
+                    elif val == 'Devolvido':
+                        return 'background-color: rgba(120, 120, 120, 0.12); color: #555555; font-weight: bold;'
+                    return ''
+
+                st.dataframe(
+                    df_exibir_equip.drop(columns=["id"]).style.map(destacar_status_equip, subset=['Status']),
+                    use_container_width=True, hide_index=True
+                )
+
+                if df_filtrado_equip.empty:
+                    st.info("Nenhum equipamento encontrado com os filtros aplicados.")
+                else:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Editar / Excluir Registro</h3>', unsafe_allow_html=True)
+
+                    df_filtrado_equip_idx = df_filtrado_equip.reset_index(drop=True)
+                    opcao_equip = st.selectbox(
+                        "Selecione o registro:",
+                        df_filtrado_equip_idx.index,
+                        format_func=lambda x: f"#{df_filtrado_equip_idx.loc[x, 'id']} - {df_filtrado_equip_idx.loc[x, 'nome_item']} ({df_filtrado_equip_idx.loc[x, 'solicitante_usuario']})"
+                    )
+                    id_equip_atual = int(df_filtrado_equip_idx.loc[opcao_equip, "id"])
+                    reg = df_filtrado_equip_idx.loc[opcao_equip]
+
+                    col_ee1, col_ee2 = st.columns(2)
+                    edit_nome_item = col_ee1.text_input("Nome do Item:", value=reg["nome_item"] or "")
+                    edit_marca_modelo = col_ee2.text_input("Marca/Modelo:", value=reg["marca_modelo"] or "")
+
+                    col_ee3, col_ee4 = st.columns(2)
+                    edit_numero_serie = col_ee3.text_input("Nº de Série:", value=reg["numero_serie"] or "")
+                    edit_patrimonio = col_ee4.text_input("Patrimônio:", value=reg["patrimonio"] or "")
+
+                    col_ee5, col_ee6 = st.columns(2)
+                    edit_solicitante = col_ee5.text_input("Solicitante/Usuário:", value=reg["solicitante_usuario"] or "")
+                    idx_coord_atual = lista_coord_equip.index(reg["coordenacao"]) if reg["coordenacao"] in lista_coord_equip else 0
+                    edit_coordenacao = col_ee6.selectbox("Coordenação:", lista_coord_equip if lista_coord_equip else ["GERAL"], index=idx_coord_atual, key=f"edit_coord_{id_equip_atual}")
+
+                    edit_data_prevista = st.text_input("Data Prevista para Devolução:", value=reg["data_prevista_devolucao"] or "Indeterminado")
+
+                    lista_status_equip = ["Em uso", "Entregue", "Devolvido"]
+                    idx_status_atual = lista_status_equip.index(reg["status"]) if reg["status"] in lista_status_equip else 0
+                    edit_status = st.selectbox("Status:", lista_status_equip, index=idx_status_atual, key=f"edit_status_{id_equip_atual}")
+
+                    edit_data_devolucao = None
+                    if edit_status == "Devolvido":
+                        valor_data_devolucao = reg["data_devolucao"] if reg["data_devolucao"] is not None else date.today()
+                        edit_data_devolucao = st.date_input("Data da Devolução:", value=valor_data_devolucao, format="DD/MM/YYYY", key=f"edit_data_dev_{id_equip_atual}")
+
+                    edit_observacao = st.text_area("Observação:", value=reg["observacao"] or "", key=f"edit_obs_{id_equip_atual}")
+
+                    col_be1, col_be2 = st.columns([1, 4])
+                    with col_be1:
+                        if st.button("Salvar Alterações", type="primary"):
+                            cursor = conn.cursor()
+                            cursor.execute("""
+                                UPDATE equipamentos_emprestados
+                                SET nome_item = %s, marca_modelo = %s, numero_serie = %s, patrimonio = %s,
+                                    solicitante_usuario = %s, coordenacao = %s, data_prevista_devolucao = %s,
+                                    status = %s, data_devolucao = %s, observacao = %s
+                                WHERE id = %s;
+                            """, (
+                                edit_nome_item.strip(), edit_marca_modelo.strip(), edit_numero_serie.strip(), edit_patrimonio.strip(),
+                                edit_solicitante.strip(), edit_coordenacao, edit_data_prevista.strip(),
+                                edit_status, edit_data_devolucao, edit_observacao.strip(), id_equip_atual
+                            ))
+                            conn.commit()
+                            st.success("Registro atualizado com sucesso!")
+                            st.rerun()
+                    with col_be2:
+                        if st.button("Excluir Registro"):
+                            cursor = conn.cursor()
+                            cursor.execute("DELETE FROM equipamentos_emprestados WHERE id = %s;", (id_equip_atual,))
+                            conn.commit()
+                            st.warning("Registro removido com sucesso.")
+                            st.rerun()
