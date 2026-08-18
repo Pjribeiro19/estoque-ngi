@@ -932,7 +932,7 @@ else:
                 menu_title=None,
                 options=[
                     "Materiais Disponíveis",
-                    "Empréstimo Disponível",
+                    "Empréstimo de Material",
                     "Minhas Solicitações",
                     "Sair do Sistema"
                 ],
@@ -1098,7 +1098,7 @@ else:
     # =========================================================================
     # NOVA TELA: EMPRÉSTIMO DE MATERIAL (INDEPENDENTE)
     # =========================================================================
-    elif escolha == "Empréstimo de Material":
+    elif escolha == "Empréstimo de Material" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum":
         st.markdown("""
             <div style="background-color: #2E7D32; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
@@ -1469,7 +1469,7 @@ else:
     # =========================================================================
     # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL USUÁRIO): EMPRÉSTIMO DISPONÍVEL
     # =========================================================================
-    elif escolha == "Empréstimo Disponível":
+    elif escolha == "Empréstimo de Material" and st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
         st.markdown("""
             <div style="background-color: #2E7D32; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
