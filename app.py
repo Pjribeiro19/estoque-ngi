@@ -2567,7 +2567,16 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         lista_coord_equip = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else []
 
         if aba_equipamento == "Novo Registro":
-            periodo_indeterminado_eq = st.checkbox("Período Indeterminado", key="periodo_indeterminado_novo_equip")
+            col_eq7, col_eq8 = st.columns(2)
+            data_retirada_eq = col_eq7.date_input("Data da Retirada:", value=date.today(), format="DD/MM/YYYY", key="data_retirada_novo_equip")
+
+            periodo_indeterminado_eq = col_eq8.checkbox("Período Indeterminado", key="periodo_indeterminado_novo_equip")
+            if periodo_indeterminado_eq:
+                col_eq8.date_input("Data de Devolução:", value=None, format="DD/MM/YYYY", disabled=True, key="data_devolucao_novo_equip_disabled")
+                data_prevista_eq = "Indeterminado"
+            else:
+                data_prevista_eq_bruta = col_eq8.date_input("Data de Devolução:", value=date.today(), format="DD/MM/YYYY", key="data_devolucao_novo_equip")
+                data_prevista_eq = data_prevista_eq_bruta.strftime("%d/%m/%Y")
 
             with st.form("form_novo_equipamento", clear_on_submit=True):
                 col_eq1, col_eq2 = st.columns(2)
@@ -2581,16 +2590,6 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 col_eq5, col_eq6 = st.columns(2)
                 solicitante_eq = col_eq5.text_input("Solicitante/Usuário: *")
                 coordenacao_eq = col_eq6.selectbox("Coordenação:", lista_coord_equip if lista_coord_equip else ["GERAL"])
-
-                col_eq7, col_eq8 = st.columns(2)
-                data_retirada_eq = col_eq7.date_input("Data da Retirada:", value=date.today(), format="DD/MM/YYYY")
-
-                if periodo_indeterminado_eq:
-                    col_eq8.date_input("Data de Devolução:", value=None, format="DD/MM/YYYY", disabled=True)
-                    data_prevista_eq = "Indeterminado"
-                else:
-                    data_prevista_eq_bruta = col_eq8.date_input("Data de Devolução:", value=date.today(), format="DD/MM/YYYY")
-                    data_prevista_eq = data_prevista_eq_bruta.strftime("%d/%m/%Y")
 
                 data_devolucao_eq = None
 
