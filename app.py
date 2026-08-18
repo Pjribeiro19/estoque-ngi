@@ -2582,19 +2582,14 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
                 col_eq7, col_eq8 = st.columns(2)
                 data_retirada_eq = col_eq7.date_input("Data da Retirada:", value=date.today(), format="DD/MM/YYYY")
-                devolucao_indeterminada_eq = col_eq8.checkbox("Devolução prevista indeterminada", value=True)
+                devolucao_indeterminada_eq = col_eq8.checkbox("Período Indeterminado", value=True)
                 if not devolucao_indeterminada_eq:
-                    data_prevista_eq_bruta = col_eq8.date_input("Data Prevista para Devolução:", value=date.today(), format="DD/MM/YYYY")
+                    data_prevista_eq_bruta = col_eq8.date_input("Data de Devolução:", value=date.today(), format="DD/MM/YYYY")
                     data_prevista_eq = data_prevista_eq_bruta.strftime("%d/%m/%Y")
                 else:
                     data_prevista_eq = "Indeterminado"
 
-                col_eq9, col_eq10 = st.columns(2)
-                data_devolucao_indeterminada_eq = col_eq9.checkbox("Data de devolução indeterminada", value=True)
-                if not data_devolucao_indeterminada_eq:
-                    data_devolucao_eq = col_eq10.date_input("Data de Devolução:", value=date.today(), format="DD/MM/YYYY")
-                else:
-                    data_devolucao_eq = None
+                data_devolucao_eq = None
 
                 status_eq = st.selectbox("Status:", ["Em uso", "Devolvido"])
                 observacao_eq = st.text_area("Observação (opcional):", placeholder="Preencher se o material foi entregue ou devolvido com alguma avaria.")
