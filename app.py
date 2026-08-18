@@ -2573,7 +2573,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 marca_modelo_eq = col_eq2.text_input("Marca/Modelo:")
 
                 col_eq3, col_eq4 = st.columns(2)
-                numero_serie_eq = col_eq3.text_input("Nº de Série:", placeholder="Ex: PE9013216028 (ou N/A)")
+                numero_serie_eq = col_eq3.text_input("Nº de Série: *", placeholder="Ex: PE9013216028 (ou N/A)")
                 patrimonio_eq = col_eq4.text_input("Patrimônio:", placeholder="Ex: PA 100")
 
                 col_eq5, col_eq6 = st.columns(2)
@@ -2582,36 +2582,43 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
                 col_eq7, col_eq8 = st.columns(2)
                 data_retirada_eq = col_eq7.date_input("Data da Retirada:", value=date.today(), format="DD/MM/YYYY")
-                devolucao_indeterminada_eq = col_eq8.checkbox("Devolução indeterminada", value=True)
+                devolucao_indeterminada_eq = col_eq8.checkbox("Devolução prevista indeterminada", value=True)
                 if not devolucao_indeterminada_eq:
                     data_prevista_eq_bruta = col_eq8.date_input("Data Prevista para Devolução:", value=date.today(), format="DD/MM/YYYY")
                     data_prevista_eq = data_prevista_eq_bruta.strftime("%d/%m/%Y")
                 else:
                     data_prevista_eq = "Indeterminado"
 
-                status_eq = st.selectbox("Status:", ["Em uso", "Entregue", "Devolvido"])
+                col_eq9, col_eq10 = st.columns(2)
+                data_devolucao_indeterminada_eq = col_eq9.checkbox("Data de devolução indeterminada", value=True)
+                if not data_devolucao_indeterminada_eq:
+                    data_devolucao_eq = col_eq10.date_input("Data de Devolução:", value=date.today(), format="DD/MM/YYYY")
+                else:
+                    data_devolucao_eq = None
+
+                status_eq = st.selectbox("Status:", ["Em uso", "Devolvido"])
                 observacao_eq = st.text_area("Observação (opcional):", placeholder="Preencher se o material foi entregue ou devolvido com alguma avaria.")
 
                 if st.form_submit_button("Salvar Registro", type="primary"):
-                    if nome_item_eq.strip() and solicitante_eq.strip():
+                    if nome_item_eq.strip() and solicitante_eq.strip() and numero_serie_eq.strip():
                         try:
                             cursor = conn.cursor()
                             cursor.execute("""
                                 INSERT INTO equipamentos_emprestados
-                                (nome_item, marca_modelo, numero_serie, patrimonio, solicitante_usuario, coordenacao, data_retirada, data_prevista_devolucao, status, observacao)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+                                (nome_item, marca_modelo, numero_serie, patrimonio, solicitante_usuario, coordenacao, data_retirada, data_prevista_devolucao, status, data_devolucao, observacao)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
                             """, (
                                 nome_item_eq.strip(), marca_modelo_eq.strip(), numero_serie_eq.strip(), patrimonio_eq.strip(),
-                                solicitante_eq.strip(), coordenacao_eq, data_retirada_eq, data_prevista_eq, status_eq, observacao_eq.strip()
+                                solicitante_eq.strip(), coordenacao_eq, data_retirada_eq, data_prevista_eq, status_eq, data_devolucao_eq, observacao_eq.strip()
                             ))
                             conn.commit()
-                            st.success(f"Registro de '{nome_item_eq.strip()}' salvo com sucesso!")
+                            st.success("Registrado com sucesso!")
                             st.rerun()
                         except Exception as ex_equip:
                             conn.rollback()
                             st.error(f"Erro ao salvar registro: {ex_equip}")
                     else:
-                        st.error("Preencha ao menos o Nome do Item e o Solicitante/Usuário!")
+                        st.error("Preencha o Nome do Item, Nº de Série e o Solicitante/Usuário!")
 
         elif aba_equipamento == "Consultar / Editar / Excluir":
             df_raw_equip = pd.read_sql_query("SELECT * FROM equipamentos_emprestados ORDER BY id DESC;", conn)
@@ -2624,7 +2631,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 col_feq1, col_feq2, col_feq3 = st.columns(3)
                 busca_equip = col_feq1.text_input("Buscar por Item, Solicitante ou Patrimônio:", placeholder="Digite para pesquisar...")
                 filtro_coord_equip = col_feq2.selectbox("Filtrar por Coordenação:", ["Todas"] + sorted(df_raw_equip["coordenacao"].dropna().unique().tolist()))
-                filtro_status_equip = col_feq3.selectbox("Filtrar por Status:", ["Todos", "Em uso", "Entregue", "Devolvido"])
+                filtro_status_equip = col_feq3.selectbox("Filtrar por Status:", ["Todos", "Em uso", "Devolvido"])
 
                 df_filtrado_equip = df_raw_equip.copy()
                 if busca_equip:
@@ -2649,8 +2656,6 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 def destacar_status_equip(val):
                     if val == 'Em uso':
                         return 'background-color: #d4edda; color: #155724; font-weight: bold;'
-                    elif val == 'Entregue':
-                        return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
                     elif val == 'Devolvido':
                         return 'background-color: rgba(120, 120, 120, 0.12); color: #555555; font-weight: bold;'
                     return ''
@@ -2690,14 +2695,16 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
                     edit_data_prevista = st.text_input("Data Prevista para Devolução:", value=reg["data_prevista_devolucao"] or "Indeterminado")
 
-                    lista_status_equip = ["Em uso", "Entregue", "Devolvido"]
+                    lista_status_equip = ["Em uso", "Devolvido"]
                     idx_status_atual = lista_status_equip.index(reg["status"]) if reg["status"] in lista_status_equip else 0
                     edit_status = st.selectbox("Status:", lista_status_equip, index=idx_status_atual, key=f"edit_status_{id_equip_atual}")
 
-                    edit_data_devolucao = None
-                    if edit_status == "Devolvido":
+                    edit_devolucao_indeterminada = st.checkbox("Data de devolução indeterminada", value=(reg["data_devolucao"] is None), key=f"edit_dev_indet_{id_equip_atual}")
+                    if not edit_devolucao_indeterminada:
                         valor_data_devolucao = reg["data_devolucao"] if reg["data_devolucao"] is not None else date.today()
                         edit_data_devolucao = st.date_input("Data da Devolução:", value=valor_data_devolucao, format="DD/MM/YYYY", key=f"edit_data_dev_{id_equip_atual}")
+                    else:
+                        edit_data_devolucao = None
 
                     edit_observacao = st.text_area("Observação:", value=reg["observacao"] or "", key=f"edit_obs_{id_equip_atual}")
 
