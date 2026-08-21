@@ -528,7 +528,7 @@ BASE_TEMPLATE = """
             <a href="#">Kit Institucional</a>
             <a href="#">Bolsa</a>
         </div>
-        {% if current_user.is_organizador %}
+        {% if current_user.perfil == 'analista' or current_user.is_organizador %}
         <div class="item">Cadastros</div>
         <div class="submenu">
             <a href="{{ url_for('cadastro_diaria') }}">Diária</a>
