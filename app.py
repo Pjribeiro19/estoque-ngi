@@ -380,6 +380,17 @@ VALOR_AUXILIO_PADRAO = 95
 CHAVE_ALIQUOTA_ISS = 'aliquota_iss_servico_pf'
 ALIQUOTA_ISS_PADRAO = 5.0
 
+# Travamento geral de novas solicitações, para respeitar o prazo semanal de
+# envio antes da reunião de lotes. Ativado/desativado manualmente pelo
+# Analista ou Administrador - não tem religamento automático por horário,
+# porque o dia útil seguinte varia (feriados, etc.).
+CHAVE_SOLICITACOES_TRAVADAS = 'solicitacoes_travadas'
+CHAVE_MENSAGEM_TRAVAMENTO = 'mensagem_travamento_solicitacoes'
+MENSAGEM_TRAVAMENTO_PADRAO = (
+    'O prazo para envio de solicitações para a próxima reunião de lotes expirou às 12h de quarta-feira. '
+    'As solicitações serão reabertas no próximo dia útil.'
+)
+
 
 # ---------------- MODELOS ----------------
 PERFIS_USUARIO = ['solicitante', 'analista', 'aprovador', 'comprador']
@@ -858,6 +869,8 @@ ACOES_AUDITORIA = {
     'enviou_nota_fiscal': 'Enviou a nota fiscal',
     'pagou_nota_fiscal': 'Marcou a nota fiscal como paga',
     'excluiu_usuario': 'Excluiu um usuário',
+    'travou_solicitacoes': 'Travou o envio de novas solicitações',
+    'destravou_solicitacoes': 'Reabriu o envio de solicitações',
     'enviou_boleto_pagamento': 'Enviou o boleto para pagamento',
     'enviou_nf_pagamento': 'Enviou a nota fiscal para pagamento',
     'alterou_convenio': 'Alterou o convênio',
@@ -893,6 +906,15 @@ class Configuracao(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     chave = db.Column(db.String(100), unique=True, nullable=False)
     valor = db.Column(db.Numeric(10, 2), nullable=False)
+
+
+class ConfiguracaoTexto(db.Model):
+    """Mesma ideia da Configuracao, mas para valores que não são número -
+    como a mensagem exibida quando as solicitações estão travadas."""
+    __tablename__ = 'configuracoes_texto'
+    id = db.Column(db.Integer, primary_key=True)
+    chave = db.Column(db.String(100), unique=True, nullable=False)
+    valor = db.Column(db.Text)
 
 
 # ---------------- DIAGNÓSTICO TEMPORÁRIO ----------------
@@ -1001,6 +1023,29 @@ def obter_valor_diaria(tipo_diaria, nome_area):
 def obter_configuracao(chave, padrao=0):
     registro = Configuracao.query.filter_by(chave=chave).first()
     return float(registro.valor) if registro else padrao
+
+
+def obter_configuracao_texto(chave, padrao=''):
+    registro = ConfiguracaoTexto.query.filter_by(chave=chave).first()
+    return registro.valor if registro and registro.valor else padrao
+
+
+def solicitacoes_estao_travadas():
+    return obter_configuracao(CHAVE_SOLICITACOES_TRAVADAS, 0) == 1
+
+
+def mensagem_travamento():
+    return obter_configuracao_texto(CHAVE_MENSAGEM_TRAVAMENTO, MENSAGEM_TRAVAMENTO_PADRAO)
+
+
+def bloquear_se_travado():
+    """Barra o acesso a um formulário de NOVA solicitação enquanto o
+    travamento semanal estiver ativo. Não afeta solicitações já em
+    andamento (correção, anexos, etc.) - só a criação de novas."""
+    if solicitacoes_estao_travadas():
+        flash(mensagem_travamento())
+        return redirect(url_for('inicio'))
+    return None
 
 
 def somente_organizador():
@@ -1964,6 +2009,7 @@ BASE_TEMPLATE = """
             <a href="{{ url_for('cadastro_servico_externo') }}">{{ ic.ferramenta|safe }} Serviços Externos</a>
             <a href="{{ url_for('cadastro_rancho') }}">{{ ic.carrinho|safe }} Rancho</a>
             <a href="{{ url_for('cadastro_usuarios') }}">{{ ic.usuarios|safe }} Usuários</a>
+            <a href="{{ url_for('cadastro_travar_solicitacoes') }}">🔒 Travar Solicitações</a>
         </div>
         {% endif %}
 
@@ -2277,10 +2323,19 @@ BASE_TEMPLATE = """
 
 
 def render_pagina(titulo, conteudo_html):
+    banner_travamento = ''
+    if current_user.is_authenticated and solicitacoes_estao_travadas():
+        banner_travamento = f"""
+        <div style="background:#fdeceb; border-left:4px solid #c0392b; color:#a02020;
+             padding:11px 16px; border-radius:5px; font-size:12.5px; margin-bottom:16px;">
+            🔒 <strong>Novas solicitações travadas.</strong> {mensagem_travamento()}
+        </div>
+        """
+
     return render_template_string(
         BASE_TEMPLATE,
         titulo=titulo,
-        conteudo_html=conteudo_html,
+        conteudo_html=banner_travamento + conteudo_html,
         tem_demandas_atribuidas=tem_demandas_atribuidas,
         ic=ICONES,
         qtd=contadores_menu(),
@@ -6624,6 +6679,10 @@ def montar_formulario_diaria():
 @app.route('/solicitacao/diaria', methods=['GET', 'POST'])
 @login_required
 def diaria_form():
+    resultado_bloqueio = bloquear_se_travado()
+    if resultado_bloqueio:
+        return resultado_bloqueio
+
     if request.method == 'POST':
         tipo_destino = request.form.get('tipo_destino')
         tipo_diaria = request.form.get('tipo_diaria')
@@ -7049,6 +7108,10 @@ def montar_formulario_passagem():
 @app.route('/solicitacao/passagem', methods=['GET', 'POST'])
 @login_required
 def passagem_form():
+    resultado_bloqueio = bloquear_se_travado()
+    if resultado_bloqueio:
+        return resultado_bloqueio
+
     pode_ver_convenio = current_user.is_organizador or current_user.is_aprovador
 
     if request.method == 'POST':
@@ -7408,6 +7471,10 @@ def montar_formulario_compras():
 @app.route('/solicitacao/compra-materiais', methods=['GET', 'POST'])
 @login_required
 def compra_materiais_form():
+    resultado_bloqueio = bloquear_se_travado()
+    if resultado_bloqueio:
+        return resultado_bloqueio
+
     if request.method == 'POST':
         especificacoes = request.form.getlist('item_especificacao[]')
         fornecedores = request.form.getlist('item_fornecedor[]')
@@ -7583,6 +7650,10 @@ document.getElementById('forma_entrega').addEventListener('change', function() {
 @app.route('/solicitacao/alimentacao', methods=['GET', 'POST'])
 @login_required
 def alimentacao_form():
+    resultado_bloqueio = bloquear_se_travado()
+    if resultado_bloqueio:
+        return resultado_bloqueio
+
     if request.method == 'POST':
         quantidade_pessoas = int(request.form.get('quantidade_pessoas') or 0)
         custo_unitario = float(request.form.get('custo_unitario') or 0)
@@ -7826,6 +7897,10 @@ document.getElementById('km_estimado').addEventListener('input', atualizarCustoV
 @app.route('/solicitacao/locacao-veiculo', methods=['GET', 'POST'])
 @login_required
 def locacao_veiculo_form():
+    resultado_bloqueio = bloquear_se_travado()
+    if resultado_bloqueio:
+        return resultado_bloqueio
+
     if request.method == 'POST':
         km_estimado = float(request.form.get('km_estimado') or 0)
         custo_km = float(request.form.get('custo_km') or 0)
@@ -8301,6 +8376,10 @@ def montar_formulario_pf():
 @app.route('/solicitacao/servico-externo-pf', methods=['GET', 'POST'])
 @login_required
 def servico_externo_pf_form():
+    resultado_bloqueio = bloquear_se_travado()
+    if resultado_bloqueio:
+        return resultado_bloqueio
+
     if request.method == 'POST':
         categorias = request.form.getlist('categoria_servico[]')
         nomes_servico = request.form.getlist('nome_servico[]')
@@ -8431,6 +8510,10 @@ def montar_formulario_pj():
 @app.route('/solicitacao/servico-externo-pj', methods=['GET', 'POST'])
 @login_required
 def servico_externo_pj_form():
+    resultado_bloqueio = bloquear_se_travado()
+    if resultado_bloqueio:
+        return resultado_bloqueio
+
     if request.method == 'POST':
         cnpj = request.form.get('cnpj')
         if not cnpj_tem_14_digitos(cnpj):
@@ -8573,6 +8656,98 @@ def cadastro_servico_externo_atualizar(tipo_id):
     db.session.commit()
     flash('Categoria atualizada com sucesso!', 'sucesso')
     return redirect(url_for('cadastro_servico_externo'))
+
+
+@app.route('/cadastros/travar-solicitacoes', methods=['GET', 'POST'])
+@login_required
+def cadastro_travar_solicitacoes():
+    somente_organizador_ou_analista()
+
+    if request.method == 'POST':
+        acao = request.form.get('acao')
+
+        if acao == 'travar':
+            mensagem = (request.form.get('mensagem') or '').strip() or MENSAGEM_TRAVAMENTO_PADRAO
+
+            registro_flag = Configuracao.query.filter_by(chave=CHAVE_SOLICITACOES_TRAVADAS).first()
+            if registro_flag:
+                registro_flag.valor = 1
+            else:
+                db.session.add(Configuracao(chave=CHAVE_SOLICITACOES_TRAVADAS, valor=1))
+
+            registro_msg = ConfiguracaoTexto.query.filter_by(chave=CHAVE_MENSAGEM_TRAVAMENTO).first()
+            if registro_msg:
+                registro_msg.valor = mensagem
+            else:
+                db.session.add(ConfiguracaoTexto(chave=CHAVE_MENSAGEM_TRAVAMENTO, valor=mensagem))
+
+            registrar_auditoria('travou_solicitacoes', None, mensagem)
+            db.session.commit()
+            flash('Novas solicitações travadas. Ninguém consegue enviar até você destravar.', 'sucesso')
+
+        elif acao == 'destravar':
+            registro_flag = Configuracao.query.filter_by(chave=CHAVE_SOLICITACOES_TRAVADAS).first()
+            if registro_flag:
+                registro_flag.valor = 0
+            else:
+                db.session.add(Configuracao(chave=CHAVE_SOLICITACOES_TRAVADAS, valor=0))
+
+            registrar_auditoria('destravou_solicitacoes', None, '')
+            db.session.commit()
+            flash('Solicitações reabertas.', 'sucesso')
+
+        return redirect(url_for('cadastro_travar_solicitacoes'))
+
+    travado = solicitacoes_estao_travadas()
+    mensagem_atual = mensagem_travamento()
+
+    if travado:
+        situacao = """
+        <div class="bloco" style="border-left:4px solid #c0392b; background:#fdeceb; max-width:700px;">
+            <strong style="color:#c0392b; font-size:15px;">🔒 Solicitações travadas no momento</strong>
+            <div style="font-size:12.5px; margin-top:6px; color:#666;">
+                Ninguém consegue abrir nem enviar uma solicitação nova enquanto isto estiver ativo.
+                Solicitações que já estavam em andamento (correção, anexos, aprovação) não são afetadas.
+            </div>
+        </div>
+        """
+        acao_form = f"""
+        <form method="POST" style="margin-top:16px;" onsubmit="return confirm('Reabrir as solicitações agora?');">
+            <input type="hidden" name="acao" value="destravar">
+            <button type="submit" class="btn btn-salvar" style="padding:11px 20px; background:#2e7d32;">
+                Destravar solicitações
+            </button>
+        </form>
+        """
+    else:
+        situacao = """
+        <div class="bloco" style="border-left:4px solid #2e7d32; background:#eef5ee; max-width:700px;">
+            <strong style="color:#2e7d32; font-size:15px;">🔓 Solicitações abertas normalmente</strong>
+        </div>
+        """
+        acao_form = f"""
+        <form method="POST" style="margin-top:16px; max-width:600px;">
+            <input type="hidden" name="acao" value="travar">
+            <label>Mensagem que aparecerá para quem tentar enviar uma solicitação:</label><br>
+            <textarea name="mensagem" rows="3" style="width:100%; padding:8px; margin:6px 0 12px;"
+                      placeholder="{MENSAGEM_TRAVAMENTO_PADRAO}">{mensagem_atual if mensagem_atual != MENSAGEM_TRAVAMENTO_PADRAO else ''}</textarea>
+            <button type="submit" class="btn" style="padding:11px 20px; background:#c0392b; color:#fff;">
+                Travar solicitações
+            </button>
+        </form>
+        """
+
+    conteudo = f"""
+    <h2>Travar Solicitações</h2>
+    <div style="font-size:12.5px; color:#666; margin-bottom:16px; max-width:700px;">
+        Use antes do horário-limite semanal de envio para a reunião de lotes, para impedir o
+        envio de solicitações de última hora. Ninguém, de nenhum perfil, consegue abrir um
+        formulário de nova solicitação enquanto estiver travado.
+    </div>
+    {situacao}
+    {acao_form}
+    """
+    return render_pagina('Travar Solicitações', conteudo)
 
 
 @app.route('/cadastros/servico-externo/iss/atualizar', methods=['POST'])
@@ -8979,6 +9154,10 @@ def montar_formulario_rancho():
 @app.route('/solicitacao/rancho', methods=['GET', 'POST'])
 @login_required
 def rancho_form():
+    resultado_bloqueio = bloquear_se_travado()
+    if resultado_bloqueio:
+        return resultado_bloqueio
+
     if request.method == 'POST':
         import math
 
@@ -9535,6 +9714,10 @@ def montar_formulario_seguro():
 @app.route('/solicitacao/seguro', methods=['GET', 'POST'])
 @login_required
 def seguro_form():
+    resultado_bloqueio = bloquear_se_travado()
+    if resultado_bloqueio:
+        return resultado_bloqueio
+
     if request.method == 'POST':
         nomes = request.form.getlist('part_nome[]')
         nascimentos = request.form.getlist('part_nascimento[]')
@@ -9871,6 +10054,10 @@ def montar_formulario_bolsa():
 @app.route('/solicitacao/bolsa', methods=['GET', 'POST'])
 @login_required
 def bolsa_form():
+    resultado_bloqueio = bloquear_se_travado()
+    if resultado_bloqueio:
+        return resultado_bloqueio
+
     if request.method == 'POST':
         nomes = request.form.getlist('bolsa_nome[]')
         titulos = request.form.getlist('bolsa_titulo[]')
