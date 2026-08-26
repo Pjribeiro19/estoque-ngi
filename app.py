@@ -996,6 +996,7 @@ else:
                 menu_title=None,
                 options=[
                     "Painel Geral", 
+                    "Materiais Disponíveis",
                     "Empréstimo de Material",
                     "Cadastrar Produto", 
                     "Cadastrar Categoria", 
@@ -1007,7 +1008,7 @@ else:
                     "Controle de Equipamentos Emprestados",
                     "Sair do Sistema"
                 ],
-                icons=["grid", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "laptop", "box-arrow-right"],
+                icons=["grid", "box-seam", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "laptop", "box-arrow-right"],
                 menu_icon="cast",
                 default_index=0,
                 styles={
@@ -1141,9 +1142,10 @@ else:
                 "Cadastrar Item Empréstimo", 
                 "Registrar Saída (Empréstimo)", 
                 "Registrar Devolução", 
-                "Histórico de Movimentação"
+                "Histórico de Movimentação",
+                "Fazer Solicitação"
             ],
-            icons=["box-seam", "plus-circle", "box-arrow-right", "box-arrow-in-left", "journal-text"],
+            icons=["box-seam", "plus-circle", "box-arrow-right", "box-arrow-in-left", "journal-text", "send"],
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
@@ -1410,6 +1412,155 @@ else:
                     return ''
 
                 st.dataframe(df_hist_emp.style.map(destacar_status, subset=['Status']), use_container_width=True, hide_index=True)
+
+        # ---------------------------------------------------------------------
+        # SUB-ABA 6: FAZER SOLICITAÇÃO (ADMINISTRADOR SOLICITA PARA SI PRÓPRIO)
+        # ---------------------------------------------------------------------
+        elif sub_emp == "Fazer Solicitação":
+            st.subheader("Solicitar Empréstimo de Material")
+            st.caption("Sua solicitação seguirá o fluxo normal de aprovação, como qualquer outra.")
+
+            if "carrinho_emprestimo" not in st.session_state:
+                st.session_state.carrinho_emprestimo = []
+
+            df_raw_emp_admin = pd.read_sql_query("SELECT id, codigo, item, quantidade_disponivel FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY codigo ASC;", conn)
+            lista_siglas_coord_admin = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
+
+            if df_raw_emp_admin.empty:
+                st.info("Nenhum item disponível para empréstimo no momento.")
+            else:
+                col_add_a1, col_add_a2, col_add_a3 = st.columns([3, 1, 1])
+                opcao_sol_admin = col_add_a1.selectbox(
+                    "Selecione o Item:",
+                    df_raw_emp_admin.index,
+                    format_func=lambda x: f"{df_raw_emp_admin.loc[x, 'item']} (Disponível: {df_raw_emp_admin.loc[x, 'quantidade_disponivel']})",
+                    key="select_emprestimo_admin"
+                )
+                qtd_sol_admin = col_add_a2.number_input("Quantidade:", min_value=1, max_value=int(df_raw_emp_admin.loc[opcao_sol_admin, "quantidade_disponivel"]), value=1, step=1, key="qtd_emprestimo_admin")
+                col_add_a3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                if col_add_a3.button("+ Adicionar", key="add_carrinho_admin", use_container_width=True):
+                    item_id_sel_admin = int(df_raw_emp_admin.loc[opcao_sol_admin, "id"])
+                    nome_sel_admin = df_raw_emp_admin.loc[opcao_sol_admin, "item"]
+                    st.session_state.carrinho_emprestimo.append({"item_id": item_id_sel_admin, "item": nome_sel_admin, "quantidade": int(qtd_sol_admin)})
+                    st.rerun()
+
+                if st.session_state.carrinho_emprestimo:
+                    st.markdown("**Itens selecionados:**")
+                    for i_carr_a, item_carr_a in enumerate(st.session_state.carrinho_emprestimo):
+                        col_ca1, col_ca2 = st.columns([5, 1])
+                        col_ca1.markdown(f"{item_carr_a['item']} (Qtd: {item_carr_a['quantidade']})")
+                        if col_ca2.button("Remover", key=f"remover_carrinho_admin_{i_carr_a}"):
+                            st.session_state.carrinho_emprestimo.pop(i_carr_a)
+                            st.rerun()
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    coord_sol_admin = st.selectbox("Coordenação:", lista_siglas_coord_admin, key="coord_carrinho_admin")
+
+                    col_dta1, col_dta2 = st.columns(2)
+                    data_retirada_admin = col_dta1.date_input("Data de Retirada: *", value=date.today(), format="DD/MM/YYYY", key="data_retirada_admin")
+                    data_prev_admin = col_dta2.date_input("Data de Devolução: *", value=date.today(), format="DD/MM/YYYY", key="data_prev_admin")
+
+                    atividade_sol_admin = st.text_input("Atividade Associada: *", placeholder="Ex: Vistoria de campo na trilha X", key="atividade_admin")
+                    obs_sol_admin = st.text_area("Observações (opcional):", key="obs_admin")
+
+                    st.markdown("<hr style='margin: 20px 0 10px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+                    with st.expander("📄 Termo de Responsabilidade - clique para ler"):
+                        st.markdown("""
+### TERMO DE RESPONSABILIDADE PELO EMPRÉSTIMO DE MATERIAIS
+
+Ao solicitar o empréstimo de materiais por meio deste sistema, o(a) solicitante declara que leu, compreendeu e concorda com as condições estabelecidas neste Termo de Responsabilidade.
+
+**1. DA UTILIZAÇÃO DO MATERIAL**
+
+O material solicitado deverá ser utilizado exclusivamente para atividades institucionais e de acordo com sua finalidade, observando-se as orientações de utilização, segurança e conservação aplicáveis.
+
+O(A) solicitante compromete-se a utilizar o material de forma adequada, zelando por sua integridade, conservação e segurança durante todo o período em que estiver sob sua responsabilidade.
+
+**2. DAS RESPONSABILIDADES DO SOLICITANTE**
+
+Ao receber o material, o(a) solicitante compromete-se a:
+
+I – utilizar o material exclusivamente para a finalidade a que se destina;
+
+II – zelar pela guarda, conservação, integridade e segurança do material enquanto estiver sob sua responsabilidade;
+
+III – utilizar o material de acordo com suas características, finalidade e orientações fornecidas pela Administração;
+
+IV – não ceder, emprestar, transferir ou disponibilizar o material a terceiros sem autorização;
+
+V – devolver o material no prazo estabelecido e nas condições adequadas de uso, ressalvado o desgaste natural decorrente de sua utilização regular;
+
+VI – comunicar imediatamente à Coordenação de Operação e Suporte qualquer ocorrência relacionada ao material, incluindo dano, avaria, perda, extravio, furto, roubo, mau funcionamento ou qualquer outra eventualidade;
+
+VII – informar qualquer situação que possa comprometer a integridade, conservação ou funcionamento do material.
+
+**3. DA RESPONSABILIDADE POR DANOS E MAU USO**
+
+O(A) solicitante declara estar ciente de que será responsável pela adequada utilização, guarda e conservação do material durante o período em que estiver sob sua responsabilidade.
+
+Em caso de dano, avaria ou perda decorrente de mau uso, utilização inadequada, negligência, imprudência ou descumprimento das orientações de utilização, o(a) solicitante deverá comunicar imediatamente o ocorrido à Coordenação de Operação e Suporte, para registro e avaliação das providências administrativas cabíveis.
+
+A responsabilidade do(a) solicitante não se aplica a danos decorrentes do desgaste natural pelo uso regular, de defeitos preexistentes ou de falhas decorrentes do funcionamento normal do material.
+
+As ocorrências serão analisadas pela Administração, considerando as circunstâncias do fato, as condições em que o material foi disponibilizado e a forma de utilização, para definição das providências cabíveis.
+
+**4. DA COMUNICAÇÃO DE OCORRÊNCIAS**
+
+Qualquer eventualidade envolvendo o material deverá ser comunicada imediatamente à Coordenação de Operação e Suporte.
+
+A comunicação deverá ocorrer mesmo que o dano ou problema aparentemente não impeça a utilização do material, permitindo que a Administração registre a ocorrência e adote as providências necessárias.
+
+Em caso de perda, extravio, furto ou roubo, o(a) solicitante deverá comunicar o fato imediatamente e fornecer as informações necessárias para o devido registro e apuração da ocorrência.
+
+**5. DA DEVOLUÇÃO**
+
+O material deverá ser devolvido dentro do prazo estabelecido na solicitação ou sempre que solicitado pela Administração.
+
+No momento da devolução, o material poderá ser submetido à conferência quanto à sua integridade, funcionamento, conservação e demais condições de uso.
+
+Constatada alguma ocorrência, a Administração poderá realizar a avaliação das condições do material e registrar as informações no sistema.
+
+**6. DA CIÊNCIA E ACEITE**
+
+O(A) solicitante declara estar ciente de que a solicitação de empréstimo somente será efetivada após a leitura e aceitação deste Termo.
+
+Ao marcar a opção "Li e concordo com o Termo de Responsabilidade", o(a) solicitante declara que:
+
+- leu integralmente este Termo;
+- compreendeu suas responsabilidades;
+- compromete-se a utilizar e conservar adequadamente o material;
+- compromete-se a comunicar imediatamente qualquer eventualidade à Coordenação de Operação e Suporte;
+- está ciente de que poderá ser responsabilizado(a), nos termos aplicáveis, por danos decorrentes de mau uso, utilização inadequada, negligência, imprudência ou descumprimento das orientações de utilização.
+
+A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitação de empréstimo, juntamente com o registro do usuário, data e horário do aceite.
+                        """)
+                    aceite_termo_admin = st.checkbox("Li e concordo com o Termo de Responsabilidade pelo Empréstimo de Materiais. *", key="aceite_admin")
+
+                    if st.button("Enviar Solicitação", type="primary", key="enviar_carrinho_admin"):
+                        if not atividade_sol_admin.strip():
+                            st.error("O campo 'Atividade Associada' é obrigatório!")
+                        elif data_prev_admin < data_retirada_admin:
+                            st.error("A Data de Devolução não pode ser anterior à Data de Retirada!")
+                        elif not aceite_termo_admin:
+                            st.error("A solicitação de empréstimo somente será efetivada após a leitura e aceitação do Termo de Responsabilidade!")
+                        else:
+                            try:
+                                lote_id_admin = str(uuid.uuid4())
+                                for item_carr_a in st.session_state.carrinho_emprestimo:
+                                    cursor.execute("""
+                                        INSERT INTO solicitacoes_almoxarifado 
+                                        (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_retirada, data_prevista, atividade_associada, status, observacao, termo_aceito, data_aceite_termo, lote_id)
+                                        VALUES ('EMPRESTIMO', %s, %s, %s, %s, %s, %s, %s, %s, %s, 'PENDENTE', %s, TRUE, CURRENT_TIMESTAMP, %s);
+                                    """, (str(item_carr_a["item_id"]), item_carr_a["item"], item_carr_a["quantidade"], st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_admin, data_retirada_admin, data_prev_admin, atividade_sol_admin.strip(), obs_sol_admin.strip(), lote_id_admin))
+                                conn.commit()
+                                st.session_state.carrinho_emprestimo = []
+                                st.success("Sua solicitação foi encaminhada com sucesso!")
+                                st.rerun()
+                            except Exception as ex_admin_sol:
+                                conn.rollback()
+                                st.error(f"Erro ao enviar solicitação: {ex_admin_sol}")
+                else:
+                    st.info("Adicione pelo menos um item para enviar a solicitação.")
 
     # =========================================================================
     # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL USUÁRIO): MATERIAIS DISPONÍVEIS
