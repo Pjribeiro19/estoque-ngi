@@ -354,6 +354,7 @@ def inicializar_banco_automatico():
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS data_retirada DATE;")
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS atividade_associada TEXT;")
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS justificativa_rejeicao TEXT;")
+    cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS lote_id TEXT;")
 
     # =========================================================================
     # NOVA TABELA: CONTROLE DE EQUIPAMENTOS EMPRESTADOS (notebooks, desktops,
@@ -1004,9 +1005,12 @@ else:
                     label_solicitacoes,
                     "Relatórios",
                     "Controle de Equipamentos Emprestados",
+                    "Materiais Disponíveis",
+                    "Solicitar Empréstimo",
+                    "Minhas Solicitações",
                     "Sair do Sistema"
                 ],
-                icons=["grid", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "laptop", "box-arrow-right"],
+                icons=["grid", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "laptop", "box-seam", "arrow-repeat", "clock-history", "box-arrow-right"],
                 menu_icon="cast",
                 default_index=0,
                 styles={
@@ -1458,41 +1462,69 @@ else:
 
             st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
             st.markdown("### Nova Solicitação de Material")
+            st.caption("Adicione quantos itens forem necessários ao carrinho. Todos serão enviados em uma única solicitação.")
+
+            if "carrinho_material" not in st.session_state:
+                st.session_state.carrinho_material = []
 
             df_raw_prod_user = pd.read_sql_query("SELECT codigo, item, quantidade FROM produtos WHERE quantidade > 0 ORDER BY codigo ASC;", conn)
             lista_siglas_coord_user = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
 
-            with st.form("form_solicitar_material", clear_on_submit=True):
-                opcao_sol_mat = st.selectbox(
-                    "Selecione o Material:",
-                    df_raw_prod_user.index,
-                    format_func=lambda x: f"{df_raw_prod_user.loc[x, 'codigo']} - {df_raw_prod_user.loc[x, 'item']} (Saldo: {df_raw_prod_user.loc[x, 'quantidade']})"
-                )
-                qtd_sol_mat = st.number_input("Quantidade Desejada:", min_value=1, max_value=int(df_raw_prod_user.loc[opcao_sol_mat, "quantidade"]), value=1, step=1)
-                coord_sol_mat = st.selectbox("Coordenação:", lista_siglas_coord_user)
-                obs_sol_mat = st.text_area("Observações (opcional):")
+            col_add_m1, col_add_m2, col_add_m3 = st.columns([3, 1, 1])
+            opcao_sol_mat = col_add_m1.selectbox(
+                "Selecione o Material:",
+                df_raw_prod_user.index,
+                format_func=lambda x: f"{df_raw_prod_user.loc[x, 'codigo']} - {df_raw_prod_user.loc[x, 'item']} (Saldo: {df_raw_prod_user.loc[x, 'quantidade']})",
+                key="select_material_carrinho"
+            )
+            qtd_sol_mat = col_add_m2.number_input("Quantidade:", min_value=1, max_value=int(df_raw_prod_user.loc[opcao_sol_mat, "quantidade"]), value=1, step=1, key="qtd_material_carrinho")
+            col_add_m3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+            if col_add_m3.button("+ Adicionar", key="add_carrinho_material", use_container_width=True):
+                cod_sel = df_raw_prod_user.loc[opcao_sol_mat, "codigo"]
+                nome_sel = df_raw_prod_user.loc[opcao_sol_mat, "item"]
+                st.session_state.carrinho_material.append({"codigo": cod_sel, "item": nome_sel, "quantidade": int(qtd_sol_mat)})
+                st.rerun()
 
-                if st.form_submit_button("Enviar Solicitação", type="primary"):
-                    cod_sel = df_raw_prod_user.loc[opcao_sol_mat, "codigo"]
-                    nome_sel = df_raw_prod_user.loc[opcao_sol_mat, "item"]
+            if st.session_state.carrinho_material:
+                st.markdown("**Itens no carrinho:**")
+                for i_carr, item_carr in enumerate(st.session_state.carrinho_material):
+                    col_cm1, col_cm2 = st.columns([5, 1])
+                    col_cm1.markdown(f"🛒 {item_carr['codigo']} - {item_carr['item']} (Qtd: {item_carr['quantidade']})")
+                    if col_cm2.button("Remover", key=f"remover_carrinho_material_{i_carr}"):
+                        st.session_state.carrinho_material.pop(i_carr)
+                        st.rerun()
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                coord_sol_mat = st.selectbox("Coordenação:", lista_siglas_coord_user, key="coord_carrinho_material")
+                obs_sol_mat = st.text_area("Observações (opcional):", key="obs_carrinho_material")
+
+                if st.button("Enviar Solicitação", type="primary", key="enviar_carrinho_material"):
                     try:
+                        lote_id_novo = str(uuid.uuid4())
                         cursor = conn.cursor()
-                        cursor.execute("""
-                            INSERT INTO solicitacoes_almoxarifado 
-                            (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, status, observacao)
-                            VALUES ('MATERIAL', %s, %s, %s, %s, %s, %s, 'PENDENTE', %s);
-                        """, (cod_sel, nome_sel, qtd_sol_mat, st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_mat, obs_sol_mat.strip()))
+                        for item_carr in st.session_state.carrinho_material:
+                            cursor.execute("""
+                                INSERT INTO solicitacoes_almoxarifado 
+                                (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, status, observacao, lote_id)
+                                VALUES ('MATERIAL', %s, %s, %s, %s, %s, %s, 'PENDENTE', %s, %s);
+                            """, (item_carr["codigo"], item_carr["item"], item_carr["quantidade"], st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_mat, obs_sol_mat.strip(), lote_id_novo))
                         conn.commit()
+                        st.session_state.carrinho_material = []
                         st.session_state["msg_sucesso_material"] = True
                         st.rerun()
                     except Exception as ex:
                         conn.rollback()
                         st.error(f"Erro ao enviar solicitação: {ex}")
+            else:
+                st.info("Adicione pelo menos um item ao carrinho para enviar a solicitação.")
 
     # =========================================================================
     # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL USUÁRIO): EMPRÉSTIMO DISPONÍVEL
     # =========================================================================
-    elif escolha == "Empréstimo de Material" and st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
+    elif escolha in ("Empréstimo de Material", "Solicitar Empréstimo") and (
+        (escolha == "Empréstimo de Material" and st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum") or
+        (escolha == "Solicitar Empréstimo" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum")
+    ):
         st.markdown("""
             <div style="background-color: #2E7D32; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
@@ -1524,25 +1556,47 @@ else:
 
             st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
             st.markdown("### Nova Solicitação de Empréstimo")
+            st.caption("Adicione quantos itens forem necessários ao carrinho. Todos serão enviados em uma única solicitação.")
+
+            if "carrinho_emprestimo" not in st.session_state:
+                st.session_state.carrinho_emprestimo = []
 
             df_raw_emp_user = pd.read_sql_query("SELECT id, codigo, item, quantidade_disponivel FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY codigo ASC;", conn)
             lista_siglas_coord_emp_user = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
 
-            with st.form("form_solicitar_emprestimo", clear_on_submit=True):
-                opcao_sol_emp = st.selectbox(
-                    "Selecione o Item:",
-                    df_raw_emp_user.index,
-                    format_func=lambda x: f"{df_raw_emp_user.loc[x, 'item']} (Disponível: {df_raw_emp_user.loc[x, 'quantidade_disponivel']})"
-                )
-                qtd_sol_emp = st.number_input("Quantidade Desejada:", min_value=1, max_value=int(df_raw_emp_user.loc[opcao_sol_emp, "quantidade_disponivel"]), value=1, step=1)
-                coord_sol_emp = st.selectbox("Coordenação:", lista_siglas_coord_emp_user)
+            col_add_e1, col_add_e2, col_add_e3 = st.columns([3, 1, 1])
+            opcao_sol_emp = col_add_e1.selectbox(
+                "Selecione o Item:",
+                df_raw_emp_user.index,
+                format_func=lambda x: f"{df_raw_emp_user.loc[x, 'item']} (Disponível: {df_raw_emp_user.loc[x, 'quantidade_disponivel']})",
+                key="select_emprestimo_carrinho"
+            )
+            qtd_sol_emp = col_add_e2.number_input("Quantidade:", min_value=1, max_value=int(df_raw_emp_user.loc[opcao_sol_emp, "quantidade_disponivel"]), value=1, step=1, key="qtd_emprestimo_carrinho")
+            col_add_e3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+            if col_add_e3.button("+ Adicionar", key="add_carrinho_emprestimo", use_container_width=True):
+                item_id_sel = int(df_raw_emp_user.loc[opcao_sol_emp, "id"])
+                nome_sel_emp = df_raw_emp_user.loc[opcao_sol_emp, "item"]
+                st.session_state.carrinho_emprestimo.append({"item_id": item_id_sel, "item": nome_sel_emp, "quantidade": int(qtd_sol_emp)})
+                st.rerun()
+
+            if st.session_state.carrinho_emprestimo:
+                st.markdown("**Itens no carrinho:**")
+                for i_carr_e, item_carr_e in enumerate(st.session_state.carrinho_emprestimo):
+                    col_ce1, col_ce2 = st.columns([5, 1])
+                    col_ce1.markdown(f"🛒 {item_carr_e['item']} (Qtd: {item_carr_e['quantidade']})")
+                    if col_ce2.button("Remover", key=f"remover_carrinho_emp_{i_carr_e}"):
+                        st.session_state.carrinho_emprestimo.pop(i_carr_e)
+                        st.rerun()
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                coord_sol_emp = st.selectbox("Coordenação:", lista_siglas_coord_emp_user, key="coord_carrinho_emp")
 
                 col_dt1, col_dt2 = st.columns(2)
-                data_retirada_sol = col_dt1.date_input("Data de Retirada: *", value=date.today(), format="DD/MM/YYYY")
-                data_prev_sol = col_dt2.date_input("Data de Devolução: *", value=date.today(), format="DD/MM/YYYY")
+                data_retirada_sol = col_dt1.date_input("Data de Retirada: *", value=date.today(), format="DD/MM/YYYY", key="data_retirada_carrinho_emp")
+                data_prev_sol = col_dt2.date_input("Data de Devolução: *", value=date.today(), format="DD/MM/YYYY", key="data_prev_carrinho_emp")
 
-                atividade_sol_emp = st.text_input("Atividade Associada: *", placeholder="Ex: Vistoria de campo na trilha X")
-                obs_sol_emp = st.text_area("Observações (opcional):")
+                atividade_sol_emp = st.text_input("Atividade Associada: *", placeholder="Ex: Vistoria de campo na trilha X", key="atividade_carrinho_emp")
+                obs_sol_emp = st.text_area("Observações (opcional):", key="obs_carrinho_emp")
 
                 st.markdown("<hr style='margin: 20px 0 10px 0; opacity: 0.2;'>", unsafe_allow_html=True)
                 with st.expander("📄 Termo de Responsabilidade - clique para ler"):
@@ -1615,9 +1669,9 @@ Ao marcar a opção "Li e concordo com o Termo de Responsabilidade", o(a) solici
 
 A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitação de empréstimo, juntamente com o registro do usuário, data e horário do aceite.
                     """)
-                aceite_termo = st.checkbox("Li e concordo com o Termo de Responsabilidade pelo Empréstimo de Materiais. *")
+                aceite_termo = st.checkbox("Li e concordo com o Termo de Responsabilidade pelo Empréstimo de Materiais. *", key="aceite_carrinho_emp")
 
-                if st.form_submit_button("Enviar Solicitação", type="primary"):
+                if st.button("Enviar Solicitação", type="primary", key="enviar_carrinho_emp"):
                     if not atividade_sol_emp.strip():
                         st.error("O campo 'Atividade Associada' é obrigatório!")
                     elif data_prev_sol < data_retirada_sol:
@@ -1625,21 +1679,25 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                     elif not aceite_termo:
                         st.error("A solicitação de empréstimo somente será efetivada após a leitura e aceitação do Termo de Responsabilidade!")
                     else:
-                        item_id_sel = int(df_raw_emp_user.loc[opcao_sol_emp, "id"])
-                        nome_sel_emp = df_raw_emp_user.loc[opcao_sol_emp, "item"]
                         try:
+                            lote_id_novo = str(uuid.uuid4())
                             cursor = conn.cursor()
-                            cursor.execute("""
-                                INSERT INTO solicitacoes_almoxarifado 
-                                (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_retirada, data_prevista, atividade_associada, status, observacao, termo_aceito, data_aceite_termo)
-                                VALUES ('EMPRESTIMO', %s, %s, %s, %s, %s, %s, %s, %s, %s, 'PENDENTE', %s, TRUE, CURRENT_TIMESTAMP);
-                            """, (str(item_id_sel), nome_sel_emp, qtd_sol_emp, st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_emp, data_retirada_sol, data_prev_sol, atividade_sol_emp.strip(), obs_sol_emp.strip()))
+                            for item_carr_e in st.session_state.carrinho_emprestimo:
+                                cursor.execute("""
+                                    INSERT INTO solicitacoes_almoxarifado 
+                                    (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_retirada, data_prevista, atividade_associada, status, observacao, termo_aceito, data_aceite_termo, lote_id)
+                                    VALUES ('EMPRESTIMO', %s, %s, %s, %s, %s, %s, %s, %s, %s, 'PENDENTE', %s, TRUE, CURRENT_TIMESTAMP, %s);
+                                """, (str(item_carr_e["item_id"]), item_carr_e["item"], item_carr_e["quantidade"], st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_emp, data_retirada_sol, data_prev_sol, atividade_sol_emp.strip(), obs_sol_emp.strip(), lote_id_novo))
                             conn.commit()
+                            st.session_state.carrinho_emprestimo = []
                             st.session_state["msg_sucesso_emprestimo"] = True
                             st.rerun()
                         except Exception as ex:
                             conn.rollback()
                             st.error(f"Erro ao enviar solicitação: {ex}")
+            else:
+                st.info("Adicione pelo menos um item ao carrinho para enviar a solicitação.")
+
 
     # =========================================================================
     # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL USUÁRIO): MINHAS SOLICITAÇÕES
@@ -1736,7 +1794,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
         if aba_solicitacao == "Pendentes":
             df_pendentes = pd.read_sql_query("""
-                SELECT id, tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_retirada, data_prevista, atividade_associada, observacao, termo_aceito, data_aceite_termo
+                SELECT id, tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_solicitacao, data_retirada, data_prevista, atividade_associada, observacao, termo_aceito, data_aceite_termo
                 FROM solicitacoes_almoxarifado WHERE status = 'PENDENTE' ORDER BY id ASC;
             """, conn)
 
@@ -1744,7 +1802,10 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 st.info("Nenhuma solicitação pendente no momento.")
             else:
                 for _, sol in df_pendentes.iterrows():
-                    tipo_label = "Material (Almoxarifado)" if sol["tipo"] == "MATERIAL" else "Empréstimo"
+                    tipo_label = "Material (Almoxarifado)" if sol["tipo"] == "MATERIAL" else "Empréstimo de Material"
+                    cor_tag = "#4CAF50" if sol["tipo"] == "MATERIAL" else "#2E7D32"
+                    data_hora_sol = converter_para_horario_br(sol["data_solicitacao"]).strftime('%d/%m/%Y às %H:%M') if sol["data_solicitacao"] is not None else "-"
+
                     linha_datas = ""
                     linha_termo = ""
                     if sol["tipo"] == "EMPRESTIMO":
@@ -1757,11 +1818,15 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                     linha_obs = f"Observações: {sol['observacao']}" if sol["observacao"] else ""
 
                     st.markdown(f"""
-                        <div style="border: 1px solid rgba(76, 175, 80, 0.3); border-radius: 8px; padding: 15px; margin-bottom: 12px;">
-                            <b>#{sol['id']} — {tipo_label}</b><br>
-                            Item: {sol['item_nome']} | Quantidade: {sol['quantidade']}<br>
-                            Solicitante: {sol['solicitante_nome']} ({sol['solicitante_email']}) | Coordenação: {sol['coordenacao'] or '-'}<br>
-                            {linha_datas}{linha_termo}{linha_atividade}{linha_obs}
+                        <div style="border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px; margin-bottom: 14px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                                <span style="background-color: {cor_tag}; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;">{tipo_label}</span>
+                                <span style="font-size: 12px; color: #888;">Solicitação Nº {sol['id']}</span>
+                            </div>
+                            <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600;">{sol['item_nome']} <span style="font-weight: 400; color: #666;">(Quantidade: {sol['quantidade']})</span></p>
+                            <p style="margin: 0 0 4px 0; font-size: 13.5px; color: #333;">Solicitante: <b>{sol['solicitante_nome']}</b> ({sol['solicitante_email']}) &nbsp;|&nbsp; Coordenação: {sol['coordenacao'] or '-'}</p>
+                            <p style="margin: 0 0 8px 0; font-size: 13.5px; color: #333;">Solicitado em: <b>{data_hora_sol}</b></p>
+                            <p style="margin: 0; font-size: 13.5px; color: #333;">{linha_datas}{linha_termo}{linha_atividade}{linha_obs}</p>
                         </div>
                     """, unsafe_allow_html=True)
 
