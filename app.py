@@ -1005,12 +1005,9 @@ else:
                     label_solicitacoes,
                     "Relatórios",
                     "Controle de Equipamentos Emprestados",
-                    "Materiais Disponíveis",
-                    "Solicitar Empréstimo",
-                    "Minhas Solicitações",
                     "Sair do Sistema"
                 ],
-                icons=["grid", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "laptop", "box-seam", "arrow-repeat", "clock-history", "box-arrow-right"],
+                icons=["grid", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "laptop", "box-arrow-right"],
                 menu_icon="cast",
                 default_index=0,
                 styles={
@@ -1489,7 +1486,7 @@ else:
                 st.markdown("**Itens no carrinho:**")
                 for i_carr, item_carr in enumerate(st.session_state.carrinho_material):
                     col_cm1, col_cm2 = st.columns([5, 1])
-                    col_cm1.markdown(f"🛒 {item_carr['codigo']} - {item_carr['item']} (Qtd: {item_carr['quantidade']})")
+                    col_cm1.markdown(f"{item_carr['codigo']} - {item_carr['item']} (Qtd: {item_carr['quantidade']})")
                     if col_cm2.button("Remover", key=f"remover_carrinho_material_{i_carr}"):
                         st.session_state.carrinho_material.pop(i_carr)
                         st.rerun()
@@ -1583,7 +1580,7 @@ else:
                 st.markdown("**Itens no carrinho:**")
                 for i_carr_e, item_carr_e in enumerate(st.session_state.carrinho_emprestimo):
                     col_ce1, col_ce2 = st.columns([5, 1])
-                    col_ce1.markdown(f"🛒 {item_carr_e['item']} (Qtd: {item_carr_e['quantidade']})")
+                    col_ce1.markdown(f"{item_carr_e['item']} (Qtd: {item_carr_e['quantidade']})")
                     if col_ce2.button("Remover", key=f"remover_carrinho_emp_{i_carr_e}"):
                         st.session_state.carrinho_emprestimo.pop(i_carr_e)
                         st.rerun()
