@@ -5852,7 +5852,9 @@ def fila_execucao():
         joinedload(Solicitacao.responsavel_encaminhamento),
     ).filter(Solicitacao.status.in_(STATUS_EM_ANDAMENTO + STATUS_CONCLUIDOS))
 
-    if not current_user.is_organizador:
+    # qualquer Executor (perfil comprador) ve TODAS as demandas, nao so as
+    # atribuidas a ele - permite cobertura de equipe entre colegas
+    if not current_user.is_organizador and current_user.perfil != 'comprador':
         consulta = consulta.filter(Solicitacao.responsavel_encaminhamento_id == current_user.id)
 
     filtro_protocolo = request.args.get('protocolo', '').strip()
@@ -5940,11 +5942,11 @@ def fila_execucao():
 
 
 def pode_executar(solicitacao):
-    if current_user.is_organizador:
-        return True
-    if solicitacao.responsavel_encaminhamento_id == current_user.id:
-        return True
-    return current_user.perfil == 'comprador' and solicitacao.responsavel_encaminhamento_id is None
+    # qualquer Executor (perfil comprador) pode agir em qualquer demanda,
+    # nao so na que esta atribuida a ele - permite cobertura de equipe
+    # (ex: um colega ou a jovem aprendiz assume no lugar de quem normalmente
+    # cuida daquela demanda)
+    return current_user.is_organizador or current_user.perfil == 'comprador'
 
 
 @app.route('/solicitacao/<int:solicitacao_id>/execucao', methods=['POST'])
@@ -11278,14 +11280,21 @@ def _dados_edicao_servico_pj(solicitacao):
 def carregar_solicitacao_para_correcao(solicitacao_id):
     """Usado no início de cada rota de criação (GET) quando chega com
     ?corrigir_id=X: confere que a pessoa pode mesmo corrigir aquela
-    solicitação (é dela, e está devolvida) e devolve o objeto, ou None se
-    não for um pedido de correção válido."""
+    solicitação (é dela, é da mesma coordenação, ou é Admin - e está
+    devolvida) e devolve o objeto, ou None se não for um pedido de
+    correção válido."""
     if not solicitacao_id:
         return None
     solicitacao = Solicitacao.query.get(solicitacao_id)
     if not solicitacao:
         return None
-    if solicitacao.solicitante_id != current_user.id and not current_user.is_organizador:
+    eh_mesma_coordenacao = (
+        current_user.coordenacao_id is not None
+        and current_user.coordenacao_id == solicitacao.coordenacao_solicitante_id
+    )
+    if (solicitacao.solicitante_id != current_user.id
+            and not current_user.is_organizador
+            and not eh_mesma_coordenacao):
         return None
     if solicitacao.status not in ('devolvida_ajuste', 'ajuste_dados'):
         return None
@@ -11308,10 +11317,17 @@ def obter_solicitacao_para_gravar(tipo, **campos):
 
     if corrigir_id:
         solicitacao = Solicitacao.query.get(int(corrigir_id))
+        eh_mesma_coordenacao = (
+            solicitacao
+            and current_user.coordenacao_id is not None
+            and current_user.coordenacao_id == solicitacao.coordenacao_solicitante_id
+        )
         pode_reaproveitar = (
             solicitacao
             and solicitacao.tipo == tipo
-            and (solicitacao.solicitante_id == current_user.id or current_user.is_organizador)
+            and (solicitacao.solicitante_id == current_user.id
+                 or current_user.is_organizador
+                 or eh_mesma_coordenacao)
             and solicitacao.status in ('devolvida_ajuste', 'ajuste_dados')
         )
         if pode_reaproveitar:
@@ -11465,7 +11481,13 @@ def _recalcular_valor(solicitacao, detalhe):
 def corrigir_solicitacao(solicitacao_id):
     solicitacao = Solicitacao.query.get_or_404(solicitacao_id)
 
-    if solicitacao.solicitante_id != current_user.id and not current_user.is_organizador:
+    eh_mesma_coordenacao = (
+        current_user.coordenacao_id is not None
+        and current_user.coordenacao_id == solicitacao.coordenacao_solicitante_id
+    )
+    if (solicitacao.solicitante_id != current_user.id
+            and not current_user.is_organizador
+            and not eh_mesma_coordenacao):
         abort(403)
 
     if solicitacao.status not in ('devolvida_ajuste', 'ajuste_dados'):
@@ -12122,7 +12144,13 @@ def detalhe_solicitacao(solicitacao_id):
 
     eh_dono = solicitacao.solicitante_id == current_user.id
     eh_fluxo = current_user.perfil in ('analista', 'aprovador', 'comprador') or current_user.is_organizador
-    if not eh_dono and not eh_fluxo:
+    # colega da MESMA coordenacao tambem pode ver e, se estiver devolvida,
+    # corrigir - cobre o caso de a pessoa titular ficar doente, viajar, etc.
+    eh_mesma_coordenacao = (
+        current_user.coordenacao_id is not None
+        and current_user.coordenacao_id == solicitacao.coordenacao_solicitante_id
+    )
+    if not eh_dono and not eh_fluxo and not eh_mesma_coordenacao:
         abort(403)
 
     tipo_label = TIPO_SOLICITACAO_LABELS.get(solicitacao.tipo, solicitacao.tipo)
