@@ -12,6 +12,7 @@ from sqlalchemy.orm import joinedload
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.datastructures import MultiDict
+from urllib.parse import quote
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -407,6 +408,11 @@ MENSAGEM_TRAVAMENTO_PADRAO = (
     'O prazo para envio de solicitações para a próxima reunião de lotes expirou às 12h de quarta-feira. '
     'As solicitações serão reabertas no próximo dia útil.'
 )
+
+# número de WhatsApp do suporte, exibido na Central de Ajuda - editável em
+# Cadastros, sem redeploy. Formato esperado: só dígitos, com DDI+DDD
+# (ex: 5594999998888 para +55 94 99999-8888)
+CHAVE_WHATSAPP_AJUDA = 'whatsapp_ajuda'
 
 
 # ---------------- MODELOS ----------------
@@ -13851,9 +13857,23 @@ AJUDA_TOPICOS = [
 ]
 
 
-@app.route('/ajuda')
+@app.route('/ajuda', methods=['GET', 'POST'])
 @login_required
 def ajuda():
+    if request.method == 'POST':
+        somente_organizador_ou_analista()
+        numero = ''.join(c for c in (request.form.get('whatsapp_numero') or '') if c.isdigit())
+
+        registro = ConfiguracaoTexto.query.filter_by(chave=CHAVE_WHATSAPP_AJUDA).first()
+        if registro:
+            registro.valor = numero
+        else:
+            db.session.add(ConfiguracaoTexto(chave=CHAVE_WHATSAPP_AJUDA, valor=numero))
+        db.session.commit()
+
+        flash('Número de WhatsApp atualizado.' if numero else 'Número removido - o botão deixa de aparecer.', 'sucesso')
+        return redirect(url_for('ajuda'))
+
     blocos = ''
     for topico in AJUDA_TOPICOS:
         perguntas = ''
@@ -13878,13 +13898,50 @@ def ajuda():
         </div>
         """
 
+    numero_whatsapp = obter_configuracao_texto(CHAVE_WHATSAPP_AJUDA, '')
+
+    botao_whatsapp = ''
+    if numero_whatsapp:
+        mensagem_padrao = quote('Olá! Vim pelo SIGAD Carajás, estou com uma dúvida.')
+        link_whatsapp = f'https://wa.me/{numero_whatsapp}?text={mensagem_padrao}'
+        botao_whatsapp = f"""
+        <a href="{link_whatsapp}" target="_blank" rel="noopener"
+           style="position:fixed; bottom:24px; right:24px; z-index:200; width:56px; height:56px;
+                  background:#25D366; border-radius:50%; display:flex; align-items:center;
+                  justify-content:center; box-shadow:0 3px 10px rgba(0,0,0,.25); text-decoration:none;">
+            <svg viewBox="0 0 24 24" width="30" height="30" fill="white">
+                <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21h.01c5.46 0 9.9-4.45 9.9-9.91C21.96 6.45 17.5 2 12.04 2zm5.8 14.02c-.24.68-1.4 1.3-1.94 1.38-.5.08-1.12.11-1.81-.11-.42-.13-.95-.31-1.64-.6-2.88-1.24-4.76-4.14-4.9-4.33-.14-.19-1.17-1.55-1.17-2.97 0-1.41.74-2.1 1-2.39.26-.28.58-.35.77-.35h.55c.18 0 .42-.07.65.5.24.58.82 2 .89 2.14.07.14.12.31.02.5-.09.19-.14.31-.28.47-.14.16-.29.36-.42.48-.14.14-.28.28-.12.56.16.28.71 1.17 1.53 1.9 1.05.94 1.94 1.23 2.22 1.37.28.14.44.12.6-.07.16-.19.68-.79.86-1.06.18-.28.36-.23.6-.14.24.09 1.55.73 1.82.86.27.14.45.2.51.32.07.11.07.66-.17 1.34z"/>
+            </svg>
+        </a>
+        """
+
+    campo_config_whatsapp = ''
+    if current_user.perfil == 'analista' or current_user.is_organizador:
+        campo_config_whatsapp = f"""
+        <div class="bloco" style="max-width:500px; margin-bottom:18px;">
+            <strong style="font-size:12.5px;">Número de WhatsApp do suporte</strong>
+            <div style="font-size:11px; color:#888; margin:4px 0 8px;">
+                Aparece como um botão flutuante para qualquer usuário clicar e já abrir uma
+                conversa no WhatsApp. Informe com DDI e DDD, só números (ex: 5594999998888
+                para +55 94 99999-8888). Deixe em branco para tirar o botão da tela.
+            </div>
+            <form method="POST" style="display:flex; gap:8px;">
+                <input type="text" name="whatsapp_numero" value="{numero_whatsapp}"
+                       placeholder="5594999998888" style="padding:7px; width:220px;">
+                <button type="submit" class="btn-atalho">Salvar</button>
+            </form>
+        </div>
+        """
+
     conteudo = f"""
     <h2>Central de Ajuda</h2>
+    {campo_config_whatsapp}
     <div style="font-size:12.5px; color:#666; margin-bottom:16px; max-width:900px;">
         Dúvidas sobre como preencher cada tipo de solicitação, com base no
         <strong>Manual de Solicitações NGI Carajás</strong>. Clique em uma pergunta para ver a resposta,
         ou use a busca abaixo.
     </div>
+    {botao_whatsapp}
 
     <div style="max-width:900px; margin-bottom:18px;">
         <input type="text" id="busca-ajuda" placeholder="Buscar: cotação, amazon, devolver diária, coffee break..."
