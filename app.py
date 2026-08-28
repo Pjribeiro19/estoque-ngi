@@ -1,4 +1,4 @@
-# VERSAO-SIGAD-CARAJAS: 2026-08-27-SEGURO-FIX-04 (se voce ve isso no GitHub, esta versao esta certa)
+# VERSAO-SIGAD-CARAJAS: 2026-08-28-APROVACAO-ITEM-02-COM-ANALISTA (se voce ve isso no GitHub, esta versao esta certa)
 import os
 import re
 import secrets
@@ -1671,7 +1671,7 @@ ICONES = {
 
 # ---------------- LAYOUT BASE ----------------
 BASE_TEMPLATE = """
-<!-- VERSAO-SIGAD-CARAJAS: 2026-08-27-SEGURO-FIX-04 -->
+<!-- VERSAO-SIGAD-CARAJAS: 2026-08-28-APROVACAO-ITEM-02-COM-ANALISTA -->
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
@@ -5568,6 +5568,27 @@ def acao_analise(solicitacao_id):
             flash('Informe o Nº do Lote de Aprovação e o Convênio antes de enviar para o Aprovador.')
             return redirect(url_for('detalhe_solicitacao', solicitacao_id=solicitacao_id))
 
+        todos_reprovados, resumo_reprovacoes = processar_itens_aprovacao(solicitacao)
+        if todos_reprovados:
+            solicitacao.status = 'reprovada'
+            solicitacao.motivo_reprovacao = resumo_reprovacoes or 'Todos os itens foram reprovados.'
+            solicitacao.reprovada_por = f'{current_user.nome} (Analista)'
+            registrar_auditoria('reprovou_analise', solicitacao, solicitacao.motivo_reprovacao)
+            db.session.commit()
+
+            notificar_solicitante(
+                solicitacao,
+                'Sua solicitação foi reprovada - SIGAD Carajás',
+                f'Olá, {solicitacao.solicitante.nome}.\n\n'
+                f'Sua solicitação de {tipo_label}, protocolo {protocolo(solicitacao)}, foi reprovada '
+                f'na etapa de análise - todos os itens foram individualmente reprovados.\n\n'
+                f'Detalhes: {solicitacao.motivo_reprovacao}\n\n'
+                f'Se quiser esclarecer algo, procure o Analista responsável.',
+            )
+
+            flash('Todos os itens foram reprovados - solicitação reprovada.', 'sucesso')
+            return redirect(url_for('fila_analise'))
+
         if solicitacao.tipo == 'bolsa' and not rubrica:
             flash('Para solicitações de Bolsa, a Rubrica é obrigatória.')
             return redirect(url_for('detalhe_solicitacao', solicitacao_id=solicitacao_id))
@@ -5605,6 +5626,22 @@ def acao_analise(solicitacao_id):
                             + (f' | Rubrica {rubrica}' if solicitacao.tipo == 'bolsa' else ''))
         db.session.commit()
 
+        aviso_itens_reprovados_analise = ''
+        config_item_analise = MODELO_ITEM_POR_TIPO.get(solicitacao.tipo)
+        if config_item_analise:
+            modelo_item_analise, _cv, campo_nome_analise = config_item_analise
+            itens_reprovados_analise = modelo_item_analise.query.filter_by(
+                solicitacao_id=solicitacao.id, status_aprovacao_item='reprovado').all()
+            if itens_reprovados_analise:
+                lista_reprovados_analise = '\n'.join(
+                    f'- {getattr(it, campo_nome_analise, "Item")}: {it.motivo_reprovacao_item}'
+                    for it in itens_reprovados_analise
+                )
+                aviso_itens_reprovados_analise = (
+                    f'\n\nO Analista já reprovou os itens abaixo na triagem - eles NÃO entram no '
+                    f'valor a aprovar:\n{lista_reprovados_analise}'
+                )
+
         aprovadores = Usuario.query.filter_by(perfil='aprovador').all()
         for aprovador in aprovadores:
             enviar_email(
@@ -5614,7 +5651,8 @@ def acao_analise(solicitacao_id):
                 f'Uma solicitação de {tipo_label}, de {solicitacao.solicitante.nome}, passou pela triagem '
                 f'do Analista e está aguardando a sua aprovação.\n\n'
                 f'Protocolo: {protocolo(solicitacao)}\n'
-                f'Valor estimado: {moeda(solicitacao.valor_total)}\n\n'
+                f'Valor estimado: {moeda(solicitacao.valor_total)}'
+                f'{aviso_itens_reprovados_analise}\n\n'
                 f'Acesse o sistema em "Fila de Aprovação" para avaliar.',
             )
 
@@ -5820,16 +5858,26 @@ def montar_checkboxes_itens_aprovacao(solicitacao):
     linhas = ''
     for item in itens:
         nome_item = getattr(item, campo_nome, None) or f'Item #{item.id}'
+        ja_reprovado = item.status_aprovacao_item == 'reprovado'
+        marcado = 'checked' if ja_reprovado else ''
+        estilo_bloco = 'display:block;' if ja_reprovado else 'display:none;'
+        motivo_existente = item.motivo_reprovacao_item or ''
+        aviso_previo = ''
+        if ja_reprovado:
+            aviso_previo = ('<div style="font-size:10.5px; color:#b35c00; margin-bottom:4px;">'
+                            'Já reprovado numa etapa anterior - desmarque a caixa para aprovar.</div>')
+
         linhas += f"""
         <div style="border-bottom:1px solid #e4ebe7; padding:8px 0;">
             <label style="font-size:13px;">
-                <input type="checkbox" name="itens_reprovados[]" value="{item.id}"
+                <input type="checkbox" name="itens_reprovados[]" value="{item.id}" {marcado}
                        class="checkbox-reprovar-item" data-item-id="{item.id}">
                 Reprovar: <strong>{nome_item}</strong>
             </label>
-            <div id="motivo-item-{item.id}" style="display:none; margin-top:6px; margin-left:22px;">
+            <div id="motivo-item-{item.id}" style="{estilo_bloco} margin-top:6px; margin-left:22px;">
+                {aviso_previo}
                 <textarea name="motivo_item_{item.id}" placeholder="Justificativa da reprovação deste item"
-                          rows="2" style="width:100%; padding:6px;"></textarea>
+                          rows="2" style="width:100%; padding:6px;">{motivo_existente}</textarea>
             </div>
         </div>
         """
@@ -13489,10 +13537,12 @@ def detalhe_solicitacao(solicitacao_id):
             </div>
             """
 
+        checkboxes_itens_analise = montar_checkboxes_itens_aprovacao(solicitacao)
+
         painel = f"""
         <h3 style="margin-top:30px;">Parecer da Análise</h3>
-        <form method="POST" action="{url_for('acao_analise', solicitacao_id=solicitacao.id)}" id="form-decisao"
-              class="bloco" style="max-width:750px;">
+        <form method="POST" action="{url_for('acao_analise', solicitacao_id=solicitacao.id)}" id="form-decisao">
+            <div class="bloco" style="max-width:750px;">
             <label>Nº Lote de Aprovação: <span style="color:red;">*</span></label><br>
             <input type="text" name="lote_aprovacao" value="{solicitacao.lote_aprovacao or ''}" style="padding:6px; width:280px; margin-bottom:12px;"><br>
 
@@ -13505,7 +13555,11 @@ def detalhe_solicitacao(solicitacao_id):
             {campo_rubrica}
 
 {campo_encaminhamento}
+            </div>
 
+            {checkboxes_itens_analise}
+
+            <div class="bloco" style="max-width:750px;">
             <label>Ressalva / observação da análise (opcional):</label><br>
             <textarea name="ressalva" rows="3" style="width:100%; padding:6px; margin-bottom:12px;">{solicitacao.ressalva_analista or ''}</textarea><br>
 
@@ -13515,6 +13569,7 @@ def detalhe_solicitacao(solicitacao_id):
             <button type="submit" name="acao" value="enviar" class="btn btn-salvar" style="padding:10px 18px;">Enviar para Aprovador</button>
             <button type="submit" name="acao" value="devolver" class="btn" style="padding:10px 18px; background:#b35c00; color:white;">Devolver para ajuste</button>
             <button type="submit" name="acao" value="reprovar" class="btn btn-excluir" style="padding:10px 18px;">Reprovar</button>
+            </div>
         </form>
         """
 
@@ -13667,7 +13722,7 @@ def detalhe_solicitacao(solicitacao_id):
                 return;
             }
 
-            if (acao === 'aprovar') {
+            if (acao === 'aprovar' || acao === 'enviar') {
                 var itensSemMotivo = [];
                 document.querySelectorAll('.checkbox-reprovar-item:checked').forEach(function (caixa) {
                     var campoMotivo = document.querySelector('textarea[name="motivo_item_' + caixa.value + '"]');
