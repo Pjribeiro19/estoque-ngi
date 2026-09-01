@@ -813,18 +813,20 @@ if not st.session_state.autenticado:
             [data-testid="stVerticalBlockBorderWrapper"] {
                 box-shadow: 0 4px 18px rgba(0,0,0,0.08);
                 border-radius: 14px !important;
+                max-width: 380px;
+                margin: 0 auto;
             }
             </style>
         """, unsafe_allow_html=True)
 
-        col_l1, col_l2, col_l3 = st.columns([1, 1.2, 1])
+        col_l1, col_l2, col_l3 = st.columns([1.6, 1, 1.6])
         with col_l2:
             with st.container(border=True):
                 st.markdown("""
                     <div style="text-align: center;">
-                        <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="260">
-                        <h2 style="color: #0B552B !important; margin: 14px 0 2px 0; font-size: 22px; font-weight: 700;">Gestão de Almoxarifado<br>NGI Carajás</h2>
-                        <p style="color: #4CAF50 !important; font-size: 13px; font-weight: 500; margin: 0 0 22px 0;">Sistema de Gestão de Almoxarifado</p>
+                        <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="160">
+                        <h2 style="color: #0B552B !important; margin: 10px 0 2px 0; font-size: 18px; font-weight: 700;">Gestão de Almoxarifado<br>NGI Carajás</h2>
+                        <p style="color: #0B552B !important; font-size: 12px; font-weight: 500; margin: 0 0 16px 0;">Sistema de Gestão de Almoxarifado</p>
                     </div>
                 """, unsafe_allow_html=True)
 
