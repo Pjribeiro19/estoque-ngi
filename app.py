@@ -66,61 +66,8 @@ st.markdown("""
         [data-testid*="ollapse"] {display: none !important;}
     }
 
-    /* Mantém o sistema sempre no visual claro, mesmo que o navegador/SO
-       da pessoa esteja no modo escuro - garante legibilidade sempre. */
-    [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="stSidebarContent"], .stApp, body {
-        background-color: #ffffff !important;
-    }
-
     html, body, [data-testid="stWidgetLabel"] p, .stMarkdown p, label, span {
-        color: #1a1a1a !important;
-    }
-
-    /* Campos de texto, número, área de texto e seletores - sempre claros */
-    input, textarea,
-    [data-baseweb="input"], [data-baseweb="base-input"],
-    [data-baseweb="textarea"],
-    [data-baseweb="select"] > div,
-    [data-testid="stTextInput"] input,
-    [data-testid="stNumberInput"] input,
-    [data-testid="stTextArea"] textarea,
-    [data-testid="stDateInput"] input {
-        background-color: #f5f6f8 !important;
-        color: #1a1a1a !important;
-        border-color: #d0d0d0 !important;
-    }
-
-    /* Menus suspensos (dropdown) de selectbox e calendário */
-    [data-baseweb="popover"] [data-baseweb="menu"],
-    [data-baseweb="calendar"] {
-        background-color: #ffffff !important;
-        color: #1a1a1a !important;
-    }
-    [data-baseweb="popover"] [data-baseweb="menu"] li {
-        color: #1a1a1a !important;
-    }
-
-    /* Botões secundários (ex: "Esqueci a senha") - sempre no visual claro */
-    .stButton button:not([kind="primary"]) {
-        background-color: #ffffff !important;
-        color: #333333 !important;
-        border: 1px solid #d0d0d0 !important;
-    }
-
-    /* Botão primário (ex: "Entrar no Sistema") - texto sempre branco, legível no fundo verde */
-    .stButton button[kind="primary"],
-    .stButton button[kind="primary"] p {
-        color: #ffffff !important;
-    }
-
-    /* Ícone de mostrar/ocultar senha - visível no fundo claro */
-    [data-testid="stTextInput"] button,
-    [data-baseweb="input"] button {
-        background-color: transparent !important;
-    }
-    [data-testid="stTextInput"] button svg,
-    [data-baseweb="input"] button svg {
-        fill: #666666 !important;
+        color: var(--text-color) !important;
     }
     
     .nav-link span {
