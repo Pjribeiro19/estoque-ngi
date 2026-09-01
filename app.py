@@ -816,11 +816,15 @@ if not st.session_state.autenticado:
                 max-width: 380px;
                 margin: 0 auto;
             }
-            .login-titulo, .login-subtitulo {
+            .login-titulo, .login-subtitulo,
+            .stMarkdown .login-titulo, .stMarkdown p.login-subtitulo,
+            .stMarkdown h2.login-titulo {
                 color: #0B552B !important;
             }
             @media (prefers-color-scheme: dark) {
-                .login-titulo, .login-subtitulo {
+                .login-titulo, .login-subtitulo,
+                .stMarkdown .login-titulo, .stMarkdown p.login-subtitulo,
+                .stMarkdown h2.login-titulo {
                     color: #ffffff !important;
                 }
             }
