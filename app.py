@@ -75,6 +75,37 @@ st.markdown("""
     html, body, [data-testid="stWidgetLabel"] p, .stMarkdown p, label, span {
         color: #1a1a1a !important;
     }
+
+    /* Campos de texto, número, área de texto e seletores - sempre claros */
+    input, textarea,
+    [data-baseweb="input"], [data-baseweb="base-input"],
+    [data-baseweb="textarea"],
+    [data-baseweb="select"] > div,
+    [data-testid="stTextInput"] input,
+    [data-testid="stNumberInput"] input,
+    [data-testid="stTextArea"] textarea,
+    [data-testid="stDateInput"] input {
+        background-color: #f5f6f8 !important;
+        color: #1a1a1a !important;
+        border-color: #d0d0d0 !important;
+    }
+
+    /* Menus suspensos (dropdown) de selectbox e calendário */
+    [data-baseweb="popover"] [data-baseweb="menu"],
+    [data-baseweb="calendar"] {
+        background-color: #ffffff !important;
+        color: #1a1a1a !important;
+    }
+    [data-baseweb="popover"] [data-baseweb="menu"] li {
+        color: #1a1a1a !important;
+    }
+
+    /* Botões secundários (ex: "Esqueci a senha") - sempre no visual claro */
+    .stButton button:not([kind="primary"]) {
+        background-color: #ffffff !important;
+        color: #333333 !important;
+        border: 1px solid #d0d0d0 !important;
+    }
     
     .nav-link span {
         color: var(--text-color) !important;
@@ -816,89 +847,81 @@ if not st.session_state.autenticado:
         st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("""
             <style>
-            .login-card {
-                background-color: #ffffff;
-                border: 1px solid #e5e5e5;
-                border-radius: 14px;
-                padding: 36px 40px 28px 40px;
-                box-shadow: 0 4px 18px rgba(0,0,0,0.06);
-                max-width: 420px;
-                margin: 0 auto;
+            [data-testid="stVerticalBlockBorderWrapper"] {
+                box-shadow: 0 4px 18px rgba(0,0,0,0.08);
+                border-radius: 14px !important;
             }
             </style>
         """, unsafe_allow_html=True)
 
         col_l1, col_l2, col_l3 = st.columns([1, 1.2, 1])
         with col_l2:
-            st.markdown("""
-                <div class="login-card">
+            with st.container(border=True):
+                st.markdown("""
                     <div style="text-align: center;">
                         <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="260">
                         <h2 style="color: #0B552B; margin: 14px 0 2px 0; font-size: 22px; font-weight: 700;">Gestão de Almoxarifado<br>NGI Carajás</h2>
                         <p style="color: #4CAF50; font-size: 13px; font-weight: 500; margin: 0 0 22px 0;">Sistema de Gestão de Almoxarifado</p>
                     </div>
-            """, unsafe_allow_html=True)
+                """, unsafe_allow_html=True)
 
-            usuario_input = st.text_input("Usuário / E-mail")
-            senha_input = st.text_input("Senha", type="password")
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            if st.button("Entrar no Sistema", type="primary", use_container_width=True):
-                if usuario_input and senha_input:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT nome, senha, perfil, email FROM usuarios WHERE LOWER(email) = %s;", (usuario_input.strip().lower(),))
-                    resultado = cursor.fetchone()
-                    
-                    if resultado:
-                        nome_banco, senha_banco, perfil_banco, email_banco = resultado
-                        if str(senha_banco) == str(senha_input).strip():
-                            st.session_state.autenticado = True
-                            st.session_state.NOME_USUARIO_LOGADO = nome_banco
-                            st.session_state.PERFIL_USUARIO_LOGADO = perfil_banco
-                            st.session_state.EMAIL_USUARIO_LOGADO = email_banco
+                usuario_input = st.text_input("Usuário / E-mail")
+                senha_input = st.text_input("Senha", type="password")
+                st.markdown("<br>", unsafe_allow_html=True)
 
-                            # Cria uma sessão persistente (mantém o login após atualizar a página)
-                            novo_token = str(uuid.uuid4())
-                            expira_em_novo = datetime.now() + timedelta(minutes=SESSAO_DURACAO_MINUTOS)
-                            try:
-                                cursor.execute("""
-                                    INSERT INTO sessoes_login (token, email, nome, perfil, expira_em)
-                                    VALUES (%s, %s, %s, %s, %s);
-                                """, (novo_token, email_banco, nome_banco, perfil_banco, expira_em_novo))
-                                conn.commit()
-                                st.session_state.SESSION_TOKEN = novo_token
+                if st.button("Entrar no Sistema", type="primary", use_container_width=True):
+                    if usuario_input and senha_input:
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT nome, senha, perfil, email FROM usuarios WHERE LOWER(email) = %s;", (usuario_input.strip().lower(),))
+                        resultado = cursor.fetchone()
+
+                        if resultado:
+                            nome_banco, senha_banco, perfil_banco, email_banco = resultado
+                            if str(senha_banco) == str(senha_input).strip():
+                                st.session_state.autenticado = True
+                                st.session_state.NOME_USUARIO_LOGADO = nome_banco
+                                st.session_state.PERFIL_USUARIO_LOGADO = perfil_banco
+                                st.session_state.EMAIL_USUARIO_LOGADO = email_banco
+
+                                # Cria uma sessão persistente (mantém o login após atualizar a página)
+                                novo_token = str(uuid.uuid4())
+                                expira_em_novo = datetime.now() + timedelta(minutes=SESSAO_DURACAO_MINUTOS)
                                 try:
-                                    cookie_controller.set(
-                                        "session", novo_token,
-                                        max_age=SESSAO_DURACAO_MINUTOS * 60,
-                                        expires=expira_em_novo,
-                                        same_site="lax"
-                                    )
+                                    cursor.execute("""
+                                        INSERT INTO sessoes_login (token, email, nome, perfil, expira_em)
+                                        VALUES (%s, %s, %s, %s, %s);
+                                    """, (novo_token, email_banco, nome_banco, perfil_banco, expira_em_novo))
+                                    conn.commit()
+                                    st.session_state.SESSION_TOKEN = novo_token
+                                    try:
+                                        cookie_controller.set(
+                                            "session", novo_token,
+                                            max_age=SESSAO_DURACAO_MINUTOS * 60,
+                                            expires=expira_em_novo,
+                                            same_site="lax"
+                                        )
+                                    except Exception:
+                                        cookie_controller.set("session", novo_token)
+                                    # Dá tempo do navegador de fato gravar o cookie
+                                    # antes da tela recarregar (evita corrida entre
+                                    # o componente de cookie e o rerun).
+                                    time.sleep(0.4)
                                 except Exception:
-                                    cookie_controller.set("session", novo_token)
-                                # Dá tempo do navegador de fato gravar o cookie
-                                # antes da tela recarregar (evita corrida entre
-                                # o componente de cookie e o rerun).
-                                time.sleep(0.4)
-                            except Exception:
-                                conn.rollback()
+                                    conn.rollback()
 
-                            st.rerun()
+                                st.rerun()
+                            else:
+                                st.error("❌ Senha incorreta!")
                         else:
-                            st.error("❌ Senha incorreta!")
+                            st.error("❌ Usuário ou E-mail não cadastrado!")
                     else:
-                        st.error("❌ Usuário ou E-mail não cadastrado!")
-                else:
-                    st.error("Por favor, preencha todos os campos!")
-                    
-            if st.button("Esqueci a senha", use_container_width=True):
-                st.session_state.sub_tela_login = "esqueci"
-                st.rerun()
+                        st.error("Por favor, preencha todos os campos!")
 
-            st.markdown("""
-                    <p style="text-align: center; color: #999999; font-size: 11.5px; margin-top: 16px;">Acesso restrito a usuários cadastrados</p>
-                </div>
-            """, unsafe_allow_html=True)
+                if st.button("Esqueci a senha", use_container_width=True):
+                    st.session_state.sub_tela_login = "esqueci"
+                    st.rerun()
+
+                st.markdown("<p style='text-align: center; color: #999999; font-size: 11.5px; margin-top: 16px;'>Acesso restrito a usuários cadastrados</p>", unsafe_allow_html=True)
 
     elif st.session_state.sub_tela_login == "esqueci":
         col_r1, col_r2, col_r3 = st.columns([1, 1.2, 1])
