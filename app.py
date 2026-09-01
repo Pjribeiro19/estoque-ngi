@@ -68,7 +68,7 @@ st.markdown("""
 
     /* Mantém o sistema sempre no visual claro, mesmo que o navegador/SO
        da pessoa esteja no modo escuro - garante legibilidade sempre. */
-    [data-testid="stAppViewContainer"], [data-testid="stHeader"], .stApp, body {
+    [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stSidebar"], [data-testid="stSidebarContent"], .stApp, body {
         background-color: #ffffff !important;
     }
 
@@ -105,6 +105,22 @@ st.markdown("""
         background-color: #ffffff !important;
         color: #333333 !important;
         border: 1px solid #d0d0d0 !important;
+    }
+
+    /* Botão primário (ex: "Entrar no Sistema") - texto sempre branco, legível no fundo verde */
+    .stButton button[kind="primary"],
+    .stButton button[kind="primary"] p {
+        color: #ffffff !important;
+    }
+
+    /* Ícone de mostrar/ocultar senha - visível no fundo claro */
+    [data-testid="stTextInput"] button,
+    [data-baseweb="input"] button {
+        background-color: transparent !important;
+    }
+    [data-testid="stTextInput"] button svg,
+    [data-baseweb="input"] button svg {
+        fill: #666666 !important;
     }
     
     .nav-link span {
@@ -860,8 +876,8 @@ if not st.session_state.autenticado:
                 st.markdown("""
                     <div style="text-align: center;">
                         <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="260">
-                        <h2 style="color: #0B552B; margin: 14px 0 2px 0; font-size: 22px; font-weight: 700;">Gestão de Almoxarifado<br>NGI Carajás</h2>
-                        <p style="color: #4CAF50; font-size: 13px; font-weight: 500; margin: 0 0 22px 0;">Sistema de Gestão de Almoxarifado</p>
+                        <h2 style="color: #0B552B !important; margin: 14px 0 2px 0; font-size: 22px; font-weight: 700;">Gestão de Almoxarifado<br>NGI Carajás</h2>
+                        <p style="color: #4CAF50 !important; font-size: 13px; font-weight: 500; margin: 0 0 22px 0;">Sistema de Gestão de Almoxarifado</p>
                     </div>
                 """, unsafe_allow_html=True)
 
