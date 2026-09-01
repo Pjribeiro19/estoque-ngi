@@ -65,9 +65,15 @@ st.markdown("""
     @media (min-width: 641px) {
         [data-testid*="ollapse"] {display: none !important;}
     }
-    
+
+    /* Mantém o sistema sempre no visual claro, mesmo que o navegador/SO
+       da pessoa esteja no modo escuro - garante legibilidade sempre. */
+    [data-testid="stAppViewContainer"], [data-testid="stHeader"], .stApp, body {
+        background-color: #ffffff !important;
+    }
+
     html, body, [data-testid="stWidgetLabel"] p, .stMarkdown p, label, span {
-        color: var(--text-color) !important;
+        color: #1a1a1a !important;
     }
     
     .nav-link span {
@@ -807,17 +813,32 @@ if token_redefinicao_url and not st.session_state.autenticado:
 # =============================================================================
 if not st.session_state.autenticado:
     if st.session_state.sub_tela_login == "login":
-        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("""
+            <style>
+            .login-card {
+                background-color: #ffffff;
+                border: 1px solid #e5e5e5;
+                border-radius: 14px;
+                padding: 36px 40px 28px 40px;
+                box-shadow: 0 4px 18px rgba(0,0,0,0.06);
+                max-width: 420px;
+                margin: 0 auto;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+
         col_l1, col_l2, col_l3 = st.columns([1, 1.2, 1])
         with col_l2:
             st.markdown("""
-                <div class="img-container">
-                    <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="320">
-                </div>
+                <div class="login-card">
+                    <div style="text-align: center;">
+                        <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="260">
+                        <h2 style="color: #0B552B; margin: 14px 0 2px 0; font-size: 22px; font-weight: 700;">Gestão de Almoxarifado<br>NGI Carajás</h2>
+                        <p style="color: #4CAF50; font-size: 13px; font-weight: 500; margin: 0 0 22px 0;">Sistema de Gestão de Almoxarifado</p>
+                    </div>
             """, unsafe_allow_html=True)
-            
-            st.markdown("<h2 style='text-align: center; color: #0B552B; margin-top: 10px; margin-bottom: 25px; font-family: sans-serif;'>Gestão de Almoxarifado<br>NGI Carajás</h2>", unsafe_allow_html=True)
-            
+
             usuario_input = st.text_input("Usuário / E-mail")
             senha_input = st.text_input("Senha", type="password")
             st.markdown("<br>", unsafe_allow_html=True)
@@ -873,6 +894,11 @@ if not st.session_state.autenticado:
             if st.button("Esqueci a senha", use_container_width=True):
                 st.session_state.sub_tela_login = "esqueci"
                 st.rerun()
+
+            st.markdown("""
+                    <p style="text-align: center; color: #999999; font-size: 11.5px; margin-top: 16px;">Acesso restrito a usuários cadastrados</p>
+                </div>
+            """, unsafe_allow_html=True)
 
     elif st.session_state.sub_tela_login == "esqueci":
         col_r1, col_r2, col_r3 = st.columns([1, 1.2, 1])
