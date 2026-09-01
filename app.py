@@ -816,6 +816,14 @@ if not st.session_state.autenticado:
                 max-width: 380px;
                 margin: 0 auto;
             }
+            .login-titulo, .login-subtitulo {
+                color: #0B552B !important;
+            }
+            @media (prefers-color-scheme: dark) {
+                .login-titulo, .login-subtitulo {
+                    color: #ffffff !important;
+                }
+            }
             </style>
         """, unsafe_allow_html=True)
 
@@ -825,8 +833,8 @@ if not st.session_state.autenticado:
                 st.markdown("""
                     <div style="text-align: center;">
                         <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="160">
-                        <h2 style="color: #0B552B !important; margin: 10px 0 2px 0; font-size: 18px; font-weight: 700;">Gestão de Almoxarifado<br>NGI Carajás</h2>
-                        <p style="color: #0B552B !important; font-size: 12px; font-weight: 500; margin: 0 0 16px 0;">Sistema de Gestão de Almoxarifado</p>
+                        <h2 class="login-titulo" style="margin: 10px 0 2px 0; font-size: 18px; font-weight: 700;">Gestão de Almoxarifado<br>NGI Carajás</h2>
+                        <p class="login-subtitulo" style="font-size: 12px; font-weight: 500; margin: 0 0 16px 0;">Sistema de Gestão de Almoxarifado</p>
                     </div>
                 """, unsafe_allow_html=True)
 
