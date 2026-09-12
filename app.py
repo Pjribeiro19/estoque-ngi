@@ -118,18 +118,20 @@ st.markdown("""
     /* Cartões de indicadores (Painel Geral e Relatórios) - tamanho reduz
        automaticamente em telas de celular para não ficarem gigantes */
     .painel-kpi-card, .rel-kpi-card {
-        padding: 18px;
+        padding: 24px 26px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
     }
     .painel-kpi-valor, .rel-kpi-valor {
-        font-size: 34px !important;
-        margin: 8px 0 0 0 !important;
+        font-size: 36px !important;
+        margin: 10px 0 0 0 !important;
     }
     .painel-kpi-label {
         font-size: 13px;
+        letter-spacing: 0.4px;
     }
     @media (max-width: 640px) {
         .painel-kpi-card, .rel-kpi-card {
-            padding: 12px !important;
+            padding: 14px !important;
             min-height: unset !important;
         }
         .painel-kpi-valor, .rel-kpi-valor {
@@ -213,6 +215,20 @@ def converter_para_horario_br(dt_utc):
     if dt_utc is None:
         return None
     return dt_utc.replace(tzinfo=ZoneInfo("UTC")).astimezone(ZoneInfo("America/Sao_Paulo"))
+
+def renderizar_banner(titulo, subtitulo, cor="#4CAF50"):
+    """Cabeçalho padrão (banner colorido) usado no topo de cada tela do
+    sistema, para manter o visual consistente entre todos os módulos."""
+    st.markdown(f"""
+        <div style="background-color: {cor}; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
+            <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+                {titulo}
+            </h1>
+            <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                {subtitulo}
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
 
 # Controlador de cookies do navegador (mantém o login sem sujar a URL)
 cookie_controller = CookieController(key="cookie_controller_almoxarifado")
@@ -801,7 +817,7 @@ if token_redefinicao_url and not st.session_state.autenticado:
                 <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="280">
             </div>
         """, unsafe_allow_html=True)
-        st.markdown("### 🔒 Criar Nova Senha")
+        st.markdown('<h3 style="display: flex; align-items: center; gap: 8px;"><span class="material-symbols-rounded" style="font-size: 22px; color: #4CAF50;">lock</span>Criar Nova Senha</h3>', unsafe_allow_html=True)
 
         try:
             cursor_reset = conn.cursor()
@@ -952,9 +968,9 @@ if not st.session_state.autenticado:
 
                                 st.rerun()
                             else:
-                                st.error("❌ Senha incorreta!")
+                                st.error("Senha incorreta!")
                         else:
-                            st.error("❌ Usuário ou E-mail não cadastrado!")
+                            st.error("Usuário ou E-mail não cadastrado!")
                     else:
                         st.error("Por favor, preencha todos os campos!")
 
@@ -968,7 +984,7 @@ if not st.session_state.autenticado:
         col_r1, col_r2, col_r3 = st.columns([1, 1.2, 1])
         with col_r2:
             st.write("<br><br>", unsafe_allow_html=True)
-            st.markdown("### 🔑 Recuperar Acesso")
+            st.markdown('<h3 style="display: flex; align-items: center; gap: 8px;"><span class="material-symbols-rounded" style="font-size: 22px; color: #4CAF50;">key</span>Recuperar Acesso</h3>', unsafe_allow_html=True)
             email_recuperar = st.text_input("E-mail corporativo", placeholder="exemplo@icmbio.gov.br")
 
             if st.button("Enviar Instruções", type="primary", use_container_width=True):
@@ -1141,7 +1157,7 @@ else:
     # --- TELA: PAINEL GERAL ---
     elif escolha == "Painel Geral":
         st.markdown("""
-            <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+            <div style="background-color: #4CAF50; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Painel Geral de Controle
                 </h1>
@@ -1215,7 +1231,7 @@ else:
     # =========================================================================
     elif escolha == "Empréstimo de Material" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum":
         st.markdown("""
-            <div style="background-color: #2E7D32; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+            <div style="background-color: #2E7D32; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Gestão de Empréstimo de Material
                 </h1>
@@ -1564,7 +1580,7 @@ else:
                     obs_sol_admin = st.text_area("Observações (opcional):", key="obs_admin")
 
                     st.markdown("<hr style='margin: 20px 0 10px 0; opacity: 0.2;'>", unsafe_allow_html=True)
-                    with st.expander("📄 Termo de Responsabilidade - clique para ler"):
+                    with st.expander("Termo de Responsabilidade - clique para ler", icon=":material/description:"):
                         st.markdown("""
 ### TERMO DE RESPONSABILIDADE PELO EMPRÉSTIMO DE MATERIAIS
 
@@ -1667,7 +1683,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # =========================================================================
     elif escolha == "Materiais Disponíveis":
         st.markdown("""
-            <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+            <div style="background-color: #4CAF50; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Materiais Disponíveis no Almoxarifado
                 </h1>
@@ -1780,7 +1796,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         (escolha == "Solicitar Empréstimo" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum")
     ):
         st.markdown("""
-            <div style="background-color: #2E7D32; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+            <div style="background-color: #2E7D32; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Itens Disponíveis para Empréstimo
                 </h1>
@@ -1858,7 +1874,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 obs_sol_emp = st.text_area("Observações (opcional):", key="obs_carrinho_emp")
 
                 st.markdown("<hr style='margin: 20px 0 10px 0; opacity: 0.2;'>", unsafe_allow_html=True)
-                with st.expander("📄 Termo de Responsabilidade - clique para ler"):
+                with st.expander("Termo de Responsabilidade - clique para ler", icon=":material/description:"):
                     st.markdown("""
 ### TERMO DE RESPONSABILIDADE PELO EMPRÉSTIMO DE MATERIAIS
 
@@ -1962,7 +1978,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL USUÁRIO): MINHAS SOLICITAÇÕES
     # =========================================================================
     elif escolha == "Minhas Solicitações":
-        st.title("Minhas Solicitações")
+        renderizar_banner("Minhas Solicitações", "Acompanhe o status das suas solicitações de material e empréstimo")
 
         df_minhas_sol = pd.read_sql_query("""
             SELECT 
@@ -2031,7 +2047,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # =========================================================================
     elif escolha == label_solicitacoes:
         st.markdown("""
-            <div style="background-color: #4CAF50; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+            <div style="background-color: #4CAF50; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Solicitações de Usuários
                 </h1>
@@ -2072,7 +2088,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                         dev_fmt = sol["data_prevista"].strftime('%d/%m/%Y') if sol["data_prevista"] is not None else "-"
                         linha_datas = f"Retirada: {ret_fmt} | Devolução: {dev_fmt}<br>"
                         if sol["termo_aceito"] and sol["data_aceite_termo"] is not None:
-                            linha_termo = f"✅ Termo de Responsabilidade aceito em {converter_para_horario_br(sol['data_aceite_termo']).strftime('%d/%m/%Y %H:%M')}<br>"
+                            linha_termo = f"<span class=\"material-symbols-rounded\" style=\"font-size: 15px; color: #4CAF50; vertical-align: -3px;\">check_circle</span> Termo de Responsabilidade aceito em {converter_para_horario_br(sol['data_aceite_termo']).strftime('%d/%m/%Y %H:%M')}<br>"
                     linha_atividade = f"Atividade Associada: {sol['atividade_associada']}<br>" if sol["atividade_associada"] else ""
                     linha_obs = f"Observações: {sol['observacao']}" if sol["observacao"] else ""
 
@@ -2097,7 +2113,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
                     col_ap1, col_ap2, col_ap3 = st.columns([1, 1, 4])
                     with col_ap1:
-                        if st.button("✅ Aprovar", key=f"aprovar_{sol['id']}", type="primary"):
+                        if st.button("Aprovar", key=f"aprovar_{sol['id']}", type="primary", icon=":material/check:"):
                             try:
                                 if sol["tipo"] == "MATERIAL":
                                     cursor.execute("SELECT quantidade FROM produtos WHERE codigo = %s;", (sol["referencia_codigo"],))
@@ -2173,7 +2189,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                                 st.error(f"Erro ao aprovar solicitação: {ex}")
 
                     with col_ap2:
-                        if st.button("❌ Rejeitar", key=f"rejeitar_{sol['id']}"):
+                        if st.button("Rejeitar", key=f"rejeitar_{sol['id']}", icon=":material/close:"):
                             if not just_rejeicao.strip():
                                 st.error("Para rejeitar, é obrigatório informar a Justificativa da Reprovação!")
                             else:
@@ -2237,7 +2253,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
     # --- TELA: CADASTRAR PRODUTO ---
     elif escolha == "Cadastrar Produto":
-        st.title("Gerenciamento de Produtos")
+        renderizar_banner("Gerenciamento de Produtos", "Cadastre, edite ou exclua os produtos do estoque")
         aba_selecionada = option_menu(
             menu_title=None,
             options=["Novo Material", "Editar / Excluir Produtos"],
@@ -2308,7 +2324,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
     # --- TELA: CADASTRAR CATEGORIA ---
     elif escolha == "Cadastrar Categoria":
-        st.title("Gerenciamento de Categorias")
+        renderizar_banner("Gerenciamento de Categorias", "Organize as categorias usadas para classificar os produtos")
         aba_selecionada = option_menu(
             menu_title=None,
             options=["Nova Categoria", "Editar / Excluir Categorias"],
@@ -2359,7 +2375,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
     # --- TELA: CADASTRAR USUÁRIO ---
     elif escolha == "Cadastrar Usuário":
-        st.title("Cadastrar Usuário")
+        renderizar_banner("Cadastrar Usuário", "Gerencie os usuários com acesso ao sistema")
         aba_selecionada = option_menu(
             menu_title=None,
             options=["Novo Usuário", "Editar / Excluir Usuários"],
@@ -2407,14 +2423,14 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                                     e.strip().lower(),
                                     "Seu acesso ao Sistema de Gestão de Almoxarifado NGI Carajás",
                                     f"""
-                                    <p>Olá, {n.strip()}! 👋</p>
+                                    <p>Olá, {n.strip()}!</p>
                                     <p>Seja bem-vindo(a)!</p>
                                     <p>Seu acesso ao sistema foi criado com sucesso. A partir de agora, você poderá:</p>
                                     <p>{lista_funcionalidades}</p>
                                     <p><b>Login:</b> {e.strip().lower()}<br><b>Senha:</b> {senha_final}</p>
                                     <p>Acesse o sistema pelo link: <a href="{URL_BASE_SISTEMA}">{URL_BASE_SISTEMA}</a></p>
                                     <p>Recomendamos que altere sua senha no primeiro acesso.</p>
-                                    <p>Em caso de dúvidas, estamos à disposição. Seja bem-vindo(a)! 😊</p>
+                                    <p>Em caso de dúvidas, estamos à disposição. Seja bem-vindo(a)!</p>
                                     """
                                 )
 
@@ -2464,7 +2480,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
     # --- TELA: CADASTRAR COORDENAÇÃO ---
     elif escolha == "Cadastrar Coordenação":
-        st.title("Cadastrar Coordenação")
+        renderizar_banner("Cadastrar Coordenação", "Gerencie as coordenações utilizadas nas solicitações e movimentações")
         aba_selecionada = option_menu(
             menu_title=None,
             options=["Nova Coordenação", "Editar / Excluir Coordenação"],
@@ -2522,7 +2538,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
   
     # --- TELA: MOVIMENTAÇÃO DE ESTOQUE (3 ABAS CONFORME SOLICITADO) ---
     elif escolha == "Movimentação de Estoque":
-        st.title("Movimentação de Estoque")
+        renderizar_banner("Movimentação de Estoque", "Registre entradas e saídas, e consulte o histórico de movimentações")
         
         aba_movimentacao = option_menu(
             menu_title=None,
@@ -2629,7 +2645,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         COR_TEXTO_CLARO = "#e8f0d8"
 
         st.markdown(f"""
-            <div style="background-color: {COR_CARD_FUNDO}; padding: 20px; border-radius: 10px; margin-bottom: 25px;">
+            <div style="background-color: {COR_CARD_FUNDO}; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
                 <h1 class="kpi-valor-limao" style="margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 700;">
                     Relatórios e Dashboard
                 </h1>
@@ -2879,7 +2895,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # NOVO MÓDULO: CONTROLE DE EQUIPAMENTOS EMPRESTADOS (PERFIL ADMINISTRADOR)
     # =========================================================================
     elif escolha == "Controle de Equipamentos Emprestados":
-        st.title("Controle de Equipamentos Emprestados")
+        renderizar_banner("Controle de Equipamentos Emprestados", "Registre e acompanhe notebooks, desktops e acessórios emprestados por tempo indeterminado")
         aba_equipamento = option_menu(
             menu_title=None,
             options=["Novo Registro", "Consultar / Editar / Excluir"],
