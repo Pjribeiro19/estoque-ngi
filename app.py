@@ -356,6 +356,10 @@ def inicializar_banco_automatico():
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS justificativa_rejeicao TEXT;")
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS lote_id TEXT;")
 
+    # Colunas para o lembrete automático de devolução em atraso
+    cursor.execute("ALTER TABLE emprestimo_registros ADD COLUMN IF NOT EXISTS email_pessoa TEXT;")
+    cursor.execute("ALTER TABLE emprestimo_registros ADD COLUMN IF NOT EXISTS ultimo_lembrete_enviado DATE;")
+
     # =========================================================================
     # NOVA TABELA: CONTROLE DE EQUIPAMENTOS EMPRESTADOS (notebooks, desktops,
     # acessórios atribuídos por tempo indeterminado - módulo admin)
@@ -559,6 +563,66 @@ def enviar_email_notificacao(destinatario, assunto, corpo_html):
     except Exception as e:
         print(f"[EMAIL] ERRO ao enviar para {destinatario}: {repr(e)}")
         return False, str(e)
+
+
+# =============================================================================
+# LEMBRETE AUTOMÁTICO DE DEVOLUÇÃO EM ATRASO (roda no máximo 1x por dia)
+# =============================================================================
+def verificar_e_notificar_emprestimos_atrasados(conexao):
+    try:
+        cursor_atraso = conexao.cursor()
+
+        # Trava de "1x por dia": guarda a última data em que essa verificação
+        # rodou na tabela config_sistema, para não reenviar e-mails toda vez
+        # que alguém abrir o sistema no mesmo dia.
+        cursor_atraso.execute("SELECT valor FROM config_sistema WHERE chave = 'ultima_verificacao_atrasados';")
+        resultado_config = cursor_atraso.fetchone()
+        hoje_str = date.today().isoformat()
+
+        if resultado_config and resultado_config[0] == hoje_str:
+            return  # já rodou hoje
+
+        cursor_atraso.execute("""
+            SELECT er.id, er.item_nome, er.quantidade, er.pessoa,
+                   COALESCE(er.email_pessoa, u.email) AS email_encontrado,
+                   er.data_prevista
+            FROM emprestimo_registros er
+            LEFT JOIN usuarios u ON LOWER(u.nome) = LOWER(er.pessoa)
+            WHERE er.status = 'EMPRESTADO'
+              AND er.data_prevista < CURRENT_DATE
+              AND (er.ultimo_lembrete_enviado IS NULL OR er.ultimo_lembrete_enviado < CURRENT_DATE)
+              AND COALESCE(er.email_pessoa, u.email) IS NOT NULL;
+        """)
+        atrasados = cursor_atraso.fetchall()
+
+        for reg_id, item_nome, quantidade, pessoa, email_pessoa, data_prevista in atrasados:
+            dias_atraso = (date.today() - data_prevista).days
+            sucesso, _ = enviar_email_notificacao(
+                email_pessoa,
+                "Lembrete: devolução de material em atraso",
+                f"""
+                <p>Olá, {pessoa},</p>
+                <p>Este é um lembrete automático de que o item abaixo, emprestado pelo Almoxarifado, está com a devolução em atraso:</p>
+                <p><b>Item:</b> {item_nome}<br><b>Quantidade:</b> {quantidade}<br><b>Data prevista de devolução:</b> {data_prevista.strftime('%d/%m/%Y')} ({dias_atraso} dia(s) de atraso)</p>
+                <p>Pedimos que providencie a devolução o quanto antes, ou entre em contato com a Coordenação de Operação e Suporte caso precise de mais prazo.</p>
+                """
+            )
+            if sucesso:
+                cursor_atraso.execute(
+                    "UPDATE emprestimo_registros SET ultimo_lembrete_enviado = CURRENT_DATE WHERE id = %s;",
+                    (reg_id,)
+                )
+
+        cursor_atraso.execute("""
+            INSERT INTO config_sistema (chave, valor) VALUES ('ultima_verificacao_atrasados', %s)
+            ON CONFLICT (chave) DO UPDATE SET valor = %s;
+        """, (hoje_str, hoje_str))
+        conexao.commit()
+    except Exception as ex_atraso:
+        conexao.rollback()
+        print(f"[LEMBRETE ATRASO] Erro ao verificar empréstimos atrasados: {ex_atraso}")
+
+verificar_e_notificar_emprestimos_atrasados(conn)
 
 
 # =============================================================================
@@ -1318,30 +1382,35 @@ else:
             else:
                 opcoes_itens = {f"{item[1]} (Disponível: {item[2]})": (item[0], item[1], item[2]) for item in itens_disponiveis}
                 
+                cursor.execute("SELECT nome, email FROM usuarios ORDER BY nome ASC;")
+                usuarios_cadastrados = cursor.fetchall()
+                opcoes_usuarios = {f"{u[0]} ({u[1]})": (u[0], u[1]) for u in usuarios_cadastrados}
+
                 with st.form("form_registro_saida_emp", clear_on_submit=True):
                     item_selecionado_label = st.selectbox("Selecione o Item para Empréstimo*", list(opcoes_itens.keys()))
                     item_id, item_nome, max_qtd = opcoes_itens[item_selecionado_label]
 
                     col_s1, col_s2 = st.columns(2)
                     qtd_saida = col_s1.number_input("Quantidade*", min_value=1, max_value=max_qtd, value=1, step=1)
-                    nome_pessoa = col_s2.text_input("Nome da Pessoa (Solicitante)*")
+                    pessoa_selecionada_label = col_s2.selectbox("Pessoa (Solicitante, já cadastrado no sistema)*", list(opcoes_usuarios.keys()) if opcoes_usuarios else ["Nenhum usuário cadastrado"])
 
                     lista_siglas_coord = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
                     coord_pessoa = col_s1.selectbox("Coordenação*", lista_siglas_coord)
                     
-                    data_retirada = col_s2.date_input("Data de Retirada*", value=date.today(), format="DD/MM/YYYY")
-                    data_prevista = col_s1.date_input("Data Prevista para Devolução*", value=date.today(), format="DD/MM/YYYY")
+                    data_retirada = col_s1.date_input("Data de Retirada*", value=date.today(), format="DD/MM/YYYY")
+                    data_prevista = col_s2.date_input("Data Prevista para Devolução*", value=date.today(), format="DD/MM/YYYY")
 
                     if st.form_submit_button("Confirmar Empréstimo", type="primary"):
-                        if nome_pessoa.strip():
+                        if opcoes_usuarios and pessoa_selecionada_label in opcoes_usuarios:
+                            nome_pessoa, email_pessoa_saida = opcoes_usuarios[pessoa_selecionada_label]
                             if data_prevista < data_retirada:
                                 st.error("A data prevista de devolução não pode ser anterior à data de retirada!")
                             else:
                                 cursor.execute("""
                                     INSERT INTO emprestimo_registros 
-                                    (item_id, item_nome, quantidade, pessoa, coordenacao, data_retirada, data_prevista, status)
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'EMPRESTADO');
-                                """, (item_id, item_nome, qtd_saida, nome_pessoa.strip(), coord_pessoa, data_retirada, data_prevista))
+                                    (item_id, item_nome, quantidade, pessoa, coordenacao, data_retirada, data_prevista, status, email_pessoa)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'EMPRESTADO', %s);
+                                """, (item_id, item_nome, qtd_saida, nome_pessoa, coord_pessoa, data_retirada, data_prevista, email_pessoa_saida))
                                 
                                 cursor.execute("""
                                     UPDATE emprestimo_itens 
@@ -1353,7 +1422,7 @@ else:
                                 st.success(f"Empréstimo registrado com sucesso para {nome_pessoa}!")
                                 st.rerun()
                         else:
-                            st.error("Por favor, preencha o Nome da Pessoa!")
+                            st.error("Nenhum usuário cadastrado disponível para seleção. Cadastre a pessoa em \"Cadastrar Usuário\" primeiro.")
 
         # ---------------------------------------------------------------------
         # SUB-ABA 4: REGISTRAR DEVOLUÇÃO
@@ -2055,9 +2124,9 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                                     else:
                                         cursor.execute("""
                                             INSERT INTO emprestimo_registros 
-                                            (item_id, item_nome, quantidade, pessoa, coordenacao, data_retirada, data_prevista, status)
-                                            VALUES (%s, %s, %s, %s, %s, %s, %s, 'EMPRESTADO');
-                                        """, (int(sol["referencia_codigo"]), sol["item_nome"], sol["quantidade"], sol["solicitante_nome"], sol["coordenacao"], sol["data_retirada"] if sol["data_retirada"] is not None else date.today(), sol["data_prevista"]))
+                                            (item_id, item_nome, quantidade, pessoa, coordenacao, data_retirada, data_prevista, status, email_pessoa)
+                                            VALUES (%s, %s, %s, %s, %s, %s, %s, 'EMPRESTADO', %s);
+                                        """, (int(sol["referencia_codigo"]), sol["item_nome"], sol["quantidade"], sol["solicitante_nome"], sol["coordenacao"], sol["data_retirada"] if sol["data_retirada"] is not None else date.today(), sol["data_prevista"], sol["solicitante_email"]))
                                         cursor.execute("""
                                             UPDATE emprestimo_itens SET quantidade_disponivel = quantidade_disponivel - %s WHERE id = %s;
                                         """, (sol["quantidade"], int(sol["referencia_codigo"])))
