@@ -1543,7 +1543,12 @@ else:
                     st.markdown("**Itens selecionados:**")
                     for i_carr_a, item_carr_a in enumerate(st.session_state.carrinho_emprestimo):
                         col_ca1, col_ca2 = st.columns([5, 1])
-                        col_ca1.markdown(f"{item_carr_a['item']} (Qtd: {item_carr_a['quantidade']})")
+                        col_ca1.markdown(f"""
+                            <div style="background-color: rgba(46, 125, 50, 0.08); border-left: 4px solid #2E7D32; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
+                                <span style="font-size: 15px; font-weight: 600; color: #1a1a1a;">{item_carr_a['item']}</span>
+                                <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_a['quantidade']}</span>
+                            </div>
+                        """, unsafe_allow_html=True)
                         if col_ca2.button("Remover", key=f"remover_carrinho_admin_{i_carr_a}"):
                             st.session_state.carrinho_emprestimo.pop(i_carr_a)
                             st.rerun()
@@ -1732,7 +1737,13 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 st.markdown("**Itens no carrinho:**")
                 for i_carr, item_carr in enumerate(st.session_state.carrinho_material):
                     col_cm1, col_cm2 = st.columns([5, 1])
-                    col_cm1.markdown(f"{item_carr['codigo']} - {item_carr['item']} (Qtd: {item_carr['quantidade']})")
+                    col_cm1.markdown(f"""
+                        <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 4px solid #4CAF50; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
+                            <span style="font-size: 12px; font-weight: 700; color: #4CAF50; text-transform: uppercase; letter-spacing: 0.3px;">{item_carr['codigo']}</span><br>
+                            <span style="font-size: 15px; font-weight: 600; color: #1a1a1a;">{item_carr['item']}</span>
+                            <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr['quantidade']}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
                     if col_cm2.button("Remover", key=f"remover_carrinho_material_{i_carr}"):
                         st.session_state.carrinho_material.pop(i_carr)
                         st.rerun()
@@ -1826,7 +1837,12 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 st.markdown("**Itens no carrinho:**")
                 for i_carr_e, item_carr_e in enumerate(st.session_state.carrinho_emprestimo):
                     col_ce1, col_ce2 = st.columns([5, 1])
-                    col_ce1.markdown(f"{item_carr_e['item']} (Qtd: {item_carr_e['quantidade']})")
+                    col_ce1.markdown(f"""
+                        <div style="background-color: rgba(46, 125, 50, 0.08); border-left: 4px solid #2E7D32; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
+                            <span style="font-size: 15px; font-weight: 600; color: #1a1a1a;">{item_carr_e['item']}</span>
+                            <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_e['quantidade']}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
                     if col_ce2.button("Remover", key=f"remover_carrinho_emp_{i_carr_e}"):
                         st.session_state.carrinho_emprestimo.pop(i_carr_e)
                         st.rerun()
