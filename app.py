@@ -78,12 +78,14 @@ st.markdown("""
         color: white !important;
     }
     
+    button[kind="primary"],
     div.stButton > button:first-child[kind="primary"],
     div.stFormSubmitButton > button:first-child[kind="primary"] {
         background-color: #4CAF50 !important;
         border-color: #4CAF50 !important;
         color: white !important;
     }
+    button[kind="primary"]:hover,
     div.stButton > button:first-child[kind="primary"]:hover,
     div.stFormSubmitButton > button:first-child[kind="primary"]:hover {
         background-color: #43a047 !important;
