@@ -79,15 +79,29 @@ st.markdown("""
     }
     
     button[kind="primary"],
+    button[kind="primaryFormSubmit"],
     div.stButton > button:first-child[kind="primary"],
-    div.stFormSubmitButton > button:first-child[kind="primary"] {
+    div.stFormSubmitButton > button:first-child[kind="primary"],
+    div.stFormSubmitButton > button:first-child[kind="primaryFormSubmit"],
+    [data-testid="baseButton-primary"],
+    [data-testid="stBaseButton-primary"],
+    [data-testid="baseButton-primaryFormSubmit"],
+    [data-testid="stBaseButton-primaryFormSubmit"],
+    [data-testid="stFormSubmitButton"] button {
         background-color: #4CAF50 !important;
         border-color: #4CAF50 !important;
         color: white !important;
     }
     button[kind="primary"]:hover,
+    button[kind="primaryFormSubmit"]:hover,
     div.stButton > button:first-child[kind="primary"]:hover,
-    div.stFormSubmitButton > button:first-child[kind="primary"]:hover {
+    div.stFormSubmitButton > button:first-child[kind="primary"]:hover,
+    div.stFormSubmitButton > button:first-child[kind="primaryFormSubmit"]:hover,
+    [data-testid="baseButton-primary"]:hover,
+    [data-testid="stBaseButton-primary"]:hover,
+    [data-testid="baseButton-primaryFormSubmit"]:hover,
+    [data-testid="stBaseButton-primaryFormSubmit"]:hover,
+    [data-testid="stFormSubmitButton"] button:hover {
         background-color: #43a047 !important;
         border-color: #43a047 !important;
     }
