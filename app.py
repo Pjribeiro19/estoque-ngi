@@ -923,11 +923,14 @@ if not st.session_state.autenticado:
                     </div>
                 """, unsafe_allow_html=True)
 
-                usuario_input = st.text_input("Usuário / E-mail")
-                senha_input = st.text_input("Senha", type="password")
-                st.markdown("<br>", unsafe_allow_html=True)
+                with st.form("form_login", clear_on_submit=False):
+                    usuario_input = st.text_input("Usuário / E-mail")
+                    senha_input = st.text_input("Senha", type="password")
+                    st.markdown("<br>", unsafe_allow_html=True)
 
-                if st.button("Entrar no Sistema", type="primary", use_container_width=True):
+                    submeteu_login = st.form_submit_button("Entrar no Sistema", type="primary", use_container_width=True)
+
+                if submeteu_login:
                     if usuario_input and senha_input:
                         cursor = conn.cursor()
                         cursor.execute("SELECT nome, senha, perfil, email FROM usuarios WHERE LOWER(email) = %s;", (usuario_input.strip().lower(),))
