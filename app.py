@@ -756,8 +756,7 @@ if not st.session_state.autenticado:
     # um instante e tenta novamente antes de decidir.
     if token_cookie is None and not st.session_state.get("verificacao_cookie_feita"):
         st.session_state.verificacao_cookie_feita = True
-        with st.spinner("Verificando sessão..."):
-            time.sleep(0.6)
+        time.sleep(0.6)
         st.rerun()
 
     if token_cookie:
@@ -887,9 +886,11 @@ if token_redefinicao_url and not st.session_state.autenticado:
 # =============================================================================
 if not st.session_state.autenticado:
     if st.session_state.sub_tela_login == "login":
-        st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("""
             <style>
+            .block-container {
+                padding-top: 3rem !important;
+            }
             [data-testid="stVerticalBlockBorderWrapper"] {
                 box-shadow: 0 4px 18px rgba(0,0,0,0.08);
                 border-radius: 14px !important;
@@ -916,9 +917,9 @@ if not st.session_state.autenticado:
             with st.container(border=True):
                 st.markdown("""
                     <div style="text-align: center;">
-                        <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="160">
-                        <h2 class="login-titulo" style="margin: 10px 0 2px 0; font-size: 18px; font-weight: 700;">Gestão de Almoxarifado<br>NGI Carajás</h2>
-                        <p class="login-subtitulo" style="font-size: 12px; font-weight: 500; margin: 0 0 16px 0;">Sistema de Gestão de Almoxarifado</p>
+                        <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="130">
+                        <h2 class="login-titulo" style="margin: 8px 0 2px 0; font-size: 17px; font-weight: 700;">Gestão de Almoxarifado<br>NGI Carajás</h2>
+                        <p class="login-subtitulo" style="font-size: 12px; font-weight: 500; margin: 0 0 12px 0;">Sistema de Gestão de Almoxarifado</p>
                     </div>
                 """, unsafe_allow_html=True)
 
