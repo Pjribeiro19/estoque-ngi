@@ -1114,7 +1114,6 @@ else:
                 Olá, {st.session_state.NOME_USUARIO_LOGADO}
             </div>
         """, unsafe_allow_html=True)
-        st.caption(f"[DIAGNÓSTICO TEMPORÁRIO] Coordenação detectada: '{st.session_state.get('COORDENACAO_USUARIO_LOGADO')}'")
         st.write("---")
         
         if st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
