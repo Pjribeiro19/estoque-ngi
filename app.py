@@ -1880,10 +1880,9 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             if df_raw_brig.empty:
                 st.info("Nenhum material cadastrado no estoque da Brigada ainda.")
             else:
-                st.dataframe(
-                    df_raw_brig.rename(columns={"codigo": "Código", "item": "Item", "quantidade": "Quantidade", "categoria": "Categoria", "valor_unitario": "Valor Unitário"}),
-                    use_container_width=True, hide_index=True
-                )
+                df_display_brig = df_raw_brig.rename(columns={"codigo": "Código", "item": "Item", "quantidade": "Quantidade", "categoria": "Categoria", "valor_unitario": "Valor Unitário"})
+                df_display_brig["Valor Unitário"] = df_display_brig["Valor Unitário"].map("R$ {:.2f}".format)
+                st.dataframe(df_display_brig, use_container_width=True, hide_index=True)
 
         # ---------------------------------------------------------------
         # ABA 2: CADASTRAR ITEM
