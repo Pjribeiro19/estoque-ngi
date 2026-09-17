@@ -395,6 +395,23 @@ def inicializar_banco_automatico():
     cursor.execute("ALTER TABLE emprestimo_registros ADD COLUMN IF NOT EXISTS ultimo_lembrete_enviado DATE;")
 
     # =========================================================================
+    # NOVO MÓDULO: MATERIAIS BRIGADA (estoque separado, acesso restrito)
+    # =========================================================================
+    cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS coordenacao TEXT;")
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS produtos_brigada (
+            codigo TEXT PRIMARY KEY,
+            item TEXT,
+            quantidade INTEGER,
+            categoria TEXT,
+            valor_unitario REAL
+        );
+    """)
+
+    cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS origem_estoque TEXT DEFAULT 'GERAL';")
+
+    # =========================================================================
     # NOVA TABELA: CONTROLE DE EQUIPAMENTOS EMPRESTADOS (notebooks, desktops,
     # acessórios atribuídos por tempo indeterminado - módulo admin)
     # =========================================================================
@@ -797,6 +814,10 @@ if not st.session_state.autenticado:
                     st.session_state.EMAIL_USUARIO_LOGADO = email_sessao
                     st.session_state.SESSION_TOKEN = token_cookie
 
+                    cursor_sessao.execute("SELECT coordenacao FROM usuarios WHERE LOWER(email) = %s;", (email_sessao.lower(),))
+                    resultado_coord_sessao = cursor_sessao.fetchone()
+                    st.session_state.COORDENACAO_USUARIO_LOGADO = resultado_coord_sessao[0] if resultado_coord_sessao else None
+
                     nova_expiracao = datetime.now() + timedelta(minutes=SESSAO_DURACAO_MINUTOS)
                     cursor_sessao.execute(
                         "UPDATE sessoes_login SET expira_em = %s WHERE token = %s;",
@@ -951,16 +972,17 @@ if not st.session_state.autenticado:
                 if submeteu_login:
                     if usuario_input and senha_input:
                         cursor = conn.cursor()
-                        cursor.execute("SELECT nome, senha, perfil, email FROM usuarios WHERE LOWER(email) = %s;", (usuario_input.strip().lower(),))
+                        cursor.execute("SELECT nome, senha, perfil, email, coordenacao FROM usuarios WHERE LOWER(email) = %s;", (usuario_input.strip().lower(),))
                         resultado = cursor.fetchone()
 
                         if resultado:
-                            nome_banco, senha_banco, perfil_banco, email_banco = resultado
+                            nome_banco, senha_banco, perfil_banco, email_banco, coordenacao_banco = resultado
                             if str(senha_banco) == str(senha_input).strip():
                                 st.session_state.autenticado = True
                                 st.session_state.NOME_USUARIO_LOGADO = nome_banco
                                 st.session_state.PERFIL_USUARIO_LOGADO = perfil_banco
                                 st.session_state.EMAIL_USUARIO_LOGADO = email_banco
+                                st.session_state.COORDENACAO_USUARIO_LOGADO = coordenacao_banco
 
                                 # Cria uma sessão persistente (mantém o login após atualizar a página)
                                 novo_token = str(uuid.uuid4())
@@ -1079,15 +1101,20 @@ else:
             # ---------------------------------------------------------------
             # MENU RESTRITO - PERFIL USUÁRIO (MÓDULO DE SOLICITAÇÃO)
             # ---------------------------------------------------------------
+            opcoes_menu_user = ["Materiais Disponíveis", "Empréstimo de Material"]
+            icones_menu_user = ["box-seam", "arrow-repeat"]
+
+            if st.session_state.get("COORDENACAO_USUARIO_LOGADO") == "Brigada":
+                opcoes_menu_user.append("Materiais Brigada")
+                icones_menu_user.append("fire")
+
+            opcoes_menu_user += ["Minhas Solicitações", "Sair do Sistema"]
+            icones_menu_user += ["clock-history", "box-arrow-right"]
+
             escolha = option_menu(
                 menu_title=None,
-                options=[
-                    "Materiais Disponíveis",
-                    "Empréstimo de Material",
-                    "Minhas Solicitações",
-                    "Sair do Sistema"
-                ],
-                icons=["box-seam", "arrow-repeat", "clock-history", "box-arrow-right"],
+                options=opcoes_menu_user,
+                icons=icones_menu_user,
                 menu_icon="cast",
                 default_index=0,
                 styles={
@@ -1127,6 +1154,7 @@ else:
                     "Materiais Disponíveis",
                     "Empréstimo de Material",
                     "Cadastrar Produto", 
+                    "Materiais Brigada",
                     "Cadastrar Categoria", 
                     "Cadastrar Usuário", 
                     "Cadastrar Coordenação",
@@ -1136,7 +1164,7 @@ else:
                     "Controle de Equipamentos Emprestados",
                     "Sair do Sistema"
                 ],
-                icons=["grid", "box-seam", "arrow-repeat", "box", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "laptop", "box-arrow-right"],
+                icons=["grid", "box-seam", "arrow-repeat", "box", "fire", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "laptop", "box-arrow-right"],
                 menu_icon="cast",
                 default_index=0,
                 styles={
@@ -1811,6 +1839,170 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 st.info("Adicione pelo menos um item ao carrinho para enviar a solicitação.")
 
     # =========================================================================
+    # NOVO MÓDULO: MATERIAIS BRIGADA — GESTÃO (ADMINISTRADOR)
+    # =========================================================================
+    elif escolha == "Materiais Brigada" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum":
+        renderizar_banner("Materiais Brigada", "Estoque próprio da Brigada, separado do almoxarifado geral", cor="#C62828")
+        aba_brigada_admin = option_menu(
+            menu_title=None,
+            options=["Novo Material", "Editar / Excluir Produtos"],
+            icons=["plus-circle", "pencil-square"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+
+        if aba_brigada_admin == "Novo Material":
+            with st.form("form_novo_produto_brigada", clear_on_submit=True):
+                col_ba, col_bb = st.columns(2)
+                cod_brig = col_ba.text_input("Código")
+                nome_it_brig = col_bb.text_input("Nome do Material")
+                cat_it_brig = col_ba.text_input("Categoria", placeholder="Ex: EPI, Combate a Incêndio, Primeiros Socorros")
+                val_unit_brig = col_bb.number_input("Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
+                qtd_inicial_brig = st.number_input("Quantidade Inicial:", min_value=0, value=0, step=1)
+
+                if st.form_submit_button("Finalizar Cadastro", type="primary"):
+                    if cod_brig and nome_it_brig:
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("INSERT INTO produtos_brigada VALUES (%s, %s, %s, %s, %s);", (cod_brig.strip(), nome_it_brig.strip(), int(qtd_inicial_brig), cat_it_brig.strip(), float(val_unit_brig)))
+                            conn.commit()
+                            st.success(f"Sucesso! {nome_it_brig} adicionado ao estoque da Brigada.")
+                            st.rerun()
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
+                            st.error(f"Erro! Código {cod_brig} já existe.")
+                    else:
+                        st.error("Preencha ao menos o Código e o Nome do Material!")
+
+        elif aba_brigada_admin == "Editar / Excluir Produtos":
+            df_raw_brig = pd.read_sql_query("SELECT * FROM produtos_brigada ORDER BY codigo ASC;", conn)
+            if df_raw_brig.empty:
+                st.info("Nenhum material cadastrado no estoque da Brigada ainda.")
+            else:
+                st.dataframe(df_raw_brig, use_container_width=True, hide_index=True)
+                opcao_brig_edit = st.selectbox("Selecione para modificar:", df_raw_brig.index, format_func=lambda x: f"{df_raw_brig.loc[x, 'codigo']} - {df_raw_brig.loc[x, 'item']}")
+                cod_atual_brig = df_raw_brig.loc[opcao_brig_edit, "codigo"]
+
+                col_edb1, col_edb2 = st.columns(2)
+                edit_cod_brig = col_edb1.text_input("Código:", value=df_raw_brig.loc[opcao_brig_edit, "codigo"])
+                edit_item_brig = col_edb2.text_input("Nome:", value=df_raw_brig.loc[opcao_brig_edit, "item"])
+                edit_qtd_brig = col_edb1.number_input("Quantidade (Ajuste):", min_value=0, value=int(df_raw_brig.loc[opcao_brig_edit, "quantidade"]))
+                edit_cat_brig = col_edb2.text_input("Categoria:", value=df_raw_brig.loc[opcao_brig_edit, "categoria"] or "")
+                edit_val_brig = st.number_input("Valor Unitário:", min_value=0.0, step=0.01, format="%.2f", value=float(df_raw_brig.loc[opcao_brig_edit, "valor_unitario"] or 0))
+
+                col_bbtn1, col_bbtn2 = st.columns([1, 4])
+                with col_bbtn1:
+                    if st.button("Salvar Alterações", type="primary"):
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            UPDATE produtos_brigada 
+                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
+                            WHERE codigo = %s;
+                        """, (edit_cod_brig.strip(), edit_item_brig.strip(), edit_qtd_brig, edit_cat_brig.strip(), float(edit_val_brig), cod_atual_brig))
+                        conn.commit()
+                        st.success("Modificado com sucesso!")
+                        st.rerun()
+
+                with col_bbtn2:
+                    if st.button("Excluir Produto"):
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM produtos_brigada WHERE codigo = %s;", (cod_atual_brig,))
+                        conn.commit()
+                        st.warning("Removido com sucesso.")
+                        st.rerun()
+
+    # =========================================================================
+    # NOVO MÓDULO: MATERIAIS BRIGADA — SOLICITAÇÃO (USUÁRIO DA COORDENAÇÃO BRIGADA)
+    # =========================================================================
+    elif escolha == "Materiais Brigada" and st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
+        if st.session_state.get("COORDENACAO_USUARIO_LOGADO") != "Brigada":
+            st.error("Acesso restrito à coordenação Brigada.")
+        else:
+            renderizar_banner("Materiais Brigada", "Estoque próprio da Brigada, separado do almoxarifado geral", cor="#C62828")
+
+            if st.session_state.get("msg_sucesso_brigada"):
+                st.success("Sua solicitação foi encaminhada com sucesso!")
+                del st.session_state["msg_sucesso_brigada"]
+
+            df_disp_brigada = pd.read_sql_query("SELECT codigo, item, quantidade, categoria, valor_unitario FROM produtos_brigada WHERE quantidade > 0 ORDER BY codigo ASC;", conn)
+
+            if df_disp_brigada.empty:
+                st.info("Nenhum material disponível no estoque da Brigada no momento.")
+            else:
+                st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #C62828; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
+
+                termo_busca_brig = st.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...", key="busca_material_brigada")
+                df_disp_brigada_filtrado = df_disp_brigada.copy()
+                if termo_busca_brig:
+                    df_disp_brigada_filtrado = df_disp_brigada_filtrado[
+                        df_disp_brigada_filtrado['item'].str.contains(termo_busca_brig, case=False, na=False) |
+                        df_disp_brigada_filtrado['codigo'].str.contains(termo_busca_brig, case=False, na=False)
+                    ]
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.dataframe(df_disp_brigada_filtrado.rename(columns={"codigo": "Código", "item": "Item", "quantidade": "Quantidade", "categoria": "Categoria"}).drop(columns=["valor_unitario"]), use_container_width=True, hide_index=True)
+
+                st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+                st.markdown("### Nova Solicitação de Material da Brigada")
+                st.caption("Adicione quantos itens forem necessários ao carrinho. Todos serão enviados em uma única solicitação.")
+
+                if "carrinho_brigada" not in st.session_state:
+                    st.session_state.carrinho_brigada = []
+
+                col_add_br1, col_add_br2, col_add_br3 = st.columns([3, 1, 1])
+                opcao_sol_brig = col_add_br1.selectbox(
+                    "Selecione o Material:",
+                    df_disp_brigada.index,
+                    format_func=lambda x: f"{df_disp_brigada.loc[x, 'codigo']} - {df_disp_brigada.loc[x, 'item']} (Saldo: {df_disp_brigada.loc[x, 'quantidade']})",
+                    key="select_material_brigada"
+                )
+                qtd_sol_brig = col_add_br2.number_input("Quantidade:", min_value=1, max_value=int(df_disp_brigada.loc[opcao_sol_brig, "quantidade"]), value=1, step=1, key="qtd_material_brigada")
+                col_add_br3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                if col_add_br3.button("+ Adicionar", key="add_carrinho_brigada", use_container_width=True):
+                    cod_sel_brig = df_disp_brigada.loc[opcao_sol_brig, "codigo"]
+                    nome_sel_brig = df_disp_brigada.loc[opcao_sol_brig, "item"]
+                    st.session_state.carrinho_brigada.append({"codigo": cod_sel_brig, "item": nome_sel_brig, "quantidade": int(qtd_sol_brig)})
+                    st.rerun()
+
+                if st.session_state.carrinho_brigada:
+                    st.markdown("**Itens no carrinho:**")
+                    for i_carr_br, item_carr_br in enumerate(st.session_state.carrinho_brigada):
+                        col_cbr1, col_cbr2 = st.columns([5, 1])
+                        col_cbr1.markdown(f"""
+                            <div style="background-color: rgba(198, 40, 40, 0.08); border-left: 4px solid #C62828; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
+                                <span style="font-size: 12px; font-weight: 700; color: #C62828; text-transform: uppercase; letter-spacing: 0.3px;">{item_carr_br['codigo']}</span><br>
+                                <span style="font-size: 15px; font-weight: 600; color: #1a1a1a;">{item_carr_br['item']}</span>
+                                <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_br['quantidade']}</span>
+                            </div>
+                        """, unsafe_allow_html=True)
+                        if col_cbr2.button("Remover", key=f"remover_carrinho_brigada_{i_carr_br}"):
+                            st.session_state.carrinho_brigada.pop(i_carr_br)
+                            st.rerun()
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    obs_sol_brig = st.text_area("Observações (opcional):", key="obs_carrinho_brigada")
+
+                    if st.button("Enviar Solicitação", type="primary", key="enviar_carrinho_brigada"):
+                        try:
+                            lote_id_brig = str(uuid.uuid4())
+                            cursor = conn.cursor()
+                            for item_carr_br in st.session_state.carrinho_brigada:
+                                cursor.execute("""
+                                    INSERT INTO solicitacoes_almoxarifado 
+                                    (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, status, observacao, lote_id, origem_estoque)
+                                    VALUES ('MATERIAL', %s, %s, %s, %s, %s, 'Brigada', 'PENDENTE', %s, %s, 'BRIGADA');
+                                """, (item_carr_br["codigo"], item_carr_br["item"], item_carr_br["quantidade"], st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, obs_sol_brig.strip(), lote_id_brig))
+                            conn.commit()
+                            st.session_state.carrinho_brigada = []
+                            st.session_state["msg_sucesso_brigada"] = True
+                            st.rerun()
+                        except Exception as ex_brig:
+                            conn.rollback()
+                            st.error(f"Erro ao enviar solicitação: {ex_brig}")
+                else:
+                    st.info("Adicione pelo menos um item ao carrinho para enviar a solicitação.")
+
+    # =========================================================================
     # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL USUÁRIO): EMPRÉSTIMO DISPONÍVEL
     # =========================================================================
     elif escolha in ("Empréstimo de Material", "Solicitar Empréstimo") and (
@@ -2091,7 +2283,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
         if aba_solicitacao == "Pendentes":
             df_pendentes = pd.read_sql_query("""
-                SELECT id, tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_solicitacao, data_retirada, data_prevista, atividade_associada, observacao, termo_aceito, data_aceite_termo
+                SELECT id, tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_solicitacao, data_retirada, data_prevista, atividade_associada, observacao, termo_aceito, data_aceite_termo, origem_estoque
                 FROM solicitacoes_almoxarifado WHERE status = 'PENDENTE' ORDER BY id ASC;
             """, conn)
 
@@ -2138,12 +2330,13 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                         if st.button("Aprovar", key=f"aprovar_{sol['id']}", type="primary", icon=":material/check:"):
                             try:
                                 if sol["tipo"] == "MATERIAL":
-                                    cursor.execute("SELECT quantidade FROM produtos WHERE codigo = %s;", (sol["referencia_codigo"],))
+                                    tabela_estoque = "produtos_brigada" if sol.get("origem_estoque") == "BRIGADA" else "produtos"
+                                    cursor.execute(f"SELECT quantidade FROM {tabela_estoque} WHERE codigo = %s;", (sol["referencia_codigo"],))
                                     res_prod = cursor.fetchone()
                                     if not res_prod or res_prod[0] < sol["quantidade"]:
                                         st.error("Saldo insuficiente em estoque para aprovar esta solicitação.")
                                     else:
-                                        cursor.execute("UPDATE produtos SET quantidade = quantidade - %s WHERE codigo = %s;", (sol["quantidade"], sol["referencia_codigo"]))
+                                        cursor.execute(f"UPDATE {tabela_estoque} SET quantidade = quantidade - %s WHERE codigo = %s;", (sol["quantidade"], sol["referencia_codigo"]))
                                         cursor.execute("""
                                             INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
                                             VALUES (%s, %s, %s, %s, %s, %s, %s);
@@ -2407,11 +2600,13 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         )
 
         if aba_selecionada == "Novo Usuário":
+            lista_coord_user = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
             with st.form("cad_user", clear_on_submit=True):
                 n = st.text_input("Nome")
                 e = st.text_input("E-mail")
                 s = st.text_input("Senha", type="password")
                 p = st.selectbox("Perfil", ["Administrador", "Usuário Comum"])
+                coord_novo_user = st.selectbox("Coordenação:", lista_coord_user, help="Coordenação à qual a pessoa está vinculada. Algumas telas do sistema (como Materiais Brigada) só ficam visíveis para coordenações específicas.")
                 
                 if st.form_submit_button("Salvar", type="primary"):
                     if n and e:
@@ -2419,9 +2614,9 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                             senha_final = s if s else "123"
                             cursor = conn.cursor()
                             cursor.execute("""
-                                INSERT INTO usuarios (nome, email, senha, perfil) 
-                                VALUES (%s, %s, %s, %s);
-                            """, (n.strip(), e.strip().lower(), senha_final, p))
+                                INSERT INTO usuarios (nome, email, senha, perfil, coordenacao) 
+                                VALUES (%s, %s, %s, %s, %s);
+                            """, (n.strip(), e.strip().lower(), senha_final, p, coord_novo_user))
                             conn.commit()
 
                             if p == "Administrador":
@@ -2468,9 +2663,9 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                         st.error("Preencha o Nome e o E-mail!")
 
         elif aba_selecionada == "Editar / Excluir Usuários":
-            df_raw_users = pd.read_sql_query("SELECT nome, email, perfil, senha FROM usuarios ORDER BY nome ASC", conn)
+            df_raw_users = pd.read_sql_query("SELECT nome, email, perfil, senha, coordenacao FROM usuarios ORDER BY nome ASC", conn)
             if not df_raw_users.empty:
-                st.dataframe(df_raw_users[["nome", "email", "perfil"]], use_container_width=True, hide_index=True)
+                st.dataframe(df_raw_users[["nome", "email", "perfil", "coordenacao"]], use_container_width=True, hide_index=True)
                 idx_user = st.selectbox("Selecione para editar:", df_raw_users.index, format_func=lambda x: f"{df_raw_users.loc[x, 'nome']} ({df_raw_users.loc[x, 'email']})")
                 email_chave = df_raw_users.loc[idx_user, "email"]
                 
@@ -2478,6 +2673,11 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 edit_e = st.text_input("E-mail:", value=df_raw_users.loc[idx_user, "email"])
                 edit_s = st.text_input("Senha:", value=df_raw_users.loc[idx_user, "senha"], type="password")
                 edit_p = st.selectbox("Perfil:", ["Administrador", "Usuário Comum"], index=0 if df_raw_users.loc[idx_user, "perfil"] == "Administrador" else 1)
+
+                lista_coord_edit_user = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
+                coord_atual_user = df_raw_users.loc[idx_user, "coordenacao"]
+                idx_coord_edit_user = lista_coord_edit_user.index(coord_atual_user) if coord_atual_user in lista_coord_edit_user else 0
+                edit_coord_user = st.selectbox("Coordenação:", lista_coord_edit_user, index=idx_coord_edit_user)
                 
                 c_btn_u1, c_btn_u2 = st.columns([1, 4])
                 with c_btn_u1:
@@ -2485,9 +2685,9 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                         cursor = conn.cursor()
                         cursor.execute("""
                             UPDATE usuarios 
-                            SET nome = %s, email = %s, senha = %s, perfil = %s 
+                            SET nome = %s, email = %s, senha = %s, perfil = %s, coordenacao = %s 
                             WHERE email = %s;
-                        """, (edit_n.strip(), edit_e.strip().lower(), edit_s, edit_p, email_chave))
+                        """, (edit_n.strip(), edit_e.strip().lower(), edit_s, edit_p, edit_coord_user, email_chave))
                         conn.commit()
                         st.success("Atualizado!")
                         st.rerun()
