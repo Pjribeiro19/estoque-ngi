@@ -409,6 +409,19 @@ def inicializar_banco_automatico():
         );
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS movimentacoes_brigada (
+            id SERIAL PRIMARY KEY,
+            data TEXT,
+            tipo TEXT,
+            codigo TEXT,
+            item TEXT,
+            quantidade INTEGER,
+            responsavel TEXT,
+            coordenacao TEXT
+        );
+    """)
+
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS origem_estoque TEXT DEFAULT 'GERAL';")
 
     # =========================================================================
@@ -1845,13 +1858,31 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         renderizar_banner("Materiais Brigada", "Estoque próprio da Brigada, separado do almoxarifado geral")
         aba_brigada_admin = option_menu(
             menu_title=None,
-            options=["Novo Material", "Editar / Excluir Produtos"],
-            icons=["plus-circle", "pencil-square"],
+            options=["Itens Disponíveis", "Cadastrar Item", "Registro de Entrada", "Registro de Saída", "Histórico de Movimentação", "Editar / Excluir Item"],
+            icons=["box-seam", "plus-circle", "arrow-down-circle", "arrow-up-circle", "journal-text", "pencil-square"],
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
 
-        if aba_brigada_admin == "Novo Material":
+        df_raw_brig = pd.read_sql_query("SELECT * FROM produtos_brigada ORDER BY codigo ASC;", conn)
+        lista_siglas_coord_brig = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
+
+        # ---------------------------------------------------------------
+        # ABA 1: ITENS DISPONÍVEIS
+        # ---------------------------------------------------------------
+        if aba_brigada_admin == "Itens Disponíveis":
+            if df_raw_brig.empty:
+                st.info("Nenhum material cadastrado no estoque da Brigada ainda.")
+            else:
+                st.dataframe(
+                    df_raw_brig.rename(columns={"codigo": "Código", "item": "Item", "quantidade": "Quantidade", "categoria": "Categoria", "valor_unitario": "Valor Unitário"}),
+                    use_container_width=True, hide_index=True
+                )
+
+        # ---------------------------------------------------------------
+        # ABA 2: CADASTRAR ITEM
+        # ---------------------------------------------------------------
+        elif aba_brigada_admin == "Cadastrar Item":
             with st.form("form_novo_produto_brigada", clear_on_submit=True):
                 col_ba, col_bb = st.columns(2)
                 cod_brig = col_ba.text_input("Código")
@@ -1874,12 +1905,104 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                     else:
                         st.error("Preencha ao menos o Código e o Nome do Material!")
 
-        elif aba_brigada_admin == "Editar / Excluir Produtos":
-            df_raw_brig = pd.read_sql_query("SELECT * FROM produtos_brigada ORDER BY codigo ASC;", conn)
+        # ---------------------------------------------------------------
+        # ABA 3: REGISTRO DE ENTRADA
+        # ---------------------------------------------------------------
+        elif aba_brigada_admin == "Registro de Entrada":
+            if df_raw_brig.empty:
+                st.warning("Nenhum material cadastrado para movimentar.")
+            else:
+                with st.form("form_entrada_brigada", clear_on_submit=True):
+                    col_be1, col_be2 = st.columns(2)
+                    data_mov_brig = col_be1.date_input("Data da Movimentação:", value=datetime.today(), format="DD/MM/YYYY").strftime("%Y-%m-%d")
+                    opcao_prod_brig_ent = col_be2.selectbox(
+                        "Selecione o Material:",
+                        df_raw_brig.index,
+                        format_func=lambda x: f"{df_raw_brig.loc[x, 'codigo']} - {df_raw_brig.loc[x, 'item']} (Saldo: {df_raw_brig.loc[x, 'quantidade']})"
+                    )
+                    qtd_mov_brig_ent = col_be1.number_input("Quantidade:", min_value=1, step=1, value=1)
+
+                    if st.form_submit_button("Registrar Entrada", type="primary"):
+                        prod_codigo_brig = df_raw_brig.loc[opcao_prod_brig_ent, "codigo"]
+                        prod_nome_brig = df_raw_brig.loc[opcao_prod_brig_ent, "item"]
+                        nova_qtd_brig = int(df_raw_brig.loc[opcao_prod_brig_ent, "quantidade"]) + qtd_mov_brig_ent
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("UPDATE produtos_brigada SET quantidade = %s WHERE codigo = %s;", (nova_qtd_brig, prod_codigo_brig))
+                            cursor.execute("""
+                                INSERT INTO movimentacoes_brigada (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s);
+                            """, (data_mov_brig, "Entrada", prod_codigo_brig, prod_nome_brig, qtd_mov_brig_ent, st.session_state.NOME_USUARIO_LOGADO, "Brigada"))
+                            conn.commit()
+                            st.success(f"Entrada de {qtd_mov_brig_ent} un. de '{prod_nome_brig}' registrada! Novo saldo: {nova_qtd_brig}.")
+                            st.rerun()
+                        except Exception as ex_ent_brig:
+                            conn.rollback()
+                            st.error(f"Erro ao salvar entrada: {ex_ent_brig}")
+
+        # ---------------------------------------------------------------
+        # ABA 4: REGISTRO DE SAÍDA
+        # ---------------------------------------------------------------
+        elif aba_brigada_admin == "Registro de Saída":
+            if df_raw_brig.empty:
+                st.warning("Nenhum material cadastrado para movimentar.")
+            else:
+                with st.form("form_saida_brigada", clear_on_submit=True):
+                    col_bs1, col_bs2 = st.columns(2)
+                    data_mov_brig_s = col_bs1.date_input("Data da Movimentação:", value=datetime.today(), format="DD/MM/YYYY").strftime("%Y-%m-%d")
+                    opcao_prod_brig_sai = col_bs2.selectbox(
+                        "Selecione o Material:",
+                        df_raw_brig.index,
+                        format_func=lambda x: f"{df_raw_brig.loc[x, 'codigo']} - {df_raw_brig.loc[x, 'item']} (Saldo: {df_raw_brig.loc[x, 'quantidade']})",
+                        key="select_saida_brigada"
+                    )
+                    qtd_mov_brig_sai = col_bs1.number_input("Quantidade da Movimentação:", min_value=1, step=1, value=1)
+                    resp_mov_brig = col_bs2.text_input("Nome da Pessoa Responsável pela Retirada:")
+                    coord_mov_brig = col_bs1.selectbox("Coordenação Destino:", lista_siglas_coord_brig)
+
+                    if st.form_submit_button("Registrar Saída", type="primary"):
+                        if not resp_mov_brig.strip():
+                            st.error("Por favor, digite o nome da pessoa responsável pela retirada.")
+                        else:
+                            prod_codigo_brig_s = df_raw_brig.loc[opcao_prod_brig_sai, "codigo"]
+                            prod_nome_brig_s = df_raw_brig.loc[opcao_prod_brig_sai, "item"]
+                            prod_qtd_atual_brig = int(df_raw_brig.loc[opcao_prod_brig_sai, "quantidade"])
+
+                            if prod_qtd_atual_brig >= qtd_mov_brig_sai:
+                                nova_qtd_brig_s = prod_qtd_atual_brig - qtd_mov_brig_sai
+                                try:
+                                    cursor = conn.cursor()
+                                    cursor.execute("UPDATE produtos_brigada SET quantidade = %s WHERE codigo = %s;", (nova_qtd_brig_s, prod_codigo_brig_s))
+                                    cursor.execute("""
+                                        INSERT INTO movimentacoes_brigada (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s);
+                                    """, (data_mov_brig_s, "Saída", prod_codigo_brig_s, prod_nome_brig_s, qtd_mov_brig_sai, resp_mov_brig.strip(), coord_mov_brig))
+                                    conn.commit()
+                                    st.success(f"Saída de {qtd_mov_brig_sai} un. de '{prod_nome_brig_s}' registrada! Novo saldo: {nova_qtd_brig_s}.")
+                                    st.rerun()
+                                except Exception as ex_sai_brig:
+                                    conn.rollback()
+                                    st.error(f"Erro ao salvar saída: {ex_sai_brig}")
+                            else:
+                                st.error(f"Saldo Insuficiente! O material possui apenas {prod_qtd_atual_brig} unidades no estoque.")
+
+        # ---------------------------------------------------------------
+        # ABA 5: HISTÓRICO DE MOVIMENTAÇÃO
+        # ---------------------------------------------------------------
+        elif aba_brigada_admin == "Histórico de Movimentação":
+            df_mov_brig = pd.read_sql_query("SELECT data AS Data, tipo AS Tipo, codigo AS Código, item AS Item, quantidade AS Quantidade, responsavel AS Responsável, coordenacao AS Coordenação FROM movimentacoes_brigada ORDER BY id DESC;", conn)
+            if df_mov_brig.empty:
+                st.info("Nenhuma movimentação registrada até o momento.")
+            else:
+                st.dataframe(df_mov_brig, use_container_width=True, hide_index=True)
+
+        # ---------------------------------------------------------------
+        # ABA 6: EDITAR / EXCLUIR ITEM
+        # ---------------------------------------------------------------
+        elif aba_brigada_admin == "Editar / Excluir Item":
             if df_raw_brig.empty:
                 st.info("Nenhum material cadastrado no estoque da Brigada ainda.")
             else:
-                st.dataframe(df_raw_brig, use_container_width=True, hide_index=True)
                 opcao_brig_edit = st.selectbox("Selecione para modificar:", df_raw_brig.index, format_func=lambda x: f"{df_raw_brig.loc[x, 'codigo']} - {df_raw_brig.loc[x, 'item']}")
                 cod_atual_brig = df_raw_brig.loc[opcao_brig_edit, "codigo"]
 
@@ -2331,14 +2454,15 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                             try:
                                 if sol["tipo"] == "MATERIAL":
                                     tabela_estoque = "produtos_brigada" if sol.get("origem_estoque") == "BRIGADA" else "produtos"
+                                    tabela_movimentacao = "movimentacoes_brigada" if sol.get("origem_estoque") == "BRIGADA" else "movimentacoes"
                                     cursor.execute(f"SELECT quantidade FROM {tabela_estoque} WHERE codigo = %s;", (sol["referencia_codigo"],))
                                     res_prod = cursor.fetchone()
                                     if not res_prod or res_prod[0] < sol["quantidade"]:
                                         st.error("Saldo insuficiente em estoque para aprovar esta solicitação.")
                                     else:
                                         cursor.execute(f"UPDATE {tabela_estoque} SET quantidade = quantidade - %s WHERE codigo = %s;", (sol["quantidade"], sol["referencia_codigo"]))
-                                        cursor.execute("""
-                                            INSERT INTO movimentacoes (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                        cursor.execute(f"""
+                                            INSERT INTO {tabela_movimentacao} (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
                                             VALUES (%s, %s, %s, %s, %s, %s, %s);
                                         """, (date.today().strftime("%Y-%m-%d"), "Saída", sol["referencia_codigo"], sol["item_nome"], sol["quantidade"], sol["solicitante_nome"], sol["coordenacao"]))
                                         cursor.execute("""
