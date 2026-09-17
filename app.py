@@ -1114,6 +1114,7 @@ else:
                 Olá, {st.session_state.NOME_USUARIO_LOGADO}
             </div>
         """, unsafe_allow_html=True)
+        st.caption(f"[DIAGNÓSTICO TEMPORÁRIO] Coordenação detectada: '{st.session_state.get('COORDENACAO_USUARIO_LOGADO')}'")
         st.write("---")
         
         if st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
@@ -1123,7 +1124,8 @@ else:
             opcoes_menu_user = ["Materiais Disponíveis", "Empréstimo de Material"]
             icones_menu_user = ["box-seam", "arrow-repeat"]
 
-            if st.session_state.get("COORDENACAO_USUARIO_LOGADO") == "Brigada":
+            coordenacao_logada_normalizada = (st.session_state.get("COORDENACAO_USUARIO_LOGADO") or "").strip().upper()
+            if coordenacao_logada_normalizada == "BRIGADA":
                 opcoes_menu_user.append("Materiais Brigada")
                 icones_menu_user.append("fire")
 
@@ -2087,7 +2089,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # NOVO MÓDULO: MATERIAIS BRIGADA — SOLICITAÇÃO (USUÁRIO DA COORDENAÇÃO BRIGADA)
     # =========================================================================
     elif escolha == "Materiais Brigada" and st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
-        if st.session_state.get("COORDENACAO_USUARIO_LOGADO") != "Brigada":
+        if (st.session_state.get("COORDENACAO_USUARIO_LOGADO") or "").strip().upper() != "BRIGADA":
             st.error("Acesso restrito à coordenação Brigada.")
         else:
             renderizar_banner("Materiais Brigada", "Estoque próprio da Brigada, separado do almoxarifado geral")
