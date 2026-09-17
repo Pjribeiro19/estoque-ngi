@@ -1842,7 +1842,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # NOVO MÓDULO: MATERIAIS BRIGADA — GESTÃO (ADMINISTRADOR)
     # =========================================================================
     elif escolha == "Materiais Brigada" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum":
-        renderizar_banner("Materiais Brigada", "Estoque próprio da Brigada, separado do almoxarifado geral", cor="#C62828")
+        renderizar_banner("Materiais Brigada", "Estoque próprio da Brigada, separado do almoxarifado geral")
         aba_brigada_admin = option_menu(
             menu_title=None,
             options=["Novo Material", "Editar / Excluir Produtos"],
@@ -1918,7 +1918,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         if st.session_state.get("COORDENACAO_USUARIO_LOGADO") != "Brigada":
             st.error("Acesso restrito à coordenação Brigada.")
         else:
-            renderizar_banner("Materiais Brigada", "Estoque próprio da Brigada, separado do almoxarifado geral", cor="#C62828")
+            renderizar_banner("Materiais Brigada", "Estoque próprio da Brigada, separado do almoxarifado geral")
 
             if st.session_state.get("msg_sucesso_brigada"):
                 st.success("Sua solicitação foi encaminhada com sucesso!")
@@ -1929,7 +1929,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             if df_disp_brigada.empty:
                 st.info("Nenhum material disponível no estoque da Brigada no momento.")
             else:
-                st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #C62828; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
+                st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
 
                 termo_busca_brig = st.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...", key="busca_material_brigada")
                 df_disp_brigada_filtrado = df_disp_brigada.copy()
@@ -1969,8 +1969,8 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                     for i_carr_br, item_carr_br in enumerate(st.session_state.carrinho_brigada):
                         col_cbr1, col_cbr2 = st.columns([5, 1])
                         col_cbr1.markdown(f"""
-                            <div style="background-color: rgba(198, 40, 40, 0.08); border-left: 4px solid #C62828; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
-                                <span style="font-size: 12px; font-weight: 700; color: #C62828; text-transform: uppercase; letter-spacing: 0.3px;">{item_carr_br['codigo']}</span><br>
+                            <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 4px solid #4CAF50; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
+                                <span style="font-size: 12px; font-weight: 700; color: #4CAF50; text-transform: uppercase; letter-spacing: 0.3px;">{item_carr_br['codigo']}</span><br>
                                 <span style="font-size: 15px; font-weight: 600; color: #1a1a1a;">{item_carr_br['item']}</span>
                                 <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_br['quantidade']}</span>
                             </div>
