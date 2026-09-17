@@ -422,6 +422,12 @@ def inicializar_banco_automatico():
         );
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS categorias_brigada (
+            nome TEXT PRIMARY KEY
+        );
+    """)
+
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS origem_estoque TEXT DEFAULT 'GERAL';")
 
     # =========================================================================
@@ -1883,11 +1889,43 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         # ABA 2: CADASTRAR ITEM
         # ---------------------------------------------------------------
         elif aba_brigada_admin == "Cadastrar Item":
+            df_cat_brigada = pd.read_sql_query("SELECT nome FROM categorias_brigada ORDER BY nome ASC;", conn)
+            lista_categorias_brigada = df_cat_brigada["nome"].tolist()
+
+            with st.expander("Gerenciar Categorias da Brigada"):
+                col_catb1, col_catb2 = st.columns([2, 1])
+                with col_catb1:
+                    nova_cat_brig = st.text_input("Nova categoria:", placeholder="Ex: EPI, Combate a Incêndio, Primeiros Socorros", key="nova_cat_brigada")
+                    if st.button("Adicionar Categoria", key="add_cat_brigada"):
+                        if nova_cat_brig and nova_cat_brig.strip():
+                            try:
+                                cursor = conn.cursor()
+                                cursor.execute("INSERT INTO categorias_brigada VALUES (%s);", (nova_cat_brig.strip(),))
+                                conn.commit()
+                                st.success("Categoria adicionada!")
+                                st.rerun()
+                            except psycopg2.IntegrityError:
+                                conn.rollback()
+                                st.error("Esta categoria já existe.")
+                with col_catb2:
+                    st.markdown("**Categorias atuais:**")
+                    if lista_categorias_brigada:
+                        for cat_existente_brig in lista_categorias_brigada:
+                            col_ce1, col_ce2 = st.columns([3, 1])
+                            col_ce1.write(cat_existente_brig)
+                            if col_ce2.button("🗑", key=f"del_cat_brig_{cat_existente_brig}"):
+                                cursor = conn.cursor()
+                                cursor.execute("DELETE FROM categorias_brigada WHERE nome = %s;", (cat_existente_brig,))
+                                conn.commit()
+                                st.rerun()
+                    else:
+                        st.caption("Nenhuma categoria cadastrada ainda.")
+
             with st.form("form_novo_produto_brigada", clear_on_submit=True):
                 col_ba, col_bb = st.columns(2)
                 cod_brig = col_ba.text_input("Código")
                 nome_it_brig = col_bb.text_input("Nome do Material")
-                cat_it_brig = col_ba.text_input("Categoria", placeholder="Ex: EPI, Combate a Incêndio, Primeiros Socorros")
+                cat_it_brig = col_ba.selectbox("Categoria", lista_categorias_brigada if lista_categorias_brigada else ["Nenhuma categoria cadastrada"])
                 val_unit_brig = col_bb.number_input("Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
                 qtd_inicial_brig = st.number_input("Quantidade Inicial:", min_value=0, value=0, step=1)
 
@@ -1895,7 +1933,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                     if cod_brig and nome_it_brig:
                         try:
                             cursor = conn.cursor()
-                            cursor.execute("INSERT INTO produtos_brigada VALUES (%s, %s, %s, %s, %s);", (cod_brig.strip(), nome_it_brig.strip(), int(qtd_inicial_brig), cat_it_brig.strip(), float(val_unit_brig)))
+                            cursor.execute("INSERT INTO produtos_brigada VALUES (%s, %s, %s, %s, %s);", (cod_brig.strip(), nome_it_brig.strip(), int(qtd_inicial_brig), cat_it_brig, float(val_unit_brig)))
                             conn.commit()
                             st.success(f"Sucesso! {nome_it_brig} adicionado ao estoque da Brigada.")
                             st.rerun()
@@ -2010,7 +2048,13 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 edit_cod_brig = col_edb1.text_input("Código:", value=df_raw_brig.loc[opcao_brig_edit, "codigo"])
                 edit_item_brig = col_edb2.text_input("Nome:", value=df_raw_brig.loc[opcao_brig_edit, "item"])
                 edit_qtd_brig = col_edb1.number_input("Quantidade (Ajuste):", min_value=0, value=int(df_raw_brig.loc[opcao_brig_edit, "quantidade"]))
-                edit_cat_brig = col_edb2.text_input("Categoria:", value=df_raw_brig.loc[opcao_brig_edit, "categoria"] or "")
+                df_cat_brigada_edit = pd.read_sql_query("SELECT nome FROM categorias_brigada ORDER BY nome ASC;", conn)
+                lista_categorias_brigada_edit = df_cat_brigada_edit["nome"].tolist()
+                cat_atual_brig_edit = df_raw_brig.loc[opcao_brig_edit, "categoria"]
+                if cat_atual_brig_edit and cat_atual_brig_edit not in lista_categorias_brigada_edit:
+                    lista_categorias_brigada_edit = [cat_atual_brig_edit] + lista_categorias_brigada_edit
+                idx_cat_brig_edit = lista_categorias_brigada_edit.index(cat_atual_brig_edit) if cat_atual_brig_edit in lista_categorias_brigada_edit else 0
+                edit_cat_brig = col_edb2.selectbox("Categoria:", lista_categorias_brigada_edit if lista_categorias_brigada_edit else ["Nenhuma categoria cadastrada"], index=idx_cat_brig_edit)
                 edit_val_brig = st.number_input("Valor Unitário:", min_value=0.0, step=0.01, format="%.2f", value=float(df_raw_brig.loc[opcao_brig_edit, "valor_unitario"] or 0))
 
                 col_bbtn1, col_bbtn2 = st.columns([1, 4])
