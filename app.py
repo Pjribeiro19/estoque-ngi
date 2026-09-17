@@ -1864,8 +1864,8 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         renderizar_banner("Materiais Brigada", "Estoque próprio da Brigada, separado do almoxarifado geral")
         aba_brigada_admin = option_menu(
             menu_title=None,
-            options=["Itens Disponíveis", "Cadastrar Item", "Registro de Entrada", "Registro de Saída", "Histórico de Movimentação", "Editar / Excluir Item"],
-            icons=["box-seam", "plus-circle", "arrow-down-circle", "arrow-up-circle", "journal-text", "pencil-square"],
+            options=["Itens Disponíveis", "Cadastrar Item", "Gerenciar Categorias", "Registro de Entrada", "Registro de Saída", "Histórico de Movimentação", "Editar / Excluir Item"],
+            icons=["box-seam", "plus-circle", "tags", "arrow-down-circle", "arrow-up-circle", "journal-text", "pencil-square"],
             orientation="horizontal",
             styles=ESTILO_MENU_HORIZONTAL
         )
@@ -1892,35 +1892,6 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             df_cat_brigada = pd.read_sql_query("SELECT nome FROM categorias_brigada ORDER BY nome ASC;", conn)
             lista_categorias_brigada = df_cat_brigada["nome"].tolist()
 
-            with st.expander("Gerenciar Categorias da Brigada"):
-                col_catb1, col_catb2 = st.columns([2, 1])
-                with col_catb1:
-                    nova_cat_brig = st.text_input("Nova categoria:", placeholder="Ex: EPI, Combate a Incêndio, Primeiros Socorros", key="nova_cat_brigada")
-                    if st.button("Adicionar Categoria", key="add_cat_brigada"):
-                        if nova_cat_brig and nova_cat_brig.strip():
-                            try:
-                                cursor = conn.cursor()
-                                cursor.execute("INSERT INTO categorias_brigada VALUES (%s);", (nova_cat_brig.strip(),))
-                                conn.commit()
-                                st.success("Categoria adicionada!")
-                                st.rerun()
-                            except psycopg2.IntegrityError:
-                                conn.rollback()
-                                st.error("Esta categoria já existe.")
-                with col_catb2:
-                    st.markdown("**Categorias atuais:**")
-                    if lista_categorias_brigada:
-                        for cat_existente_brig in lista_categorias_brigada:
-                            col_ce1, col_ce2 = st.columns([3, 1])
-                            col_ce1.write(cat_existente_brig)
-                            if col_ce2.button("🗑", key=f"del_cat_brig_{cat_existente_brig}"):
-                                cursor = conn.cursor()
-                                cursor.execute("DELETE FROM categorias_brigada WHERE nome = %s;", (cat_existente_brig,))
-                                conn.commit()
-                                st.rerun()
-                    else:
-                        st.caption("Nenhuma categoria cadastrada ainda.")
-
             with st.form("form_novo_produto_brigada", clear_on_submit=True):
                 col_ba, col_bb = st.columns(2)
                 cod_brig = col_ba.text_input("Código")
@@ -1944,7 +1915,42 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                         st.error("Preencha ao menos o Código e o Nome do Material!")
 
         # ---------------------------------------------------------------
-        # ABA 3: REGISTRO DE ENTRADA
+        # ABA 3: GERENCIAR CATEGORIAS
+        # ---------------------------------------------------------------
+        elif aba_brigada_admin == "Gerenciar Categorias":
+            df_cat_brigada_aba = pd.read_sql_query("SELECT nome FROM categorias_brigada ORDER BY nome ASC;", conn)
+            lista_categorias_brigada_aba = df_cat_brigada_aba["nome"].tolist()
+
+            col_catb1, col_catb2 = st.columns([2, 1])
+            with col_catb1:
+                nova_cat_brig = st.text_input("Nova categoria:", placeholder="Ex: EPI, Combate a Incêndio, Primeiros Socorros", key="nova_cat_brigada")
+                if st.button("Adicionar Categoria", type="primary", key="add_cat_brigada"):
+                    if nova_cat_brig and nova_cat_brig.strip():
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("INSERT INTO categorias_brigada VALUES (%s);", (nova_cat_brig.strip(),))
+                            conn.commit()
+                            st.success("Categoria adicionada!")
+                            st.rerun()
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
+                            st.error("Esta categoria já existe.")
+            with col_catb2:
+                st.markdown("**Categorias atuais:**")
+                if lista_categorias_brigada_aba:
+                    for cat_existente_brig in lista_categorias_brigada_aba:
+                        col_ce1, col_ce2 = st.columns([3, 1])
+                        col_ce1.write(cat_existente_brig)
+                        if col_ce2.button("🗑", key=f"del_cat_brig_{cat_existente_brig}"):
+                            cursor = conn.cursor()
+                            cursor.execute("DELETE FROM categorias_brigada WHERE nome = %s;", (cat_existente_brig,))
+                            conn.commit()
+                            st.rerun()
+                else:
+                    st.caption("Nenhuma categoria cadastrada ainda.")
+
+        # ---------------------------------------------------------------
+        # ABA 4: REGISTRO DE ENTRADA
         # ---------------------------------------------------------------
         elif aba_brigada_admin == "Registro de Entrada":
             if df_raw_brig.empty:
@@ -1979,7 +1985,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                             st.error(f"Erro ao salvar entrada: {ex_ent_brig}")
 
         # ---------------------------------------------------------------
-        # ABA 4: REGISTRO DE SAÍDA
+        # ABA 5: REGISTRO DE SAÍDA
         # ---------------------------------------------------------------
         elif aba_brigada_admin == "Registro de Saída":
             if df_raw_brig.empty:
@@ -2025,7 +2031,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                                 st.error(f"Saldo Insuficiente! O material possui apenas {prod_qtd_atual_brig} unidades no estoque.")
 
         # ---------------------------------------------------------------
-        # ABA 5: HISTÓRICO DE MOVIMENTAÇÃO
+        # ABA 6: HISTÓRICO DE MOVIMENTAÇÃO
         # ---------------------------------------------------------------
         elif aba_brigada_admin == "Histórico de Movimentação":
             df_mov_brig = pd.read_sql_query("SELECT data AS Data, tipo AS Tipo, codigo AS Código, item AS Item, quantidade AS Quantidade, responsavel AS Responsável, coordenacao AS Coordenação FROM movimentacoes_brigada ORDER BY id DESC;", conn)
@@ -2035,7 +2041,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 st.dataframe(df_mov_brig, use_container_width=True, hide_index=True)
 
         # ---------------------------------------------------------------
-        # ABA 6: EDITAR / EXCLUIR ITEM
+        # ABA 7: EDITAR / EXCLUIR ITEM
         # ---------------------------------------------------------------
         elif aba_brigada_admin == "Editar / Excluir Item":
             if df_raw_brig.empty:
