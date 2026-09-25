@@ -1617,18 +1617,23 @@ else:
             else:
                 def status_texto_emprestimo_admin(row):
                     if row["quantidade_disponivel"] > 0:
-                        return f"🟢 Disponível ({row['quantidade_disponivel']})"
+                        return f"Disponível ({row['quantidade_disponivel']})"
                     elif row["previsao_devolucao"] is not None:
-                        return f"🟠 Em uso — devolução prevista: {row['previsao_devolucao'].strftime('%d/%m/%Y')}"
+                        return f"Em uso — devolução prevista: {row['previsao_devolucao'].strftime('%d/%m/%Y')}"
                     else:
-                        return "🟠 Em uso"
+                        return "Em uso"
+
+                def destacar_status_emprestimo_admin(val):
+                    if val.startswith("Disponível"):
+                        return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+                    elif val.startswith("Em uso"):
+                        return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
+                    return ''
 
                 df_status_emp_admin = df_todos_itens_emprestimo_admin.copy()
                 df_status_emp_admin["Status"] = df_status_emp_admin.apply(status_texto_emprestimo_admin, axis=1)
-                st.dataframe(
-                    df_status_emp_admin.rename(columns={"codigo": "Código", "item": "Item"})[["Código", "Item", "Status"]],
-                    use_container_width=True, hide_index=True
-                )
+                df_status_emp_admin = df_status_emp_admin.rename(columns={"codigo": "Código", "item": "Item"})[["Código", "Item", "Status"]]
+                st.dataframe(df_status_emp_admin.style.map(destacar_status_emprestimo_admin, subset=['Status']), use_container_width=True, hide_index=True)
                 st.caption("Um item indisponível não aparece na lista de seleção abaixo — verifique aqui a previsão de devolução antes de planejar a retirada.")
                 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -2235,11 +2240,18 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         else:
             def status_texto_emprestimo(row):
                 if row["quantidade_disponivel"] > 0:
-                    return f"🟢 Disponível ({row['quantidade_disponivel']})"
+                    return f"Disponível ({row['quantidade_disponivel']})"
                 elif row["previsao_devolucao"] is not None:
-                    return f"🟠 Em uso — devolução prevista: {row['previsao_devolucao'].strftime('%d/%m/%Y')}"
+                    return f"Em uso — devolução prevista: {row['previsao_devolucao'].strftime('%d/%m/%Y')}"
                 else:
-                    return "🟠 Em uso"
+                    return "Em uso"
+
+            def destacar_status_emprestimo(val):
+                if val.startswith("Disponível"):
+                    return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+                elif val.startswith("Em uso"):
+                    return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
+                return ''
 
             df_emp_disp_user = df_todos_itens_emprestimo.copy()
             df_emp_disp_user["Status"] = df_emp_disp_user.apply(status_texto_emprestimo, axis=1)
@@ -2247,7 +2259,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 "codigo": "Código", "item": "Item / Equipamento", "observacao": "Observações"
             })[["Código", "Item / Equipamento", "Status", "Observações"]]
 
-            st.dataframe(df_emp_disp_user, use_container_width=True, hide_index=True)
+            st.dataframe(df_emp_disp_user.style.map(destacar_status_emprestimo, subset=['Status']), use_container_width=True, hide_index=True)
             st.caption("Um item indisponível não aparece na lista de seleção abaixo — verifique aqui a previsão de devolução antes de planejar sua retirada.")
 
             st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
