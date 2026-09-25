@@ -1604,25 +1604,43 @@ else:
             if "carrinho_emprestimo" not in st.session_state:
                 st.session_state.carrinho_emprestimo = []
 
-            df_raw_emp_admin = pd.read_sql_query("SELECT id, codigo, item, quantidade_disponivel FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY codigo ASC;", conn)
+            df_raw_emp_admin = pd.read_sql_query("""
+                SELECT ei.id, ei.codigo, ei.item, ei.quantidade_disponivel,
+                       (SELECT MIN(er.data_prevista) FROM emprestimo_registros er WHERE er.item_id = ei.id AND er.status = 'EMPRESTADO') AS previsao_devolucao
+                FROM emprestimo_itens ei
+                ORDER BY ei.codigo ASC;
+            """, conn)
             lista_siglas_coord_admin = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
 
             if df_raw_emp_admin.empty:
-                st.info("Nenhum item disponível para empréstimo no momento.")
+                st.info("Nenhum item cadastrado para empréstimo no momento.")
             else:
+                def formatar_opcao_emprestimo_admin(x):
+                    linha = df_raw_emp_admin.loc[x]
+                    if linha["quantidade_disponivel"] > 0:
+                        return f"{linha['item']} (Disponível: {linha['quantidade_disponivel']})"
+                    elif linha["previsao_devolucao"] is not None:
+                        return f"{linha['item']} (Em uso — previsão de devolução: {linha['previsao_devolucao'].strftime('%d/%m/%Y')})"
+                    else:
+                        return f"{linha['item']} (Em uso)"
+
                 col_add_a1, col_add_a2, col_add_a3 = st.columns([3, 1, 1])
                 opcao_sol_admin = col_add_a1.selectbox(
                     "Selecione o Item:",
                     df_raw_emp_admin.index,
-                    format_func=lambda x: f"{df_raw_emp_admin.loc[x, 'item']} (Disponível: {df_raw_emp_admin.loc[x, 'quantidade_disponivel']})",
+                    format_func=formatar_opcao_emprestimo_admin,
                     key="select_emprestimo_admin"
                 )
-                qtd_sol_admin = col_add_a2.number_input("Quantidade:", min_value=1, max_value=int(df_raw_emp_admin.loc[opcao_sol_admin, "quantidade_disponivel"]), value=1, step=1, key="qtd_emprestimo_admin")
+                qtd_disponivel_admin = int(df_raw_emp_admin.loc[opcao_sol_admin, "quantidade_disponivel"])
+                qtd_sol_admin = col_add_a2.number_input("Quantidade:", min_value=1, max_value=max(1, qtd_disponivel_admin), value=1, step=1, key="qtd_emprestimo_admin", disabled=(qtd_disponivel_admin == 0))
                 col_add_a3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
                 if col_add_a3.button("+ Adicionar", key="add_carrinho_admin", use_container_width=True):
-                    item_id_sel_admin = int(df_raw_emp_admin.loc[opcao_sol_admin, "id"])
-                    nome_sel_admin = df_raw_emp_admin.loc[opcao_sol_admin, "item"]
-                    st.session_state.carrinho_emprestimo.append({"item_id": item_id_sel_admin, "item": nome_sel_admin, "quantidade": int(qtd_sol_admin)})
+                    if qtd_disponivel_admin == 0:
+                        st.error("Este item está em uso no momento e não pode ser adicionado.")
+                    else:
+                        item_id_sel_admin = int(df_raw_emp_admin.loc[opcao_sol_admin, "id"])
+                        nome_sel_admin = df_raw_emp_admin.loc[opcao_sol_admin, "item"]
+                        st.session_state.carrinho_emprestimo.append({"item_id": item_id_sel_admin, "item": nome_sel_admin, "quantidade": int(qtd_sol_admin)})
                     st.rerun()
 
                 if st.session_state.carrinho_emprestimo:
@@ -2197,19 +2215,24 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             st.success("Sua solicitação foi encaminhada com sucesso!")
             del st.session_state["msg_sucesso_emprestimo"]
 
-        df_emp_disp_user = pd.read_sql_query("""
-            SELECT 
-                codigo AS "Código", 
-                item AS "Item / Equipamento", 
-                quantidade_disponivel AS "Qtd Disponível",
-                observacao AS "Observações"
-            FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY codigo ASC;
+        df_todos_itens_emprestimo = pd.read_sql_query("""
+            SELECT ei.id, ei.codigo, ei.item, ei.quantidade_disponivel, ei.observacao,
+                   (SELECT MIN(er.data_prevista) FROM emprestimo_registros er WHERE er.item_id = ei.id AND er.status = 'EMPRESTADO') AS previsao_devolucao
+            FROM emprestimo_itens ei
+            ORDER BY ei.codigo ASC;
         """, conn)
 
-        if df_emp_disp_user.empty:
-            st.info("Nenhum item disponível para empréstimo no momento.")
+        if df_todos_itens_emprestimo.empty:
+            st.info("Nenhum item cadastrado para empréstimo no momento.")
         else:
-            st.dataframe(df_emp_disp_user, use_container_width=True, hide_index=True)
+            df_emp_disp_user = df_todos_itens_emprestimo[df_todos_itens_emprestimo["quantidade_disponivel"] > 0].rename(columns={
+                "codigo": "Código", "item": "Item / Equipamento", "quantidade_disponivel": "Qtd Disponível", "observacao": "Observações"
+            })[["Código", "Item / Equipamento", "Qtd Disponível", "Observações"]]
+
+            if df_emp_disp_user.empty:
+                st.info("Nenhum item disponível para empréstimo no momento — todos estão em uso.")
+            else:
+                st.dataframe(df_emp_disp_user, use_container_width=True, hide_index=True)
 
             st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
             st.markdown("### Nova Solicitação de Empréstimo")
@@ -2218,23 +2241,36 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             if "carrinho_emprestimo" not in st.session_state:
                 st.session_state.carrinho_emprestimo = []
 
-            df_raw_emp_user = pd.read_sql_query("SELECT id, codigo, item, quantidade_disponivel FROM emprestimo_itens WHERE quantidade_disponivel > 0 ORDER BY codigo ASC;", conn)
+            df_raw_emp_user = df_todos_itens_emprestimo
             lista_siglas_coord_emp_user = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
+
+            def formatar_opcao_emprestimo_user(x):
+                linha = df_raw_emp_user.loc[x]
+                if linha["quantidade_disponivel"] > 0:
+                    return f"{linha['item']} (Disponível: {linha['quantidade_disponivel']})"
+                elif linha["previsao_devolucao"] is not None:
+                    return f"{linha['item']} (Em uso — previsão de devolução: {linha['previsao_devolucao'].strftime('%d/%m/%Y')})"
+                else:
+                    return f"{linha['item']} (Em uso)"
 
             col_add_e1, col_add_e2, col_add_e3 = st.columns([3, 1, 1])
             opcao_sol_emp = col_add_e1.selectbox(
                 "Selecione o Item:",
                 df_raw_emp_user.index,
-                format_func=lambda x: f"{df_raw_emp_user.loc[x, 'item']} (Disponível: {df_raw_emp_user.loc[x, 'quantidade_disponivel']})",
+                format_func=formatar_opcao_emprestimo_user,
                 key="select_emprestimo_carrinho"
             )
-            qtd_sol_emp = col_add_e2.number_input("Quantidade:", min_value=1, max_value=int(df_raw_emp_user.loc[opcao_sol_emp, "quantidade_disponivel"]), value=1, step=1, key="qtd_emprestimo_carrinho")
+            qtd_disponivel_emp = int(df_raw_emp_user.loc[opcao_sol_emp, "quantidade_disponivel"])
+            qtd_sol_emp = col_add_e2.number_input("Quantidade:", min_value=1, max_value=max(1, qtd_disponivel_emp), value=1, step=1, key="qtd_emprestimo_carrinho", disabled=(qtd_disponivel_emp == 0))
             col_add_e3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
             if col_add_e3.button("+ Adicionar", key="add_carrinho_emprestimo", use_container_width=True):
-                item_id_sel = int(df_raw_emp_user.loc[opcao_sol_emp, "id"])
-                nome_sel_emp = df_raw_emp_user.loc[opcao_sol_emp, "item"]
-                st.session_state.carrinho_emprestimo.append({"item_id": item_id_sel, "item": nome_sel_emp, "quantidade": int(qtd_sol_emp)})
-                st.rerun()
+                if qtd_disponivel_emp == 0:
+                    st.error("Este item está em uso no momento e não pode ser adicionado.")
+                else:
+                    item_id_sel = int(df_raw_emp_user.loc[opcao_sol_emp, "id"])
+                    nome_sel_emp = df_raw_emp_user.loc[opcao_sol_emp, "item"]
+                    st.session_state.carrinho_emprestimo.append({"item_id": item_id_sel, "item": nome_sel_emp, "quantidade": int(qtd_sol_emp)})
+                    st.rerun()
 
             if st.session_state.carrinho_emprestimo:
                 st.markdown("**Itens no carrinho:**")
