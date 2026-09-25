@@ -1604,7 +1604,7 @@ else:
             if "carrinho_emprestimo" not in st.session_state:
                 st.session_state.carrinho_emprestimo = []
 
-            df_raw_emp_admin = pd.read_sql_query("""
+            df_todos_itens_emprestimo_admin = pd.read_sql_query("""
                 SELECT ei.id, ei.codigo, ei.item, ei.quantidade_disponivel,
                        (SELECT MIN(er.data_prevista) FROM emprestimo_registros er WHERE er.item_id = ei.id AND er.status = 'EMPRESTADO') AS previsao_devolucao
                 FROM emprestimo_itens ei
@@ -1612,36 +1612,50 @@ else:
             """, conn)
             lista_siglas_coord_admin = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
 
-            if df_raw_emp_admin.empty:
+            if df_todos_itens_emprestimo_admin.empty:
                 st.info("Nenhum item cadastrado para empréstimo no momento.")
             else:
-                def formatar_opcao_emprestimo_admin(x):
-                    linha = df_raw_emp_admin.loc[x]
-                    if linha["quantidade_disponivel"] > 0:
-                        return f"{linha['item']} (Disponível: {linha['quantidade_disponivel']})"
-                    elif linha["previsao_devolucao"] is not None:
-                        return f"{linha['item']} (Em uso — previsão de devolução: {linha['previsao_devolucao'].strftime('%d/%m/%Y')})"
+                def status_texto_emprestimo_admin(row):
+                    if row["quantidade_disponivel"] > 0:
+                        return f"🟢 Disponível ({row['quantidade_disponivel']})"
+                    elif row["previsao_devolucao"] is not None:
+                        return f"🟠 Em uso — devolução prevista: {row['previsao_devolucao'].strftime('%d/%m/%Y')}"
                     else:
-                        return f"{linha['item']} (Em uso)"
+                        return "🟠 Em uso"
 
-                col_add_a1, col_add_a2, col_add_a3 = st.columns([3, 1, 1])
-                opcao_sol_admin = col_add_a1.selectbox(
-                    "Selecione o Item:",
-                    df_raw_emp_admin.index,
-                    format_func=formatar_opcao_emprestimo_admin,
-                    key="select_emprestimo_admin"
+                df_status_emp_admin = df_todos_itens_emprestimo_admin.copy()
+                df_status_emp_admin["Status"] = df_status_emp_admin.apply(status_texto_emprestimo_admin, axis=1)
+                st.dataframe(
+                    df_status_emp_admin.rename(columns={"codigo": "Código", "item": "Item"})[["Código", "Item", "Status"]],
+                    use_container_width=True, hide_index=True
                 )
-                qtd_disponivel_admin = int(df_raw_emp_admin.loc[opcao_sol_admin, "quantidade_disponivel"])
-                qtd_sol_admin = col_add_a2.number_input("Quantidade:", min_value=1, max_value=max(1, qtd_disponivel_admin), value=1, step=1, key="qtd_emprestimo_admin", disabled=(qtd_disponivel_admin == 0))
-                col_add_a3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                if col_add_a3.button("+ Adicionar", key="add_carrinho_admin", use_container_width=True):
-                    if qtd_disponivel_admin == 0:
-                        st.error("Este item está em uso no momento e não pode ser adicionado.")
-                    else:
+                st.caption("Um item indisponível não aparece na lista de seleção abaixo — verifique aqui a previsão de devolução antes de planejar a retirada.")
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                col_dta1, col_dta2, col_dta3 = st.columns(3)
+                data_retirada_admin = col_dta1.date_input("Data de Retirada: *", value=date.today(), format="DD/MM/YYYY", key="data_retirada_admin")
+                data_prev_admin = col_dta2.date_input("Data de Devolução: *", value=date.today(), format="DD/MM/YYYY", key="data_prev_admin")
+                coord_sol_admin = col_dta3.selectbox("Coordenação:", lista_siglas_coord_admin, key="coord_carrinho_admin")
+
+                df_raw_emp_admin = df_todos_itens_emprestimo_admin[df_todos_itens_emprestimo_admin["quantidade_disponivel"] > 0].reset_index(drop=True)
+
+                if df_raw_emp_admin.empty:
+                    st.warning("Nenhum item disponível para adicionar no momento — confira a previsão de devolução na tabela acima.")
+                else:
+                    col_add_a1, col_add_a2, col_add_a3 = st.columns([3, 1, 1])
+                    opcao_sol_admin = col_add_a1.selectbox(
+                        "Selecione o Item:",
+                        df_raw_emp_admin.index,
+                        format_func=lambda x: f"{df_raw_emp_admin.loc[x, 'item']} (Disponível: {df_raw_emp_admin.loc[x, 'quantidade_disponivel']})",
+                        key="select_emprestimo_admin"
+                    )
+                    qtd_sol_admin = col_add_a2.number_input("Quantidade:", min_value=1, max_value=int(df_raw_emp_admin.loc[opcao_sol_admin, "quantidade_disponivel"]), value=1, step=1, key="qtd_emprestimo_admin")
+                    col_add_a3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                    if col_add_a3.button("+ Adicionar", key="add_carrinho_admin", use_container_width=True):
                         item_id_sel_admin = int(df_raw_emp_admin.loc[opcao_sol_admin, "id"])
                         nome_sel_admin = df_raw_emp_admin.loc[opcao_sol_admin, "item"]
                         st.session_state.carrinho_emprestimo.append({"item_id": item_id_sel_admin, "item": nome_sel_admin, "quantidade": int(qtd_sol_admin)})
-                    st.rerun()
+                        st.rerun()
 
                 if st.session_state.carrinho_emprestimo:
                     st.markdown("**Itens selecionados:**")
@@ -1658,12 +1672,6 @@ else:
                             st.rerun()
 
                     st.markdown("<br>", unsafe_allow_html=True)
-                    coord_sol_admin = st.selectbox("Coordenação:", lista_siglas_coord_admin, key="coord_carrinho_admin")
-
-                    col_dta1, col_dta2 = st.columns(2)
-                    data_retirada_admin = col_dta1.date_input("Data de Retirada: *", value=date.today(), format="DD/MM/YYYY", key="data_retirada_admin")
-                    data_prev_admin = col_dta2.date_input("Data de Devolução: *", value=date.today(), format="DD/MM/YYYY", key="data_prev_admin")
-
                     atividade_sol_admin = st.text_input("Atividade Associada: *", placeholder="Ex: Vistoria de campo na trilha X", key="atividade_admin")
                     obs_sol_admin = st.text_area("Observações (opcional):", key="obs_admin")
 
@@ -2225,48 +2233,52 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         if df_todos_itens_emprestimo.empty:
             st.info("Nenhum item cadastrado para empréstimo no momento.")
         else:
-            df_emp_disp_user = df_todos_itens_emprestimo[df_todos_itens_emprestimo["quantidade_disponivel"] > 0].rename(columns={
-                "codigo": "Código", "item": "Item / Equipamento", "quantidade_disponivel": "Qtd Disponível", "observacao": "Observações"
-            })[["Código", "Item / Equipamento", "Qtd Disponível", "Observações"]]
+            def status_texto_emprestimo(row):
+                if row["quantidade_disponivel"] > 0:
+                    return f"🟢 Disponível ({row['quantidade_disponivel']})"
+                elif row["previsao_devolucao"] is not None:
+                    return f"🟠 Em uso — devolução prevista: {row['previsao_devolucao'].strftime('%d/%m/%Y')}"
+                else:
+                    return "🟠 Em uso"
 
-            if df_emp_disp_user.empty:
-                st.info("Nenhum item disponível para empréstimo no momento — todos estão em uso.")
-            else:
-                st.dataframe(df_emp_disp_user, use_container_width=True, hide_index=True)
+            df_emp_disp_user = df_todos_itens_emprestimo.copy()
+            df_emp_disp_user["Status"] = df_emp_disp_user.apply(status_texto_emprestimo, axis=1)
+            df_emp_disp_user = df_emp_disp_user.rename(columns={
+                "codigo": "Código", "item": "Item / Equipamento", "observacao": "Observações"
+            })[["Código", "Item / Equipamento", "Status", "Observações"]]
+
+            st.dataframe(df_emp_disp_user, use_container_width=True, hide_index=True)
+            st.caption("Um item indisponível não aparece na lista de seleção abaixo — verifique aqui a previsão de devolução antes de planejar sua retirada.")
 
             st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
             st.markdown("### Nova Solicitação de Empréstimo")
-            st.caption("Adicione quantos itens forem necessários ao carrinho. Todos serão enviados em uma única solicitação.")
+            st.caption("Primeiro informe o período desejado, depois adicione os itens ao carrinho. Todos serão enviados em uma única solicitação.")
 
             if "carrinho_emprestimo" not in st.session_state:
                 st.session_state.carrinho_emprestimo = []
 
-            df_raw_emp_user = df_todos_itens_emprestimo
             lista_siglas_coord_emp_user = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
 
-            def formatar_opcao_emprestimo_user(x):
-                linha = df_raw_emp_user.loc[x]
-                if linha["quantidade_disponivel"] > 0:
-                    return f"{linha['item']} (Disponível: {linha['quantidade_disponivel']})"
-                elif linha["previsao_devolucao"] is not None:
-                    return f"{linha['item']} (Em uso — previsão de devolução: {linha['previsao_devolucao'].strftime('%d/%m/%Y')})"
-                else:
-                    return f"{linha['item']} (Em uso)"
+            col_dt1, col_dt2, col_dt3 = st.columns(3)
+            data_retirada_sol = col_dt1.date_input("Data de Retirada: *", value=date.today(), format="DD/MM/YYYY", key="data_retirada_carrinho_emp")
+            data_prev_sol = col_dt2.date_input("Data de Devolução: *", value=date.today(), format="DD/MM/YYYY", key="data_prev_carrinho_emp")
+            coord_sol_emp = col_dt3.selectbox("Coordenação:", lista_siglas_coord_emp_user, key="coord_carrinho_emp")
 
-            col_add_e1, col_add_e2, col_add_e3 = st.columns([3, 1, 1])
-            opcao_sol_emp = col_add_e1.selectbox(
-                "Selecione o Item:",
-                df_raw_emp_user.index,
-                format_func=formatar_opcao_emprestimo_user,
-                key="select_emprestimo_carrinho"
-            )
-            qtd_disponivel_emp = int(df_raw_emp_user.loc[opcao_sol_emp, "quantidade_disponivel"])
-            qtd_sol_emp = col_add_e2.number_input("Quantidade:", min_value=1, max_value=max(1, qtd_disponivel_emp), value=1, step=1, key="qtd_emprestimo_carrinho", disabled=(qtd_disponivel_emp == 0))
-            col_add_e3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-            if col_add_e3.button("+ Adicionar", key="add_carrinho_emprestimo", use_container_width=True):
-                if qtd_disponivel_emp == 0:
-                    st.error("Este item está em uso no momento e não pode ser adicionado.")
-                else:
+            df_raw_emp_user = df_todos_itens_emprestimo[df_todos_itens_emprestimo["quantidade_disponivel"] > 0].reset_index(drop=True)
+
+            if df_raw_emp_user.empty:
+                st.warning("Nenhum item disponível para adicionar no momento — confira a previsão de devolução na tabela acima.")
+            else:
+                col_add_e1, col_add_e2, col_add_e3 = st.columns([3, 1, 1])
+                opcao_sol_emp = col_add_e1.selectbox(
+                    "Selecione o Item:",
+                    df_raw_emp_user.index,
+                    format_func=lambda x: f"{df_raw_emp_user.loc[x, 'item']} (Disponível: {df_raw_emp_user.loc[x, 'quantidade_disponivel']})",
+                    key="select_emprestimo_carrinho"
+                )
+                qtd_sol_emp = col_add_e2.number_input("Quantidade:", min_value=1, max_value=int(df_raw_emp_user.loc[opcao_sol_emp, "quantidade_disponivel"]), value=1, step=1, key="qtd_emprestimo_carrinho")
+                col_add_e3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                if col_add_e3.button("+ Adicionar", key="add_carrinho_emprestimo", use_container_width=True):
                     item_id_sel = int(df_raw_emp_user.loc[opcao_sol_emp, "id"])
                     nome_sel_emp = df_raw_emp_user.loc[opcao_sol_emp, "item"]
                     st.session_state.carrinho_emprestimo.append({"item_id": item_id_sel, "item": nome_sel_emp, "quantidade": int(qtd_sol_emp)})
@@ -2287,12 +2299,6 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                         st.rerun()
 
                 st.markdown("<br>", unsafe_allow_html=True)
-                coord_sol_emp = st.selectbox("Coordenação:", lista_siglas_coord_emp_user, key="coord_carrinho_emp")
-
-                col_dt1, col_dt2 = st.columns(2)
-                data_retirada_sol = col_dt1.date_input("Data de Retirada: *", value=date.today(), format="DD/MM/YYYY", key="data_retirada_carrinho_emp")
-                data_prev_sol = col_dt2.date_input("Data de Devolução: *", value=date.today(), format="DD/MM/YYYY", key="data_prev_carrinho_emp")
-
                 atividade_sol_emp = st.text_input("Atividade Associada: *", placeholder="Ex: Vistoria de campo na trilha X", key="atividade_carrinho_emp")
                 obs_sol_emp = st.text_area("Observações (opcional):", key="obs_carrinho_emp")
 
