@@ -2258,16 +2258,16 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             if df_raw_livros.empty:
                 st.info("Nenhum livro ou produto cadastrado ainda.")
             else:
-                colunas_grade = st.columns(4)
+                colunas_grade = st.columns(6)
                 for i_livro, linha_livro in df_raw_livros.reset_index(drop=True).iterrows():
-                    with colunas_grade[i_livro % 4]:
+                    with colunas_grade[i_livro % 6]:
                         with st.container(border=True):
                             if linha_livro["foto"] is not None:
-                                st.image(bytes(linha_livro["foto"]), use_container_width=True)
-                            st.markdown(f"**{linha_livro['titulo']}**")
+                                st.image(bytes(linha_livro["foto"]), width=110)
+                            st.markdown(f"<span style='font-size: 13px; font-weight: 600;'>{linha_livro['titulo']}</span>", unsafe_allow_html=True)
                             st.caption(f"Código: {linha_livro['codigo']} · {linha_livro['tipo'] or '-'}")
                             cor_qtd = "#4CAF50" if linha_livro["quantidade"] > 0 else "#c62828"
-                            st.markdown(f"<span style='color:{cor_qtd}; font-weight:700;'>Disponível: {linha_livro['quantidade']}</span>", unsafe_allow_html=True)
+                            st.markdown(f"<span style='color:{cor_qtd}; font-weight:700; font-size: 13px;'>Disponível: {linha_livro['quantidade']}</span>", unsafe_allow_html=True)
 
         # ---------------------------------------------------------------
         # ABA 2: CADASTRAR ITEM (FOTO OBRIGATÓRIA)
@@ -2464,13 +2464,13 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         if df_disp_livros.empty:
             st.info("Nenhum livro ou produto disponível no momento.")
         else:
-            colunas_grade_user = st.columns(4)
+            colunas_grade_user = st.columns(6)
             for i_livro_u, linha_livro_u in df_disp_livros.reset_index(drop=True).iterrows():
-                with colunas_grade_user[i_livro_u % 4]:
+                with colunas_grade_user[i_livro_u % 6]:
                     with st.container(border=True):
                         if linha_livro_u["foto"] is not None:
-                            st.image(bytes(linha_livro_u["foto"]), use_container_width=True)
-                        st.markdown(f"**{linha_livro_u['titulo']}**")
+                            st.image(bytes(linha_livro_u["foto"]), width=110)
+                        st.markdown(f"<span style='font-size: 13px; font-weight: 600;'>{linha_livro_u['titulo']}</span>", unsafe_allow_html=True)
                         st.caption(f"{linha_livro_u['tipo'] or '-'} · Disponível: {linha_livro_u['quantidade']}")
 
             st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
