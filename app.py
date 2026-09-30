@@ -439,9 +439,11 @@ def inicializar_banco_automatico():
             titulo TEXT NOT NULL,
             tipo TEXT,
             quantidade INTEGER NOT NULL DEFAULT 0,
-            foto BYTEA NOT NULL
+            foto BYTEA
         );
     """)
+
+    cursor.execute("ALTER TABLE produtos_livros ALTER COLUMN foto DROP NOT NULL;")
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS movimentacoes_livros (
@@ -2411,6 +2413,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 edit_tipo_livro = col_edl1.selectbox("Tipo:", lista_tipo_livro, index=idx_tipo_livro)
                 edit_qtd_livro = col_edl2.number_input("Quantidade (Ajuste):", min_value=0, value=int(df_raw_livros.loc[opcao_livro_edit, "quantidade"]))
                 nova_foto_livro = st.file_uploader("Substituir Foto (opcional):", type=["png", "jpg", "jpeg"], key=f"nova_foto_{cod_atual_livro}")
+                remover_foto_livro = st.checkbox("Remover foto atual (ficar sem foto)", key=f"remover_foto_{cod_atual_livro}")
 
                 col_lbtn1, col_lbtn2 = st.columns([1, 4])
                 with col_lbtn1:
@@ -2422,6 +2425,12 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                                 SET codigo = %s, titulo = %s, tipo = %s, quantidade = %s, foto = %s 
                                 WHERE codigo = %s;
                             """, (edit_cod_livro.strip(), edit_titulo_livro.strip(), edit_tipo_livro, edit_qtd_livro, psycopg2.Binary(nova_foto_livro.getvalue()), cod_atual_livro))
+                        elif remover_foto_livro:
+                            cursor.execute("""
+                                UPDATE produtos_livros 
+                                SET codigo = %s, titulo = %s, tipo = %s, quantidade = %s, foto = NULL 
+                                WHERE codigo = %s;
+                            """, (edit_cod_livro.strip(), edit_titulo_livro.strip(), edit_tipo_livro, edit_qtd_livro, cod_atual_livro))
                         else:
                             cursor.execute("""
                                 UPDATE produtos_livros 
