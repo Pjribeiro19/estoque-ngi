@@ -2237,7 +2237,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # NOVO MÓDULO: LIVROS E PRODUTOS — GESTÃO (ADMINISTRADOR)
     # =========================================================================
     elif escolha == "Livros e Produtos" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum":
-        renderizar_banner("Livros e Produtos", "Catálogo de livros e livretos disponíveis, com foto de referência", cor="#6A1B9A")
+        renderizar_banner("Livros e Produtos", "Catálogo de livros e livretos disponíveis, com foto de referência")
         aba_livros_admin = option_menu(
             menu_title=None,
             options=["Itens Disponíveis", "Cadastrar Item", "Registro de Entrada", "Registro de Saída", "Histórico de Movimentação", "Editar / Excluir Item"],
@@ -2444,7 +2444,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # NOVO MÓDULO: LIVROS E PRODUTOS — SOLICITAÇÃO (TODOS OS USUÁRIOS)
     # =========================================================================
     elif escolha == "Livros e Produtos" and st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
-        renderizar_banner("Livros e Produtos", "Catálogo de livros e livretos disponíveis, com foto de referência", cor="#6A1B9A")
+        renderizar_banner("Livros e Produtos", "Catálogo de livros e livretos disponíveis, com foto de referência")
 
         if st.session_state.get("msg_sucesso_livros"):
             st.success("Sua solicitação foi encaminhada com sucesso!")
@@ -2491,7 +2491,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 for i_carr_lv, item_carr_lv in enumerate(st.session_state.carrinho_livros):
                     col_clv1, col_clv2 = st.columns([5, 1])
                     col_clv1.markdown(f"""
-                        <div style="background-color: rgba(106, 27, 154, 0.08); border-left: 4px solid #6A1B9A; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
+                        <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 4px solid #4CAF50; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
                             <span style="font-size: 15px; font-weight: 600; color: #1a1a1a;">{item_carr_lv['item']}</span>
                             <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_lv['quantidade']}</span>
                         </div>
