@@ -105,6 +105,28 @@ st.markdown("""
         background-color: #43a047 !important;
         border-color: #43a047 !important;
     }
+
+    /* Botões "Adicionar" (carrinho, categorias) - verde suave */
+    [class*="st-key-btn_add_"] button {
+        background-color: rgba(76, 175, 80, 0.14) !important;
+        border-color: rgba(76, 175, 80, 0.45) !important;
+        color: #2E7D32 !important;
+    }
+    [class*="st-key-btn_add_"] button:hover {
+        background-color: rgba(76, 175, 80, 0.24) !important;
+        border-color: #4CAF50 !important;
+    }
+
+    /* Botões "Remover" (itens do carrinho, categorias) - cinza neutro */
+    [class*="st-key-btn_remove_"] button {
+        background-color: #eeeeee !important;
+        border-color: #d5d5d5 !important;
+        color: #555555 !important;
+    }
+    [class*="st-key-btn_remove_"] button:hover {
+        background-color: #e0e0e0 !important;
+        border-color: #bbbbbb !important;
+    }
     
     .img-container {
         display: flex;
@@ -1685,7 +1707,10 @@ else:
                     )
                     qtd_sol_admin = col_add_a2.number_input("Quantidade:", min_value=1, max_value=int(df_raw_emp_admin.loc[opcao_sol_admin, "quantidade_disponivel"]), value=1, step=1, key="qtd_emprestimo_admin")
                     col_add_a3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                    if col_add_a3.button("+ Adicionar", key="add_carrinho_admin", use_container_width=True):
+                    with col_add_a3:
+                        with st.container(key="btn_add_1"):
+                            clicou_add_1 = st.button("+ Adicionar", key="add_carrinho_admin", use_container_width=True)
+                    if clicou_add_1:
                         item_id_sel_admin = int(df_raw_emp_admin.loc[opcao_sol_admin, "id"])
                         nome_sel_admin = df_raw_emp_admin.loc[opcao_sol_admin, "item"]
                         st.session_state.carrinho_emprestimo.append({"item_id": item_id_sel_admin, "item": nome_sel_admin, "quantidade": int(qtd_sol_admin)})
@@ -1701,7 +1726,10 @@ else:
                                 <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_a['quantidade']}</span>
                             </div>
                         """, unsafe_allow_html=True)
-                        if col_ca2.button("Remover", key=f"remover_carrinho_admin_{i_carr_a}"):
+                        with col_ca2:
+                            with st.container(key=f"btn_remove_1_{i_carr_a}"):
+                                clicou_remover_1 = st.button("Remover", key=f"remover_carrinho_admin_{i_carr_a}")
+                        if clicou_remover_1:
                             st.session_state.carrinho_emprestimo.pop(i_carr_a)
                             st.rerun()
 
@@ -1873,7 +1901,10 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             )
             qtd_sol_mat = col_add_m2.number_input("Quantidade:", min_value=1, max_value=int(df_raw_prod_user.loc[opcao_sol_mat, "quantidade"]), value=1, step=1, key="qtd_material_carrinho")
             col_add_m3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-            if col_add_m3.button("+ Adicionar", key="add_carrinho_material", use_container_width=True):
+            with col_add_m3:
+                with st.container(key="btn_add_2"):
+                    clicou_add_2 = st.button("+ Adicionar", key="add_carrinho_material", use_container_width=True)
+            if clicou_add_2:
                 cod_sel = df_raw_prod_user.loc[opcao_sol_mat, "codigo"]
                 nome_sel = df_raw_prod_user.loc[opcao_sol_mat, "item"]
                 st.session_state.carrinho_material.append({"codigo": cod_sel, "item": nome_sel, "quantidade": int(qtd_sol_mat)})
@@ -1890,7 +1921,10 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                             <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr['quantidade']}</span>
                         </div>
                     """, unsafe_allow_html=True)
-                    if col_cm2.button("Remover", key=f"remover_carrinho_material_{i_carr}"):
+                    with col_cm2:
+                        with st.container(key=f"btn_remove_2_{i_carr}"):
+                            clicou_remover_2 = st.button("Remover", key=f"remover_carrinho_material_{i_carr}")
+                    if clicou_remover_2:
                         st.session_state.carrinho_material.pop(i_carr)
                         st.rerun()
 
@@ -1984,7 +2018,9 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             col_catb1, col_catb2 = st.columns([2, 1])
             with col_catb1:
                 nova_cat_brig = st.text_input("Nova categoria:", placeholder="Ex: EPI, Combate a Incêndio, Primeiros Socorros", key="nova_cat_brigada")
-                if st.button("Adicionar Categoria", type="primary", key="add_cat_brigada"):
+                with st.container(key="btn_add_3"):
+                    clicou_add_cat_brig = st.button("Adicionar Categoria", key="add_cat_brigada")
+                if clicou_add_cat_brig:
                     if nova_cat_brig and nova_cat_brig.strip():
                         try:
                             cursor = conn.cursor()
@@ -2191,7 +2227,10 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 )
                 qtd_sol_brig = col_add_br2.number_input("Quantidade:", min_value=1, max_value=int(df_disp_brigada.loc[opcao_sol_brig, "quantidade"]), value=1, step=1, key="qtd_material_brigada")
                 col_add_br3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                if col_add_br3.button("+ Adicionar", key="add_carrinho_brigada", use_container_width=True):
+                with col_add_br3:
+                    with st.container(key="btn_add_4"):
+                        clicou_add_4 = st.button("+ Adicionar", key="add_carrinho_brigada", use_container_width=True)
+                if clicou_add_4:
                     cod_sel_brig = df_disp_brigada.loc[opcao_sol_brig, "codigo"]
                     nome_sel_brig = df_disp_brigada.loc[opcao_sol_brig, "item"]
                     st.session_state.carrinho_brigada.append({"codigo": cod_sel_brig, "item": nome_sel_brig, "quantidade": int(qtd_sol_brig)})
@@ -2208,7 +2247,10 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                                 <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_br['quantidade']}</span>
                             </div>
                         """, unsafe_allow_html=True)
-                        if col_cbr2.button("Remover", key=f"remover_carrinho_brigada_{i_carr_br}"):
+                        with col_cbr2:
+                            with st.container(key=f"btn_remove_3_{i_carr_br}"):
+                                clicou_remover_3 = st.button("Remover", key=f"remover_carrinho_brigada_{i_carr_br}")
+                        if clicou_remover_3:
                             st.session_state.carrinho_brigada.pop(i_carr_br)
                             st.rerun()
 
@@ -2489,7 +2531,10 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             )
             qtd_sol_livro = col_add_lv2.number_input("Quantidade:", min_value=1, max_value=int(df_disp_livros.loc[opcao_sol_livro, "quantidade"]), value=1, step=1, key="qtd_livro_carrinho")
             col_add_lv3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-            if col_add_lv3.button("+ Adicionar", key="add_carrinho_livro", use_container_width=True):
+            with col_add_lv3:
+                with st.container(key="btn_add_5"):
+                    clicou_add_5 = st.button("+ Adicionar", key="add_carrinho_livro", use_container_width=True)
+            if clicou_add_5:
                 cod_sel_livro = df_disp_livros.loc[opcao_sol_livro, "codigo"]
                 titulo_sel_livro = df_disp_livros.loc[opcao_sol_livro, "titulo"]
                 st.session_state.carrinho_livros.append({"codigo": cod_sel_livro, "item": titulo_sel_livro, "quantidade": int(qtd_sol_livro)})
@@ -2505,7 +2550,10 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                             <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_lv['quantidade']}</span>
                         </div>
                     """, unsafe_allow_html=True)
-                    if col_clv2.button("Remover", key=f"remover_carrinho_livro_{i_carr_lv}"):
+                    with col_clv2:
+                        with st.container(key=f"btn_remove_4_{i_carr_lv}"):
+                            clicou_remover_4 = st.button("Remover", key=f"remover_carrinho_livro_{i_carr_lv}")
+                    if clicou_remover_4:
                         st.session_state.carrinho_livros.pop(i_carr_lv)
                         st.rerun()
 
@@ -2621,7 +2669,10 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 )
                 qtd_sol_emp = col_add_e2.number_input("Quantidade:", min_value=1, max_value=int(df_raw_emp_user.loc[opcao_sol_emp, "quantidade_disponivel"]), value=1, step=1, key="qtd_emprestimo_carrinho")
                 col_add_e3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                if col_add_e3.button("+ Adicionar", key="add_carrinho_emprestimo", use_container_width=True):
+                with col_add_e3:
+                    with st.container(key="btn_add_6"):
+                        clicou_add_6 = st.button("+ Adicionar", key="add_carrinho_emprestimo", use_container_width=True)
+                if clicou_add_6:
                     item_id_sel = int(df_raw_emp_user.loc[opcao_sol_emp, "id"])
                     nome_sel_emp = df_raw_emp_user.loc[opcao_sol_emp, "item"]
                     st.session_state.carrinho_emprestimo.append({"item_id": item_id_sel, "item": nome_sel_emp, "quantidade": int(qtd_sol_emp)})
@@ -2637,7 +2688,10 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                             <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_e['quantidade']}</span>
                         </div>
                     """, unsafe_allow_html=True)
-                    if col_ce2.button("Remover", key=f"remover_carrinho_emp_{i_carr_e}"):
+                    with col_ce2:
+                        with st.container(key=f"btn_remove_5_{i_carr_e}"):
+                            clicou_remover_5 = st.button("Remover", key=f"remover_carrinho_emp_{i_carr_e}")
+                    if clicou_remover_5:
                         st.session_state.carrinho_emprestimo.pop(i_carr_e)
                         st.rerun()
 
@@ -2781,7 +2835,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 for _, sol_u in df_pendentes_usuario.iterrows():
                     col_su1, col_su2 = st.columns([5, 1])
                     with col_su1:
-                        st.markdown(f"**#{int(sol_u['id'])} — {sol_u['Tipo']}** · {sol_u['Item']} (Qtd: {sol_u['Quantidade']}) · Solicitado em {sol_u['Data da Solicitação']}")
+                        st.markdown(f"**Solicitação Nº {int(sol_u['id'])} — {sol_u['Tipo']}** · {sol_u['Item']} (Qtd: {sol_u['Quantidade']}) · Solicitado em {sol_u['Data da Solicitação']}")
                     with col_su2:
                         if st.button("Cancelar", key=f"cancelar_sol_{int(sol_u['id'])}"):
                             try:
@@ -3116,7 +3170,9 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             col_cat1, col_cat2 = st.columns([1, 2])
             with col_cat1:
                 nova_cat = st.text_input("Nome da Nova Categoria:")
-                if st.button("Adicionar Categoria", type="primary"):
+                with st.container(key="btn_add_7"):
+                    clicou_add_7 = st.button("Adicionar Categoria")
+                if clicou_add_7:
                     if nova_cat and nova_cat.strip():
                         try:
                             cursor = conn.cursor()
@@ -3798,7 +3854,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                     opcao_equip = st.selectbox(
                         "Selecione o registro:",
                         df_filtrado_equip_idx.index,
-                        format_func=lambda x: f"#{df_filtrado_equip_idx.loc[x, 'id']} - {df_filtrado_equip_idx.loc[x, 'nome_item']} ({df_filtrado_equip_idx.loc[x, 'solicitante_usuario']})"
+                        format_func=lambda x: f"Registro Nº {df_filtrado_equip_idx.loc[x, 'id']} - {df_filtrado_equip_idx.loc[x, 'nome_item']} ({df_filtrado_equip_idx.loc[x, 'solicitante_usuario']})"
                     )
                     id_equip_atual = int(df_filtrado_equip_idx.loc[opcao_equip, "id"])
                     reg = df_filtrado_equip_idx.loc[opcao_equip]
