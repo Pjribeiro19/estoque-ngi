@@ -431,6 +431,32 @@ def inicializar_banco_automatico():
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS origem_estoque TEXT DEFAULT 'GERAL';")
 
     # =========================================================================
+    # NOVO MÓDULO: LIVROS E PRODUTOS (com foto obrigatória)
+    # =========================================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS produtos_livros (
+            codigo TEXT PRIMARY KEY,
+            titulo TEXT NOT NULL,
+            tipo TEXT,
+            quantidade INTEGER NOT NULL DEFAULT 0,
+            foto BYTEA NOT NULL
+        );
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS movimentacoes_livros (
+            id SERIAL PRIMARY KEY,
+            data TEXT,
+            tipo TEXT,
+            codigo TEXT,
+            titulo TEXT,
+            quantidade INTEGER,
+            responsavel TEXT,
+            coordenacao TEXT
+        );
+    """)
+
+    # =========================================================================
     # NOVA TABELA: CONTROLE DE EQUIPAMENTOS EMPRESTADOS (notebooks, desktops,
     # acessórios atribuídos por tempo indeterminado - módulo admin)
     # =========================================================================
@@ -1120,8 +1146,8 @@ else:
             # ---------------------------------------------------------------
             # MENU RESTRITO - PERFIL USUÁRIO (MÓDULO DE SOLICITAÇÃO)
             # ---------------------------------------------------------------
-            opcoes_menu_user = ["Materiais Disponíveis", "Empréstimo de Material"]
-            icones_menu_user = ["box-seam", "arrow-repeat"]
+            opcoes_menu_user = ["Materiais Disponíveis", "Empréstimo de Material", "Livros e Produtos"]
+            icones_menu_user = ["box-seam", "arrow-repeat", "book"]
 
             coordenacao_logada_normalizada = (st.session_state.get("COORDENACAO_USUARIO_LOGADO") or "").strip().upper()
             if coordenacao_logada_normalizada == "BRIGADA":
@@ -1175,6 +1201,7 @@ else:
                     "Empréstimo de Material",
                     "Cadastrar Produto", 
                     "Materiais Brigada",
+                    "Livros e Produtos",
                     "Cadastrar Categoria", 
                     "Cadastrar Usuário", 
                     "Cadastrar Coordenação",
@@ -1184,7 +1211,7 @@ else:
                     "Controle de Equipamentos Emprestados",
                     "Sair do Sistema"
                 ],
-                icons=["grid", "box-seam", "arrow-repeat", "box", "fire", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "laptop", "box-arrow-right"],
+                icons=["grid", "box-seam", "arrow-repeat", "box", "fire", "book", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "laptop", "box-arrow-right"],
                 menu_icon="cast",
                 default_index=0,
                 styles={
@@ -2207,6 +2234,298 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                     st.info("Adicione pelo menos um item ao carrinho para enviar a solicitação.")
 
     # =========================================================================
+    # NOVO MÓDULO: LIVROS E PRODUTOS — GESTÃO (ADMINISTRADOR)
+    # =========================================================================
+    elif escolha == "Livros e Produtos" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum":
+        renderizar_banner("Livros e Produtos", "Catálogo de livros e livretos disponíveis, com foto de referência", cor="#6A1B9A")
+        aba_livros_admin = option_menu(
+            menu_title=None,
+            options=["Itens Disponíveis", "Cadastrar Item", "Registro de Entrada", "Registro de Saída", "Histórico de Movimentação", "Editar / Excluir Item"],
+            icons=["images", "plus-circle", "arrow-down-circle", "arrow-up-circle", "journal-text", "pencil-square"],
+            orientation="horizontal",
+            styles=ESTILO_MENU_HORIZONTAL
+        )
+
+        df_raw_livros = pd.read_sql_query("SELECT codigo, titulo, tipo, quantidade, foto FROM produtos_livros ORDER BY titulo ASC;", conn)
+        lista_siglas_coord_livros = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
+
+        # ---------------------------------------------------------------
+        # ABA 1: ITENS DISPONÍVEIS (GRADE COM FOTOS)
+        # ---------------------------------------------------------------
+        if aba_livros_admin == "Itens Disponíveis":
+            if df_raw_livros.empty:
+                st.info("Nenhum livro ou produto cadastrado ainda.")
+            else:
+                colunas_grade = st.columns(4)
+                for i_livro, linha_livro in df_raw_livros.reset_index(drop=True).iterrows():
+                    with colunas_grade[i_livro % 4]:
+                        with st.container(border=True):
+                            if linha_livro["foto"] is not None:
+                                st.image(bytes(linha_livro["foto"]), use_container_width=True)
+                            st.markdown(f"**{linha_livro['titulo']}**")
+                            st.caption(f"Código: {linha_livro['codigo']} · {linha_livro['tipo'] or '-'}")
+                            cor_qtd = "#4CAF50" if linha_livro["quantidade"] > 0 else "#c62828"
+                            st.markdown(f"<span style='color:{cor_qtd}; font-weight:700;'>Disponível: {linha_livro['quantidade']}</span>", unsafe_allow_html=True)
+
+        # ---------------------------------------------------------------
+        # ABA 2: CADASTRAR ITEM (FOTO OBRIGATÓRIA)
+        # ---------------------------------------------------------------
+        elif aba_livros_admin == "Cadastrar Item":
+            with st.form("form_novo_livro", clear_on_submit=True):
+                col_lv1, col_lv2 = st.columns(2)
+                cod_livro = col_lv1.text_input("Código")
+                titulo_livro = col_lv2.text_input("Título do Livro/Livreto")
+                tipo_livro = col_lv1.selectbox("Tipo:", ["Livro", "Livreto"])
+                qtd_inicial_livro = col_lv2.number_input("Quantidade Inicial:", min_value=0, value=0, step=1)
+                foto_livro = st.file_uploader("Foto de Referência: *", type=["png", "jpg", "jpeg"], help="Obrigatório - anexe uma foto do livro/livreto.")
+
+                if st.form_submit_button("Finalizar Cadastro", type="primary"):
+                    if not (cod_livro and titulo_livro):
+                        st.error("Preencha ao menos o Código e o Título!")
+                    elif foto_livro is None:
+                        st.error("A foto de referência é obrigatória para cadastrar um item.")
+                    else:
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute(
+                                "INSERT INTO produtos_livros (codigo, titulo, tipo, quantidade, foto) VALUES (%s, %s, %s, %s, %s);",
+                                (cod_livro.strip(), titulo_livro.strip(), tipo_livro, int(qtd_inicial_livro), psycopg2.Binary(foto_livro.getvalue()))
+                            )
+                            conn.commit()
+                            st.success(f"Sucesso! '{titulo_livro}' adicionado ao catálogo.")
+                            st.rerun()
+                        except psycopg2.IntegrityError:
+                            conn.rollback()
+                            st.error(f"Erro! Código {cod_livro} já existe.")
+
+        # ---------------------------------------------------------------
+        # ABA 3: REGISTRO DE ENTRADA
+        # ---------------------------------------------------------------
+        elif aba_livros_admin == "Registro de Entrada":
+            if df_raw_livros.empty:
+                st.warning("Nenhum item cadastrado para movimentar.")
+            else:
+                with st.form("form_entrada_livros", clear_on_submit=True):
+                    col_le1, col_le2 = st.columns(2)
+                    data_mov_livro = col_le1.date_input("Data da Movimentação:", value=datetime.today(), format="DD/MM/YYYY").strftime("%Y-%m-%d")
+                    opcao_livro_ent = col_le2.selectbox(
+                        "Selecione o Item:",
+                        df_raw_livros.index,
+                        format_func=lambda x: f"{df_raw_livros.loc[x, 'codigo']} - {df_raw_livros.loc[x, 'titulo']} (Saldo: {df_raw_livros.loc[x, 'quantidade']})"
+                    )
+                    qtd_mov_livro_ent = col_le1.number_input("Quantidade:", min_value=1, step=1, value=1)
+
+                    if st.form_submit_button("Registrar Entrada", type="primary"):
+                        cod_livro_ent = df_raw_livros.loc[opcao_livro_ent, "codigo"]
+                        titulo_livro_ent = df_raw_livros.loc[opcao_livro_ent, "titulo"]
+                        nova_qtd_livro = int(df_raw_livros.loc[opcao_livro_ent, "quantidade"]) + qtd_mov_livro_ent
+                        try:
+                            cursor = conn.cursor()
+                            cursor.execute("UPDATE produtos_livros SET quantidade = %s WHERE codigo = %s;", (nova_qtd_livro, cod_livro_ent))
+                            cursor.execute("""
+                                INSERT INTO movimentacoes_livros (data, tipo, codigo, titulo, quantidade, responsavel, coordenacao)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s);
+                            """, (data_mov_livro, "Entrada", cod_livro_ent, titulo_livro_ent, qtd_mov_livro_ent, st.session_state.NOME_USUARIO_LOGADO, "-"))
+                            conn.commit()
+                            st.success(f"Entrada de {qtd_mov_livro_ent} un. de '{titulo_livro_ent}' registrada! Novo saldo: {nova_qtd_livro}.")
+                            st.rerun()
+                        except Exception as ex_ent_livro:
+                            conn.rollback()
+                            st.error(f"Erro ao salvar entrada: {ex_ent_livro}")
+
+        # ---------------------------------------------------------------
+        # ABA 4: REGISTRO DE SAÍDA
+        # ---------------------------------------------------------------
+        elif aba_livros_admin == "Registro de Saída":
+            if df_raw_livros.empty:
+                st.warning("Nenhum item cadastrado para movimentar.")
+            else:
+                with st.form("form_saida_livros", clear_on_submit=True):
+                    col_ls1, col_ls2 = st.columns(2)
+                    data_mov_livro_s = col_ls1.date_input("Data da Movimentação:", value=datetime.today(), format="DD/MM/YYYY").strftime("%Y-%m-%d")
+                    opcao_livro_sai = col_ls2.selectbox(
+                        "Selecione o Item:",
+                        df_raw_livros.index,
+                        format_func=lambda x: f"{df_raw_livros.loc[x, 'codigo']} - {df_raw_livros.loc[x, 'titulo']} (Saldo: {df_raw_livros.loc[x, 'quantidade']})",
+                        key="select_saida_livros"
+                    )
+                    qtd_mov_livro_sai = col_ls1.number_input("Quantidade da Movimentação:", min_value=1, step=1, value=1)
+                    resp_mov_livro = col_ls2.text_input("Nome da Pessoa Responsável pela Retirada:")
+                    coord_mov_livro = col_ls1.selectbox("Coordenação Destino:", lista_siglas_coord_livros)
+
+                    if st.form_submit_button("Registrar Saída", type="primary"):
+                        if not resp_mov_livro.strip():
+                            st.error("Por favor, digite o nome da pessoa responsável pela retirada.")
+                        else:
+                            cod_livro_sai = df_raw_livros.loc[opcao_livro_sai, "codigo"]
+                            titulo_livro_sai = df_raw_livros.loc[opcao_livro_sai, "titulo"]
+                            qtd_atual_livro = int(df_raw_livros.loc[opcao_livro_sai, "quantidade"])
+
+                            if qtd_atual_livro >= qtd_mov_livro_sai:
+                                nova_qtd_livro_s = qtd_atual_livro - qtd_mov_livro_sai
+                                try:
+                                    cursor = conn.cursor()
+                                    cursor.execute("UPDATE produtos_livros SET quantidade = %s WHERE codigo = %s;", (nova_qtd_livro_s, cod_livro_sai))
+                                    cursor.execute("""
+                                        INSERT INTO movimentacoes_livros (data, tipo, codigo, titulo, quantidade, responsavel, coordenacao)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s);
+                                    """, (data_mov_livro_s, "Saída", cod_livro_sai, titulo_livro_sai, qtd_mov_livro_sai, resp_mov_livro.strip(), coord_mov_livro))
+                                    conn.commit()
+                                    st.success(f"Saída de {qtd_mov_livro_sai} un. de '{titulo_livro_sai}' registrada! Novo saldo: {nova_qtd_livro_s}.")
+                                    st.rerun()
+                                except Exception as ex_sai_livro:
+                                    conn.rollback()
+                                    st.error(f"Erro ao salvar saída: {ex_sai_livro}")
+                            else:
+                                st.error(f"Saldo Insuficiente! O item possui apenas {qtd_atual_livro} unidades no estoque.")
+
+        # ---------------------------------------------------------------
+        # ABA 5: HISTÓRICO DE MOVIMENTAÇÃO
+        # ---------------------------------------------------------------
+        elif aba_livros_admin == "Histórico de Movimentação":
+            df_mov_livros = pd.read_sql_query("SELECT data AS Data, tipo AS Tipo, codigo AS Código, titulo AS Título, quantidade AS Quantidade, responsavel AS Responsável, coordenacao AS Coordenação FROM movimentacoes_livros ORDER BY id DESC;", conn)
+            if df_mov_livros.empty:
+                st.info("Nenhuma movimentação registrada até o momento.")
+            else:
+                st.dataframe(df_mov_livros, use_container_width=True, hide_index=True)
+
+        # ---------------------------------------------------------------
+        # ABA 6: EDITAR / EXCLUIR ITEM
+        # ---------------------------------------------------------------
+        elif aba_livros_admin == "Editar / Excluir Item":
+            if df_raw_livros.empty:
+                st.info("Nenhum livro ou produto cadastrado ainda.")
+            else:
+                opcao_livro_edit = st.selectbox("Selecione para modificar:", df_raw_livros.index, format_func=lambda x: f"{df_raw_livros.loc[x, 'codigo']} - {df_raw_livros.loc[x, 'titulo']}")
+                cod_atual_livro = df_raw_livros.loc[opcao_livro_edit, "codigo"]
+
+                if df_raw_livros.loc[opcao_livro_edit, "foto"] is not None:
+                    st.image(bytes(df_raw_livros.loc[opcao_livro_edit, "foto"]), width=180)
+
+                col_edl1, col_edl2 = st.columns(2)
+                edit_cod_livro = col_edl1.text_input("Código:", value=df_raw_livros.loc[opcao_livro_edit, "codigo"])
+                edit_titulo_livro = col_edl2.text_input("Título:", value=df_raw_livros.loc[opcao_livro_edit, "titulo"])
+                lista_tipo_livro = ["Livro", "Livreto"]
+                tipo_atual_livro = df_raw_livros.loc[opcao_livro_edit, "tipo"]
+                idx_tipo_livro = lista_tipo_livro.index(tipo_atual_livro) if tipo_atual_livro in lista_tipo_livro else 0
+                edit_tipo_livro = col_edl1.selectbox("Tipo:", lista_tipo_livro, index=idx_tipo_livro)
+                edit_qtd_livro = col_edl2.number_input("Quantidade (Ajuste):", min_value=0, value=int(df_raw_livros.loc[opcao_livro_edit, "quantidade"]))
+                nova_foto_livro = st.file_uploader("Substituir Foto (opcional):", type=["png", "jpg", "jpeg"], key=f"nova_foto_{cod_atual_livro}")
+
+                col_lbtn1, col_lbtn2 = st.columns([1, 4])
+                with col_lbtn1:
+                    if st.button("Salvar Alterações", type="primary"):
+                        cursor = conn.cursor()
+                        if nova_foto_livro is not None:
+                            cursor.execute("""
+                                UPDATE produtos_livros 
+                                SET codigo = %s, titulo = %s, tipo = %s, quantidade = %s, foto = %s 
+                                WHERE codigo = %s;
+                            """, (edit_cod_livro.strip(), edit_titulo_livro.strip(), edit_tipo_livro, edit_qtd_livro, psycopg2.Binary(nova_foto_livro.getvalue()), cod_atual_livro))
+                        else:
+                            cursor.execute("""
+                                UPDATE produtos_livros 
+                                SET codigo = %s, titulo = %s, tipo = %s, quantidade = %s 
+                                WHERE codigo = %s;
+                            """, (edit_cod_livro.strip(), edit_titulo_livro.strip(), edit_tipo_livro, edit_qtd_livro, cod_atual_livro))
+                        conn.commit()
+                        st.success("Modificado com sucesso!")
+                        st.rerun()
+
+                with col_lbtn2:
+                    if st.button("Excluir Item"):
+                        cursor = conn.cursor()
+                        cursor.execute("DELETE FROM produtos_livros WHERE codigo = %s;", (cod_atual_livro,))
+                        conn.commit()
+                        st.warning("Removido com sucesso.")
+                        st.rerun()
+
+    # =========================================================================
+    # NOVO MÓDULO: LIVROS E PRODUTOS — SOLICITAÇÃO (TODOS OS USUÁRIOS)
+    # =========================================================================
+    elif escolha == "Livros e Produtos" and st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
+        renderizar_banner("Livros e Produtos", "Catálogo de livros e livretos disponíveis, com foto de referência", cor="#6A1B9A")
+
+        if st.session_state.get("msg_sucesso_livros"):
+            st.success("Sua solicitação foi encaminhada com sucesso!")
+            del st.session_state["msg_sucesso_livros"]
+
+        df_disp_livros = pd.read_sql_query("SELECT codigo, titulo, tipo, quantidade, foto FROM produtos_livros WHERE quantidade > 0 ORDER BY titulo ASC;", conn)
+
+        if df_disp_livros.empty:
+            st.info("Nenhum livro ou produto disponível no momento.")
+        else:
+            colunas_grade_user = st.columns(4)
+            for i_livro_u, linha_livro_u in df_disp_livros.reset_index(drop=True).iterrows():
+                with colunas_grade_user[i_livro_u % 4]:
+                    with st.container(border=True):
+                        if linha_livro_u["foto"] is not None:
+                            st.image(bytes(linha_livro_u["foto"]), use_container_width=True)
+                        st.markdown(f"**{linha_livro_u['titulo']}**")
+                        st.caption(f"{linha_livro_u['tipo'] or '-'} · Disponível: {linha_livro_u['quantidade']}")
+
+            st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+            st.markdown("### Nova Solicitação de Livros/Produtos")
+            st.caption("Adicione quantos itens forem necessários ao carrinho. Todos serão enviados em uma única solicitação.")
+
+            if "carrinho_livros" not in st.session_state:
+                st.session_state.carrinho_livros = []
+
+            col_add_lv1, col_add_lv2, col_add_lv3 = st.columns([3, 1, 1])
+            opcao_sol_livro = col_add_lv1.selectbox(
+                "Selecione o Item:",
+                df_disp_livros.index,
+                format_func=lambda x: f"{df_disp_livros.loc[x, 'titulo']} (Disponível: {df_disp_livros.loc[x, 'quantidade']})",
+                key="select_livro_carrinho"
+            )
+            qtd_sol_livro = col_add_lv2.number_input("Quantidade:", min_value=1, max_value=int(df_disp_livros.loc[opcao_sol_livro, "quantidade"]), value=1, step=1, key="qtd_livro_carrinho")
+            col_add_lv3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+            if col_add_lv3.button("+ Adicionar", key="add_carrinho_livro", use_container_width=True):
+                cod_sel_livro = df_disp_livros.loc[opcao_sol_livro, "codigo"]
+                titulo_sel_livro = df_disp_livros.loc[opcao_sol_livro, "titulo"]
+                st.session_state.carrinho_livros.append({"codigo": cod_sel_livro, "item": titulo_sel_livro, "quantidade": int(qtd_sol_livro)})
+                st.rerun()
+
+            if st.session_state.carrinho_livros:
+                st.markdown("**Itens no carrinho:**")
+                for i_carr_lv, item_carr_lv in enumerate(st.session_state.carrinho_livros):
+                    col_clv1, col_clv2 = st.columns([5, 1])
+                    col_clv1.markdown(f"""
+                        <div style="background-color: rgba(106, 27, 154, 0.08); border-left: 4px solid #6A1B9A; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
+                            <span style="font-size: 15px; font-weight: 600; color: #1a1a1a;">{item_carr_lv['item']}</span>
+                            <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_lv['quantidade']}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    if col_clv2.button("Remover", key=f"remover_carrinho_livro_{i_carr_lv}"):
+                        st.session_state.carrinho_livros.pop(i_carr_lv)
+                        st.rerun()
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                lista_siglas_coord_livro_user = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
+                coord_sol_livro = st.selectbox("Coordenação:", lista_siglas_coord_livro_user, key="coord_carrinho_livro")
+                obs_sol_livro = st.text_area("Observações (opcional):", key="obs_carrinho_livro")
+
+                if st.button("Enviar Solicitação", type="primary", key="enviar_carrinho_livro"):
+                    try:
+                        lote_id_livro = str(uuid.uuid4())
+                        cursor = conn.cursor()
+                        for item_carr_lv in st.session_state.carrinho_livros:
+                            cursor.execute("""
+                                INSERT INTO solicitacoes_almoxarifado 
+                                (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, status, observacao, lote_id, origem_estoque)
+                                VALUES ('MATERIAL', %s, %s, %s, %s, %s, %s, 'PENDENTE', %s, %s, 'LIVROS');
+                            """, (item_carr_lv["codigo"], item_carr_lv["item"], item_carr_lv["quantidade"], st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_livro, obs_sol_livro.strip(), lote_id_livro))
+                        conn.commit()
+                        st.session_state.carrinho_livros = []
+                        st.session_state["msg_sucesso_livros"] = True
+                        st.rerun()
+                    except Exception as ex_livro:
+                        conn.rollback()
+                        st.error(f"Erro ao enviar solicitação: {ex_livro}")
+            else:
+                st.info("Adicione pelo menos um item ao carrinho para enviar a solicitação.")
+
+    # =========================================================================
     # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL USUÁRIO): EMPRÉSTIMO DISPONÍVEL
     # =========================================================================
     elif escolha in ("Empréstimo de Material", "Solicitar Empréstimo") and (
@@ -2557,8 +2876,13 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                         if st.button("Aprovar", key=f"aprovar_{sol['id']}", type="primary", icon=":material/check:"):
                             try:
                                 if sol["tipo"] == "MATERIAL":
-                                    tabela_estoque = "produtos_brigada" if sol.get("origem_estoque") == "BRIGADA" else "produtos"
-                                    tabela_movimentacao = "movimentacoes_brigada" if sol.get("origem_estoque") == "BRIGADA" else "movimentacoes"
+                                    origem_sol = sol.get("origem_estoque")
+                                    if origem_sol == "BRIGADA":
+                                        tabela_estoque, tabela_movimentacao, coluna_item_mov = "produtos_brigada", "movimentacoes_brigada", "item"
+                                    elif origem_sol == "LIVROS":
+                                        tabela_estoque, tabela_movimentacao, coluna_item_mov = "produtos_livros", "movimentacoes_livros", "titulo"
+                                    else:
+                                        tabela_estoque, tabela_movimentacao, coluna_item_mov = "produtos", "movimentacoes", "item"
                                     cursor.execute(f"SELECT quantidade FROM {tabela_estoque} WHERE codigo = %s;", (sol["referencia_codigo"],))
                                     res_prod = cursor.fetchone()
                                     if not res_prod or res_prod[0] < sol["quantidade"]:
@@ -2566,7 +2890,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                                     else:
                                         cursor.execute(f"UPDATE {tabela_estoque} SET quantidade = quantidade - %s WHERE codigo = %s;", (sol["quantidade"], sol["referencia_codigo"]))
                                         cursor.execute(f"""
-                                            INSERT INTO {tabela_movimentacao} (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                            INSERT INTO {tabela_movimentacao} (data, tipo, codigo, {coluna_item_mov}, quantidade, responsavel, coordenacao)
                                             VALUES (%s, %s, %s, %s, %s, %s, %s);
                                         """, (date.today().strftime("%Y-%m-%d"), "Saída", sol["referencia_codigo"], sol["item_nome"], sol["quantidade"], sol["solicitante_nome"], sol["coordenacao"]))
                                         cursor.execute("""
