@@ -2511,26 +2511,29 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 lista_siglas_coord_livro_user = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
-                coord_sol_livro = st.selectbox("Coordenação:", lista_siglas_coord_livro_user, key="coord_carrinho_livro")
-                obs_sol_livro = st.text_area("Observações (opcional):", key="obs_carrinho_livro")
+                coord_sol_livro = st.selectbox("Coordenação: *", lista_siglas_coord_livro_user, key="coord_carrinho_livro")
+                justificativa_sol_livro = st.text_area("Justificativa: *", placeholder="Explique o motivo da solicitação (ex: atividade de educação ambiental, distribuição em evento, etc.)", key="obs_carrinho_livro")
 
                 if st.button("Enviar Solicitação", type="primary", key="enviar_carrinho_livro"):
-                    try:
-                        lote_id_livro = str(uuid.uuid4())
-                        cursor = conn.cursor()
-                        for item_carr_lv in st.session_state.carrinho_livros:
-                            cursor.execute("""
-                                INSERT INTO solicitacoes_almoxarifado 
-                                (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, status, observacao, lote_id, origem_estoque)
-                                VALUES ('MATERIAL', %s, %s, %s, %s, %s, %s, 'PENDENTE', %s, %s, 'LIVROS');
-                            """, (item_carr_lv["codigo"], item_carr_lv["item"], item_carr_lv["quantidade"], st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_livro, obs_sol_livro.strip(), lote_id_livro))
-                        conn.commit()
-                        st.session_state.carrinho_livros = []
-                        st.session_state["msg_sucesso_livros"] = True
-                        st.rerun()
-                    except Exception as ex_livro:
-                        conn.rollback()
-                        st.error(f"Erro ao enviar solicitação: {ex_livro}")
+                    if not justificativa_sol_livro.strip():
+                        st.error("A Justificativa é obrigatória para solicitar livros/livretos!")
+                    else:
+                        try:
+                            lote_id_livro = str(uuid.uuid4())
+                            cursor = conn.cursor()
+                            for item_carr_lv in st.session_state.carrinho_livros:
+                                cursor.execute("""
+                                    INSERT INTO solicitacoes_almoxarifado 
+                                    (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, status, observacao, lote_id, origem_estoque)
+                                    VALUES ('MATERIAL', %s, %s, %s, %s, %s, %s, 'PENDENTE', %s, %s, 'LIVROS');
+                                """, (item_carr_lv["codigo"], item_carr_lv["item"], item_carr_lv["quantidade"], st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_livro, justificativa_sol_livro.strip(), lote_id_livro))
+                            conn.commit()
+                            st.session_state.carrinho_livros = []
+                            st.session_state["msg_sucesso_livros"] = True
+                            st.rerun()
+                        except Exception as ex_livro:
+                            conn.rollback()
+                            st.error(f"Erro ao enviar solicitação: {ex_livro}")
             else:
                 st.info("Adicione pelo menos um item ao carrinho para enviar a solicitação.")
 
