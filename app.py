@@ -2759,6 +2759,11 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             st.success("Sua solicitação foi encaminhada com sucesso!")
             del st.session_state["msg_sucesso_livros"]
 
+        # Resumo completo do acervo, inclusive títulos sem estoque.
+        # A seleção para solicitar continua restrita aos itens disponíveis.
+        df_resumo_livros_solicitante = pd.read_sql_query("SELECT quantidade FROM produtos_livros;", conn)
+        renderizar_indicadores_acervo_ngi(df_resumo_livros_solicitante)
+
         df_disp_livros = pd.read_sql_query("SELECT codigo, titulo, tipo, quantidade, foto FROM produtos_livros WHERE quantidade > 0 ORDER BY titulo ASC;", conn)
 
         if df_disp_livros.empty:
