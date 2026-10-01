@@ -2300,16 +2300,100 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             if df_raw_livros.empty:
                 st.info("Nenhum livro ou produto cadastrado ainda.")
             else:
-                colunas_grade = st.columns(6)
-                for i_livro, linha_livro in df_raw_livros.reset_index(drop=True).iterrows():
-                    with colunas_grade[i_livro % 6]:
-                        with st.container(border=True):
-                            if linha_livro["foto"] is not None:
-                                st.image(bytes(linha_livro["foto"]), width=110)
-                            st.markdown(f"<span style='font-size: 13px; font-weight: 600;'>{linha_livro['titulo']}</span>", unsafe_allow_html=True)
-                            st.caption(f"Código: {linha_livro['codigo']} · {linha_livro['tipo'] or '-'}")
-                            cor_qtd = "#4CAF50" if linha_livro["quantidade"] > 0 else "#c62828"
-                            st.markdown(f"<span style='color:{cor_qtd}; font-weight:700; font-size: 13px;'>Disponível: {linha_livro['quantidade']}</span>", unsafe_allow_html=True)
+                st.markdown("""
+                    <style>
+                    .livros-grid {
+                        display: grid;
+                        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+                        gap: 16px;
+                        margin-top: 12px;
+                    }
+                    .livro-card {
+                        display: flex;
+                        flex-direction: column;
+                        border: 1px solid #e5e5e5;
+                        border-radius: 10px;
+                        overflow: hidden;
+                        height: 270px;
+                        background: #ffffff;
+                        box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+                    }
+                    .livro-img-wrap {
+                        height: 130px;
+                        width: 100%;
+                        flex-shrink: 0;
+                        overflow: hidden;
+                        background: #f5f6f8;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    }
+                    .livro-img-wrap img {
+                        width: 100%;
+                        height: 100%;
+                        object-fit: cover;
+                        display: block;
+                    }
+                    .livro-img-placeholder {
+                        color: #aaaaaa;
+                        font-size: 12px;
+                        text-align: center;
+                    }
+                    .livro-info {
+                        padding: 10px 12px 6px 12px;
+                        flex: 1;
+                        display: flex;
+                        flex-direction: column;
+                        min-height: 0;
+                    }
+                    .livro-titulo {
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: #1a1a1a;
+                        display: -webkit-box;
+                        -webkit-line-clamp: 2;
+                        -webkit-box-orient: vertical;
+                        overflow: hidden;
+                        line-height: 1.3;
+                        min-height: 34px;
+                        margin-bottom: 6px;
+                    }
+                    .livro-meta {
+                        font-size: 11px;
+                        color: #888888;
+                    }
+                    .livro-footer {
+                        padding: 8px 12px;
+                        font-size: 13px;
+                        font-weight: 700;
+                        border-top: 1px solid #f0f0f0;
+                        flex-shrink: 0;
+                    }
+                    </style>
+                """, unsafe_allow_html=True)
+
+                cards_html_livros = ['<div class="livros-grid">']
+                for _, linha_livro in df_raw_livros.iterrows():
+                    if linha_livro["foto"] is not None:
+                        img_b64_livro = base64.b64encode(bytes(linha_livro["foto"])).decode()
+                        img_tag_livro = f'<img src="data:image/jpeg;base64,{img_b64_livro}">'
+                    else:
+                        img_tag_livro = '<div class="livro-img-placeholder">Sem foto</div>'
+
+                    cor_qtd = "#4CAF50" if linha_livro["quantidade"] > 0 else "#c62828"
+
+                    cards_html_livros.append(f'''
+                        <div class="livro-card">
+                            <div class="livro-img-wrap">{img_tag_livro}</div>
+                            <div class="livro-info">
+                                <div class="livro-titulo">{linha_livro['titulo']}</div>
+                                <div class="livro-meta">Código: {linha_livro['codigo']} · {linha_livro['tipo'] or '-'}</div>
+                            </div>
+                            <div class="livro-footer" style="color:{cor_qtd};">Disponível: {linha_livro['quantidade']}</div>
+                        </div>
+                    ''')
+                cards_html_livros.append('</div>')
+                st.markdown("".join(cards_html_livros), unsafe_allow_html=True)
 
         # ---------------------------------------------------------------
         # ABA 2: CADASTRAR ITEM (FOTO OBRIGATÓRIA)
