@@ -9,6 +9,7 @@ import requests
 import re
 import socket
 import base64
+import html
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import psycopg2
@@ -2329,10 +2330,11 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                         justify-content: center;
                     }
                     .livro-img-wrap img {
-                        width: 100%;
-                        height: 100%;
-                        object-fit: cover;
+                        max-width: 100%;
+                        max-height: 100%;
+                        object-fit: contain;
                         display: block;
+                        margin: 0 auto;
                     }
                     .livro-img-placeholder {
                         color: #aaaaaa;
@@ -2375,19 +2377,24 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 cards_html_livros = ['<div class="livros-grid">']
                 for _, linha_livro in df_raw_livros.iterrows():
                     if linha_livro["foto"] is not None:
-                        img_b64_livro = base64.b64encode(bytes(linha_livro["foto"])).decode()
-                        img_tag_livro = f'<img src="data:image/jpeg;base64,{img_b64_livro}">'
+                        foto_bytes_livro = bytes(linha_livro["foto"])
+                        mime_foto_livro = "image/png" if foto_bytes_livro[:8] == b'\x89PNG\r\n\x1a\n' else "image/jpeg"
+                        img_b64_livro = base64.b64encode(foto_bytes_livro).decode()
+                        img_tag_livro = f'<img src="data:{mime_foto_livro};base64,{img_b64_livro}">'
                     else:
                         img_tag_livro = '<div class="livro-img-placeholder">Sem foto</div>'
 
                     cor_qtd = "#4CAF50" if linha_livro["quantidade"] > 0 else "#c62828"
+                    titulo_seguro = html.escape(str(linha_livro['titulo']))
+                    codigo_seguro = html.escape(str(linha_livro['codigo']))
+                    tipo_seguro = html.escape(str(linha_livro['tipo'])) if pd.notna(linha_livro['tipo']) and str(linha_livro['tipo']).strip() else '-'
 
                     cards_html_livros.append(f'''
                         <div class="livro-card">
                             <div class="livro-img-wrap">{img_tag_livro}</div>
                             <div class="livro-info">
-                                <div class="livro-titulo">{linha_livro['titulo']}</div>
-                                <div class="livro-meta">Código: {linha_livro['codigo']} · {linha_livro['tipo'] or '-'}</div>
+                                <div class="livro-titulo">{titulo_seguro}</div>
+                                <div class="livro-meta">Código: {codigo_seguro} · {tipo_seguro}</div>
                             </div>
                             <div class="livro-footer" style="color:{cor_qtd};">Disponível: {linha_livro['quantidade']}</div>
                         </div>
