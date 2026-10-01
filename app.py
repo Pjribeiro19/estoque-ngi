@@ -377,6 +377,40 @@ CSS_VISUAL_NGI = """
 @media (max-width:640px) {
     .ngi-acervo-kpis { grid-template-columns:minmax(0,1fr); gap:10px; }
 }
+
+/* Painel geral: indicadores claros e consulta integrada. */
+.ngi-painel-kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; margin:8px 0 22px; }
+.ngi-painel-kpi { display:flex; align-items:center; gap:20px; padding:24px;
+    min-height:132px; box-sizing:border-box; background:#fff; border:1px solid #e5ece7;
+    border-radius:12px; box-shadow:0 3px 12px #15372605; }
+.ngi-painel-icon { flex:0 0 64px; height:64px; display:grid; place-items:center;
+    border-radius:13px; background:#eaf5e7; color:#17803f; }
+.ngi-painel-icon svg { width:34px; height:34px; }
+.ngi-painel-icon.alerta { background:#ffedef; color:#bd2535; }
+.ngi-painel-icon.mov { background:#e6f7ed; color:#11794a; }
+.ngi-painel-label { font-size:15px; color:#53675c; line-height:1.4; }
+.ngi-painel-value { font-size:36px; font-weight:800; color:#147348; line-height:1.2; margin-top:8px; }
+.ngi-painel-value.alerta { color:#bd2535; }
+[data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ngi-stock-heading) {
+    background:#fff; border-radius:12px; padding:22px;
+}
+[data-testid="stVerticalBlockBorderWrapper"]:has(.ngi-stock-heading) > div {
+    background:#fff; border-color:#e1e8e3; border-radius:12px;
+}
+.ngi-stock-heading { margin-bottom:6px; }
+.stMarkdown .ngi-stock-heading h3 { padding:0; margin:0; font-size:23px; color:#172b22 !important; font-weight:800 !important; }
+.stMarkdown .ngi-stock-heading p { margin:5px 0 12px; font-size:14px; color:#74867a !important; }
+@media(max-width:1100px) {
+    .ngi-painel-kpi { gap:12px; padding:18px; }
+    .ngi-painel-icon { flex-basis:48px; height:48px; }
+    .ngi-painel-label { font-size:13px; }
+}
+@media(max-width:640px) {
+    .ngi-painel-kpis { grid-template-columns:1fr; gap:10px; }
+    .ngi-painel-kpi { min-height:96px; }
+    .ngi-painel-value { font-size:28px; margin-top:4px; }
+    [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ngi-stock-heading) { padding:12px; }
+}
 </style>
 """
 
@@ -389,6 +423,26 @@ ESTILO_MENU_LATERAL_NGI = {
     "nav-link-selected": {"background-color": "#194b38", "color": "#ffffff",
                           "font-weight": "600", "border-left": "3px solid #55bd75"},
 }
+
+def renderizar_indicadores_painel_ngi(total_itens, produtos_esgotados, total_movimentacoes):
+    """Apresentação dos três indicadores existentes, sem mudar seus cálculos."""
+    itens = (
+        ('Itens cadastrados', total_itens, '', '<path d="m12 3 9 5v9l-9 5-9-5V8l9-5Z"/><path d="m3 8 9 5 9-5M12 13v9M7.5 5.5l9 5"/>'),
+        ('Produtos esgotados', produtos_esgotados, 'alerta' if produtos_esgotados > 0 else '', '<path d="m10.3 4-8 14a2 2 0 0 0 1.7 3h16a2 2 0 0 0 1.7-3l-8-14a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4m0 4h.01"/>'),
+        ('Movimentações realizadas', total_movimentacoes, 'mov', '<path d="M7 20V4m-5 5 5-5 5 5M17 4v16m-5-5 5 5 5-5"/>'),
+    )
+    partes = ['<div class="ngi-painel-kpis">']
+    for rotulo, valor, classe, desenho in itens:
+        numero = format(int(valor), ',').replace(',', '.')
+        partes.append(
+            f'<div class="ngi-painel-kpi"><div class="ngi-painel-icon {classe}" aria-hidden="true">'
+            f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+            f'stroke-linecap="round" stroke-linejoin="round">{desenho}</svg></div>'
+            f'<div><div class="ngi-painel-label">{rotulo}</div>'
+            f'<div class="ngi-painel-value {classe}">{numero}</div></div></div>'
+        )
+    partes.append('</div>')
+    st.markdown(''.join(partes), unsafe_allow_html=True)
 
 def renderizar_indicadores_acervo_ngi(dados):
     """Resumo de leitura: usa somente o catálogo já consultado pela página."""
@@ -1432,75 +1486,40 @@ else:
 
     # --- TELA: PAINEL GERAL ---
     elif escolha == "Painel Geral":
-        st.markdown("""
-            <div class="ngi-page-header" style="background-color: #4CAF50; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
-                <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
-                    Painel Geral de Controle
-                </h1>
-                <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
-                    Visão Geral de Saldos, Alertas de Materiais e Fluxo de Insumos NGI Carajás
-                </p>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        c1, c2, c3 = st.columns(3)
+        renderizar_banner("Painel geral de controle", "Visão geral do estoque e das movimentações do almoxarifado")
         total_itens = len(df_produtos) if not df_produtos.empty else 0
         produtos_esgotados = len(df_produtos[df_produtos['Quantidade'] == 0]) if not df_produtos.empty else 0
         total_movimentacoes = len(df_movimentacoes) if not df_movimentacoes.empty else 0
         
-        c1.markdown(f"""
-            <div class="painel-kpi-card" style="background-color: rgba(76, 175, 80, 0.08); border-left: 5px solid #4CAF50; border-radius: 4px;">
-                <span class="painel-kpi-label" style="font-weight: 600; text-transform: uppercase;">Total de Itens Cadastrados</span>
-                <h2 class="painel-kpi-valor" style="color: #4CAF50; font-weight: 700;">{total_itens}</h2>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        cor_esgotados = "#c62828" if produtos_esgotados > 0 else "#4CAF50"
-        bg_esgotados = "rgba(198, 40, 40, 0.08)" if produtos_esgotados > 0 else "rgba(76, 175, 80, 0.08)"
-        
-        c2.markdown(f"""
-            <div class="painel-kpi-card" style="background-color: {bg_esgotados}; border-left: 5px solid {cor_esgotados}; border-radius: 4px;">
-                <span class="painel-kpi-label" style="font-weight: 600; text-transform: uppercase;">Produtos Esgotados</span>
-                <h2 class="painel-kpi-valor" style="color: {cor_esgotados}; font-weight: 700;">{produtos_esgotados}</h2>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        c3.markdown(f"""
-            <div class="painel-kpi-card" style="background-color: rgba(33, 150, 243, 0.08); border-left: 5px solid #2196F3; border-radius: 4px;">
-                <span class="painel-kpi-label" style="font-weight: 600; text-transform: uppercase;">Movimentações Realizadas</span>
-                <h2 class="painel-kpi-valor" style="color: #2196F3; font-weight: 700;">{total_movimentacoes}</h2>
-            </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("<br><hr style='margin: 10px 0 25px 0; opacity: 0.15;'>", unsafe_allow_html=True)
-        st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
-        
-        col_filtro1, col_filtro2 = st.columns([2, 1])
-        termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...")
-        categoria_selecionada = col_filtro2.selectbox("Filtrar por Categoria:", ["Todas"] + lista_categorias)
-        
-        df_filtrado = df_produtos.copy() if not df_produtos.empty else pd.DataFrame()
-        if not df_filtrado.empty and termo_busca:
-            df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
-        if not df_filtrado.empty and categoria_selecionada != "Todas":
-            df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
+        renderizar_indicadores_painel_ngi(total_itens, produtos_esgotados, total_movimentacoes)
 
-        st.markdown("<br><h3 style='font-size: 18px; font-weight: 600; margin-bottom: 12px;'> Controle de Estoque</h3>", unsafe_allow_html=True)
-        if df_filtrado.empty:
-            st.info("Nenhum material encontrado com os filtros aplicados.")
-        else:
-            df_display = df_filtrado.copy()
-            df_display["Valor Unitário"] = df_display["Valor Unitário"].astype(float)
-            df_display["Valor Total"] = df_display["Quantidade"] * df_display["Valor Unitário"]
-            df_display["Valor Unitário"] = df_display["Valor Unitário"].map("R$ {:.2f}".format)
-            df_display["Valor Total"] = df_display["Valor Total"].map("R$ {:.2f}".format)
+        with st.container(border=True):
+            st.markdown('<div class="ngi-stock-heading"><h3>Controle de estoque</h3><p>Consulte os materiais cadastrados</p></div>', unsafe_allow_html=True)
+            col_filtro1, col_filtro2 = st.columns([2, 1])
+            termo_busca = col_filtro1.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...")
+            categoria_selecionada = col_filtro2.selectbox("Filtrar por Categoria:", ["Todas"] + lista_categorias)
+        
+            df_filtrado = df_produtos.copy() if not df_produtos.empty else pd.DataFrame()
+            if not df_filtrado.empty and termo_busca:
+                df_filtrado = df_filtrado[df_filtrado['Item'].str.contains(termo_busca, case=False, na=False) | df_filtrado['Código'].str.contains(termo_busca, case=False, na=False)]
+            if not df_filtrado.empty and categoria_selecionada != "Todas":
+                df_filtrado = df_filtrado[df_filtrado['Categoria'] == categoria_selecionada]
 
-            def destacar_zerados(row):
-                if row['Quantidade'] == 0:
-                    return ['background-color: rgba(198, 40, 40, 0.12); color: #c62828; font-weight: bold;'] * len(row)
-                return [''] * len(row)
+            if df_filtrado.empty:
+                st.info("Nenhum material encontrado com os filtros aplicados.")
+            else:
+                df_display = df_filtrado.copy()
+                df_display["Valor Unitário"] = df_display["Valor Unitário"].astype(float)
+                df_display["Valor Total"] = df_display["Quantidade"] * df_display["Valor Unitário"]
+                df_display["Valor Unitário"] = df_display["Valor Unitário"].map(lambda valor: "R$ " + format(valor, ",.2f").replace(",", "_").replace(".", ",").replace("_", "."))
+                df_display["Valor Total"] = df_display["Valor Total"].map(lambda valor: "R$ " + format(valor, ",.2f").replace(",", "_").replace(".", ",").replace("_", "."))
+
+                def destacar_zerados(row):
+                    if row['Quantidade'] == 0:
+                        return ['background-color: rgba(198, 40, 40, 0.12); color: #c62828; font-weight: bold;'] * len(row)
+                    return [''] * len(row)
                 
-            st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
+                st.dataframe(df_display.style.set_properties(**{"background-color": "#ffffff", "color": "#334b3e"}).apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
 
     # =========================================================================
     # NOVA TELA: EMPRÉSTIMO DE MATERIAL (INDEPENDENTE)
