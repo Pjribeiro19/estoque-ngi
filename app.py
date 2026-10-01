@@ -290,8 +290,8 @@ CSS_VISUAL_NGI = """
     border-radius:12px; background:#164b35; color:#7acb88; font-size:26px; }
 .ngi-brand-name { font-size:21px; font-weight:800; color:#fff !important; letter-spacing:-.5px; }
 .ngi-brand-subtitle { font-size:11px; color:#adc7ba !important; margin-top:3px; }
-.ngi-profile { display:flex; gap:10px; align-items:center; padding:16px 6px 6px;
-    margin-top:16px; border-top:1px solid #305145; }
+.ngi-profile { display:flex; gap:10px; align-items:center; padding:0 6px 16px;
+    margin:0 0 20px; border-bottom:1px solid #305145; }
 .ngi-avatar { flex:0 0 36px; height:36px; display:grid; place-items:center; background:#187746;
     color:white !important; border-radius:50%; font-weight:700; font-size:13px; }
 .ngi-profile-name { color:#eff6f2 !important; font-size:13px; font-weight:600; overflow-wrap:anywhere; }
@@ -534,6 +534,9 @@ def renderizar_catalogo_emprestimos(dados, solicitante=False):
     .ngi-emp-code {font-size:12px;color:#718077;margin-top:10px}
     .ngi-emp-counts {display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #e5ebe7;padding:8px 0;gap:6px}
     .ngi-emp-counts span {font-size:11px;color:#617269}.ngi-emp-counts b {display:block;font-size:17px;color:#233e2d}
+    .ngi-emp-details {height:96px;overflow:hidden;}
+    .ngi-emp-return {height:36px;font-size:12px;line-height:18px;color:#6a7b73;}
+    .ngi-emp-note {height:52px;overflow:auto;font-size:12px;line-height:17px;color:#6a7b73;overflow-wrap:anywhere;}
     .ngi-emp-status {font-size:12px;color:#276644;background:#e9f4e9;padding:3px 9px;border-radius:15px;display:inline-block;margin-bottom:5px}
     [class*="st-key-ngi_emp_card_"] {background:#fff;border-radius:10px;}
     [class*="st-key-ngi_emp_card_"] [data-testid="stVerticalBlock"] {gap:8px;}
@@ -591,12 +594,10 @@ def renderizar_catalogo_emprestimos(dados, solicitante=False):
                     st.markdown(f'<div class="ngi-emp-photo">{visual}</div><div class="ngi-emp-code">{codigo}</div><div class="ngi-emp-name" title="{nome}">{nome}</div><div class="ngi-emp-status">{status}</div><div class="ngi-emp-counts">'+''.join(f'<div><span>{n}</span><b>{v}</b></div>' for n,v in metricas)+'</div>',unsafe_allow_html=True)
                     if solicitante:
                         previsao = item.get('Previsão de devolução')
-                        if disponiveis <= 0 and pd.notna(previsao):
-                            st.caption(f"Devolução prevista: {previsao.strftime('%d/%m/%Y')}")
+                        texto_previsao = f"Devolução prevista: {previsao.strftime('%d/%m/%Y')}" if disponiveis <= 0 and pd.notna(previsao) else ""
                         observacao = item.get('Observações')
-                        if pd.notna(observacao) and str(observacao).strip():
-                            with st.expander("Observações"):
-                                st.write(str(observacao))
+                        texto_obs = str(observacao).strip() if pd.notna(observacao) else ""
+                        st.markdown('<div class="ngi-emp-details"><div class="ngi-emp-return">'+html.escape(texto_previsao)+'</div><div class="ngi-emp-note">'+html.escape(texto_obs if texto_obs else 'Sem observações')+'</div></div>', unsafe_allow_html=True)
                     else:
                         sair, editar = st.columns([3,1])
                         sair.button("Registrar saída", key=f"ngi_emp_saida_{item['ID']}", use_container_width=True, disabled=disponiveis<=0, on_click=navegar_emprestimo, args=("Registrar Saída (Empréstimo)",int(item['ID'])))
@@ -1469,6 +1470,13 @@ else:
 
     st.markdown(CSS_VISUAL_NGI, unsafe_allow_html=True)
     with st.sidebar:
+        st.markdown(
+            '<div class="ngi-profile"><div class="ngi-avatar">' +
+            html.escape(''.join(p[0] for p in str(st.session_state.NOME_USUARIO_LOGADO).split()[:2]).upper()) +
+            '</div><div><div class="ngi-profile-name">' + html.escape(str(st.session_state.NOME_USUARIO_LOGADO)) +
+            '</div><div class="ngi-profile-role">' + html.escape(str(st.session_state.PERFIL_USUARIO_LOGADO)) +
+            '</div></div></div>', unsafe_allow_html=True)
+
         st.markdown('<div class="ngi-brand"><div class="ngi-brand-icon">◈</div>'
                     '<div><div class="ngi-brand-name">NGI Carajás</div>'
                     '<div class="ngi-brand-subtitle">Gestão de Almoxarifado</div></div></div>', unsafe_allow_html=True)
@@ -1533,13 +1541,6 @@ else:
                 styles=ESTILO_MENU_LATERAL_NGI
             )
 
-    with st.sidebar:
-        st.markdown(
-            '<div class="ngi-profile"><div class="ngi-avatar">' +
-            html.escape(''.join(p[0] for p in str(st.session_state.NOME_USUARIO_LOGADO).split()[:2]).upper()) +
-            '</div><div><div class="ngi-profile-name">' + html.escape(str(st.session_state.NOME_USUARIO_LOGADO)) +
-            '</div><div class="ngi-profile-role">' + html.escape(str(st.session_state.PERFIL_USUARIO_LOGADO)) +
-            '</div></div></div>', unsafe_allow_html=True)
     st.markdown('<div class="ngi-breadcrumb">NGI Carajás &nbsp; / &nbsp; ' + html.escape(str(escolha)) + '</div>', unsafe_allow_html=True)
 
     if escolha == "Sair do Sistema":
@@ -2890,70 +2891,71 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 "observacao": "Observações", "previsao_devolucao": "Previsão de devolução"
             }).copy()
             df_emp_disp_user["Emprestados"] = df_emp_disp_user["Qtd Total"] - df_emp_disp_user["Qtd Disponível"]
-            renderizar_catalogo_emprestimos(df_emp_disp_user, solicitante=True)
-            st.caption("Itens indisponíveis podem ser consultados no catálogo, mas não podem ser adicionados à solicitação.")
+            aba_emp_catalogo, aba_emp_solicitar = st.tabs(["Itens disponíveis", "Fazer solicitação"])
+            with aba_emp_catalogo:
+                renderizar_catalogo_emprestimos(df_emp_disp_user, solicitante=True)
+                st.caption("Itens indisponíveis podem ser consultados no catálogo, mas não podem ser adicionados à solicitação.")
+            with aba_emp_solicitar:
+                st.markdown("### Nova Solicitação de Empréstimo")
+                st.caption("Primeiro informe o período desejado, depois adicione os itens ao carrinho. Todos serão enviados em uma única solicitação.")
 
-            st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
-            st.markdown("### Nova Solicitação de Empréstimo")
-            st.caption("Primeiro informe o período desejado, depois adicione os itens ao carrinho. Todos serão enviados em uma única solicitação.")
+                if "carrinho_emprestimo" not in st.session_state:
+                    st.session_state.carrinho_emprestimo = []
 
-            if "carrinho_emprestimo" not in st.session_state:
-                st.session_state.carrinho_emprestimo = []
+                lista_siglas_coord_emp_user = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
 
-            lista_siglas_coord_emp_user = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
+                col_dt1, col_dt2, col_dt3 = st.columns(3)
+                data_retirada_sol = col_dt1.date_input("Data de Retirada: *", value=date.today(), format="DD/MM/YYYY", key="data_retirada_carrinho_emp")
+                data_prev_sol = col_dt2.date_input("Data de Devolução: *", value=date.today(), format="DD/MM/YYYY", key="data_prev_carrinho_emp")
+                coord_sol_emp = col_dt3.selectbox("Coordenação:", lista_siglas_coord_emp_user, key="coord_carrinho_emp")
 
-            col_dt1, col_dt2, col_dt3 = st.columns(3)
-            data_retirada_sol = col_dt1.date_input("Data de Retirada: *", value=date.today(), format="DD/MM/YYYY", key="data_retirada_carrinho_emp")
-            data_prev_sol = col_dt2.date_input("Data de Devolução: *", value=date.today(), format="DD/MM/YYYY", key="data_prev_carrinho_emp")
-            coord_sol_emp = col_dt3.selectbox("Coordenação:", lista_siglas_coord_emp_user, key="coord_carrinho_emp")
+                df_raw_emp_user = df_todos_itens_emprestimo[df_todos_itens_emprestimo["quantidade_disponivel"] > 0].reset_index(drop=True)
 
-            df_raw_emp_user = df_todos_itens_emprestimo[df_todos_itens_emprestimo["quantidade_disponivel"] > 0].reset_index(drop=True)
-
-            if df_raw_emp_user.empty:
-                st.warning("Nenhum item disponível para adicionar no momento — confira a previsão de devolução no catálogo acima.")
-            else:
-                col_add_e1, col_add_e2, col_add_e3 = st.columns([3, 1, 1])
-                opcao_sol_emp = col_add_e1.selectbox(
-                    "Selecione o Item:",
-                    df_raw_emp_user.index,
-                    format_func=lambda x: f"{df_raw_emp_user.loc[x, 'item']} (Disponível: {df_raw_emp_user.loc[x, 'quantidade_disponivel']})",
-                    key="select_emprestimo_carrinho"
-                )
-                qtd_sol_emp = col_add_e2.number_input("Quantidade:", min_value=1, max_value=int(df_raw_emp_user.loc[opcao_sol_emp, "quantidade_disponivel"]), value=1, step=1, key="qtd_emprestimo_carrinho")
-                col_add_e3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                with col_add_e3:
-                    with st.container(key="btn_add_6"):
-                        clicou_add_6 = st.button("+ Adicionar", key="add_carrinho_emprestimo", use_container_width=True)
-                if clicou_add_6:
-                    item_id_sel = int(df_raw_emp_user.loc[opcao_sol_emp, "id"])
-                    nome_sel_emp = df_raw_emp_user.loc[opcao_sol_emp, "item"]
-                    st.session_state.carrinho_emprestimo.append({"item_id": item_id_sel, "item": nome_sel_emp, "quantidade": int(qtd_sol_emp)})
-                    st.rerun()
-
-            if st.session_state.carrinho_emprestimo:
-                st.markdown("**Itens no carrinho:**")
-                for i_carr_e, item_carr_e in enumerate(st.session_state.carrinho_emprestimo):
-                    col_ce1, col_ce2 = st.columns([5, 1])
-                    col_ce1.markdown(f"""
-                        <div style="background-color: rgba(20, 93, 59, 0.08); border-left: 4px solid #145d3b; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
-                            <span style="font-size: 15px; font-weight: 600; color: #1a1a1a;">{item_carr_e['item']}</span>
-                            <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_e['quantidade']}</span>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    with col_ce2:
-                        with st.container(key=f"btn_remove_5_{i_carr_e}"):
-                            clicou_remover_5 = st.button("Remover", key=f"remover_carrinho_emp_{i_carr_e}")
-                    if clicou_remover_5:
-                        st.session_state.carrinho_emprestimo.pop(i_carr_e)
+                if df_raw_emp_user.empty:
+                    st.warning("Nenhum item disponível para adicionar no momento — confira a previsão de devolução no catálogo acima.")
+                else:
+                    col_add_e1, col_add_e2, col_add_e3 = st.columns([3, 1, 1])
+                    opcao_sol_emp = col_add_e1.selectbox(
+                        "Selecione o Item:",
+                        df_raw_emp_user.index,
+                        format_func=lambda x: f"{df_raw_emp_user.loc[x, 'item']} (Disponível: {df_raw_emp_user.loc[x, 'quantidade_disponivel']})",
+                        key="select_emprestimo_carrinho"
+                    )
+                    qtd_sol_emp = col_add_e2.number_input("Quantidade:", min_value=1, max_value=int(df_raw_emp_user.loc[opcao_sol_emp, "quantidade_disponivel"]), value=1, step=1, key="qtd_emprestimo_carrinho")
+                    col_add_e3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                    with col_add_e3:
+                        with st.container(key="btn_add_6"):
+                            clicou_add_6 = st.button("+ Adicionar", key="add_carrinho_emprestimo", use_container_width=True)
+                    if clicou_add_6:
+                        item_id_sel = int(df_raw_emp_user.loc[opcao_sol_emp, "id"])
+                        nome_sel_emp = df_raw_emp_user.loc[opcao_sol_emp, "item"]
+                        st.session_state.carrinho_emprestimo.append({"item_id": item_id_sel, "item": nome_sel_emp, "quantidade": int(qtd_sol_emp)})
                         st.rerun()
 
-                st.markdown("<br>", unsafe_allow_html=True)
-                atividade_sol_emp = st.text_input("Atividade Associada: *", placeholder="Ex: Vistoria de campo na trilha X", key="atividade_carrinho_emp")
-                obs_sol_emp = st.text_area("Observações (opcional):", key="obs_carrinho_emp")
+                if st.session_state.carrinho_emprestimo:
+                    st.markdown("**Itens no carrinho:**")
+                    for i_carr_e, item_carr_e in enumerate(st.session_state.carrinho_emprestimo):
+                        col_ce1, col_ce2 = st.columns([5, 1])
+                        col_ce1.markdown(f"""
+                            <div style="background-color: rgba(20, 93, 59, 0.08); border-left: 4px solid #145d3b; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
+                                <span style="font-size: 15px; font-weight: 600; color: #1a1a1a;">{item_carr_e['item']}</span>
+                                <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_e['quantidade']}</span>
+                            </div>
+                        """, unsafe_allow_html=True)
+                        with col_ce2:
+                            with st.container(key=f"btn_remove_5_{i_carr_e}"):
+                                clicou_remover_5 = st.button("Remover", key=f"remover_carrinho_emp_{i_carr_e}")
+                        if clicou_remover_5:
+                            st.session_state.carrinho_emprestimo.pop(i_carr_e)
+                            st.rerun()
 
-                st.markdown("<hr style='margin: 20px 0 10px 0; opacity: 0.2;'>", unsafe_allow_html=True)
-                with st.expander("Termo de Responsabilidade - clique para ler", icon=":material/description:"):
-                    st.markdown("""
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    atividade_sol_emp = st.text_input("Atividade Associada: *", placeholder="Ex: Vistoria de campo na trilha X", key="atividade_carrinho_emp")
+                    obs_sol_emp = st.text_area("Observações (opcional):", key="obs_carrinho_emp")
+
+                    st.markdown("<hr style='margin: 20px 0 10px 0; opacity: 0.2;'>", unsafe_allow_html=True)
+                    with st.expander("Termo de Responsabilidade - clique para ler", icon=":material/description:"):
+                        st.markdown("""
 ### TERMO DE RESPONSABILIDADE PELO EMPRÉSTIMO DE MATERIAIS
 
 Ao solicitar o empréstimo de materiais por meio deste sistema, o(a) solicitante declara que leu, compreendeu e concorda com as condições estabelecidas neste Termo de Responsabilidade.
@@ -3022,38 +3024,38 @@ Ao marcar a opção "Li e concordo com o Termo de Responsabilidade", o(a) solici
 
 A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitação de empréstimo, juntamente com o registro do usuário, data e horário do aceite.
                     """)
-                aceite_termo = st.checkbox("Li e concordo com o Termo de Responsabilidade pelo Empréstimo de Materiais. *", key="aceite_carrinho_emp")
+                    aceite_termo = st.checkbox("Li e concordo com o Termo de Responsabilidade pelo Empréstimo de Materiais. *", key="aceite_carrinho_emp")
 
-                if st.button("Enviar Solicitação", type="primary", key="enviar_carrinho_emp"):
-                    if not atividade_sol_emp.strip():
-                        st.error("O campo 'Atividade Associada' é obrigatório!")
-                    elif data_prev_sol < data_retirada_sol:
-                        st.error("A Data de Devolução não pode ser anterior à Data de Retirada!")
-                    elif not aceite_termo:
-                        st.error("A solicitação de empréstimo somente será efetivada após a leitura e aceitação do Termo de Responsabilidade!")
-                    else:
-                        try:
-                            lote_id_novo = str(uuid.uuid4())
-                            cursor = conn.cursor()
-                            for item_carr_e in st.session_state.carrinho_emprestimo:
-                                cursor.execute("""
+                    if st.button("Enviar Solicitação", type="primary", key="enviar_carrinho_emp"):
+                        if not atividade_sol_emp.strip():
+                            st.error("O campo 'Atividade Associada' é obrigatório!")
+                        elif data_prev_sol < data_retirada_sol:
+                            st.error("A Data de Devolução não pode ser anterior à Data de Retirada!")
+                        elif not aceite_termo:
+                            st.error("A solicitação de empréstimo somente será efetivada após a leitura e aceitação do Termo de Responsabilidade!")
+                        else:
+                            try:
+                                lote_id_novo = str(uuid.uuid4())
+                                cursor = conn.cursor()
+                                for item_carr_e in st.session_state.carrinho_emprestimo:
+                                    cursor.execute("""
                                     INSERT INTO solicitacoes_almoxarifado 
                                     (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_retirada, data_prevista, atividade_associada, status, observacao, termo_aceito, data_aceite_termo, lote_id)
                                     VALUES ('EMPRESTIMO', %s, %s, %s, %s, %s, %s, %s, %s, %s, 'PENDENTE', %s, TRUE, CURRENT_TIMESTAMP, %s);
                                 """, (str(item_carr_e["item_id"]), item_carr_e["item"], item_carr_e["quantidade"], st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_emp, data_retirada_sol, data_prev_sol, atividade_sol_emp.strip(), obs_sol_emp.strip(), lote_id_novo))
-                            conn.commit()
-                            st.session_state.carrinho_emprestimo = []
-                            st.session_state["msg_sucesso_emprestimo"] = True
-                            st.rerun()
-                        except Exception as ex:
-                            conn.rollback()
-                            st.error(f"Erro ao enviar solicitação: {ex}")
-            else:
-                st.info("Adicione pelo menos um item ao carrinho para enviar a solicitação.")
+                                conn.commit()
+                                st.session_state.carrinho_emprestimo = []
+                                st.session_state["msg_sucesso_emprestimo"] = True
+                                st.rerun()
+                            except Exception as ex:
+                                conn.rollback()
+                                st.error(f"Erro ao enviar solicitação: {ex}")
+                else:
+                    st.info("Adicione pelo menos um item ao carrinho para enviar a solicitação.")
 
 
-    # =========================================================================
-    # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL USUÁRIO): MINHAS SOLICITAÇÕES
+        # =========================================================================
+        # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL USUÁRIO): MINHAS SOLICITAÇÕES
     # =========================================================================
     elif escolha == "Minhas Solicitações":
         renderizar_banner("Minhas Solicitações", "Acompanhe o status das suas solicitações de material e empréstimo")
