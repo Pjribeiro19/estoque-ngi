@@ -270,8 +270,11 @@ CSS_VISUAL_NGI = """
     background: #f6f8f7; color: #182b28;
 }
 [data-testid="stHeader"] { background: #f6f8f7; }
-[data-testid="stMainBlockContainer"], .main .block-container {
-    padding-top: 2.5rem; padding-bottom: 3rem; max-width: 1600px;
+/* Aproveita a largura disponível, sem grandes margens junto ao menu. */
+[data-testid="stMainBlockContainer"],
+[data-testid="stMain"] .block-container, .main .block-container {
+    width: 100%; max-width: none; margin-left: 0; margin-right: 0;
+    padding: 2.5rem 2rem 3rem; box-sizing: border-box;
 }
 [data-testid="stSidebar"] {
     --text-color: #e3eee8; --background-color: #092e24;
