@@ -257,11 +257,150 @@ def converter_para_horario_br(dt_utc):
         return None
     return dt_utc.replace(tzinfo=ZoneInfo("UTC")).astimezone(ZoneInfo("America/Sao_Paulo"))
 
+
+# =============================================================================
+# APRESENTAÇÃO VISUAL — sem consultas ou alterações no banco de dados
+# =============================================================================
+CSS_VISUAL_NGI = """
+<style>
+/* Tema visual NGI Carajás. Aplicado somente após a autenticação. */
+[data-testid="stAppViewContainer"], .stApp {
+    --text-color: #182b28; --background-color: #f6f8f7;
+    --secondary-background-color: #edf3ef; --primary-color: #147746;
+    background: #f6f8f7; color: #182b28;
+}
+[data-testid="stHeader"] { background: #f6f8f7; }
+[data-testid="stMainBlockContainer"], .main .block-container {
+    padding-top: 2.5rem; padding-bottom: 3rem; max-width: 1600px;
+}
+[data-testid="stSidebar"] {
+    --text-color: #e3eee8; --background-color: #092e24;
+    --secondary-background-color: #164335;
+    background: #092e24; border-right: 1px solid #164335;
+}
+[data-testid="stSidebar"] [data-testid="stSidebarContent"] { background: #092e24; }
+[data-testid="stSidebar"] [data-testid="stSidebarUserContent"] { padding: 1.6rem 1rem; }
+[data-testid="stSidebar"] hr { border-color: #305145; }
+[data-testid="stSidebar"] button { color: #e3eee8; }
+.ngi-brand { display:flex; gap:12px; align-items:center; margin:0 4px 25px; }
+.ngi-brand-icon { width:42px; height:42px; display:grid; place-items:center;
+    border-radius:12px; background:#164b35; color:#7acb88; font-size:26px; }
+.ngi-brand-name { font-size:21px; font-weight:800; color:#fff !important; letter-spacing:-.5px; }
+.ngi-brand-subtitle { font-size:11px; color:#adc7ba !important; margin-top:3px; }
+.ngi-profile { display:flex; gap:10px; align-items:center; padding:16px 6px 6px;
+    margin-top:16px; border-top:1px solid #305145; }
+.ngi-avatar { flex:0 0 36px; height:36px; display:grid; place-items:center; background:#187746;
+    color:white !important; border-radius:50%; font-weight:700; font-size:13px; }
+.ngi-profile-name { color:#eff6f2 !important; font-size:13px; font-weight:600; overflow-wrap:anywhere; }
+.ngi-profile-role { color:#a9c2b5 !important; font-size:11px; margin-top:3px; }
+.ngi-page-header { background:transparent !important; padding:0 0 24px !important;
+    border-radius:0 !important; margin-bottom:8px !important; border-bottom:1px solid #e0e7e3; }
+.stMarkdown .ngi-page-header h1 { color:#122820 !important; font-size:30px !important;
+    font-weight:800 !important; letter-spacing:-1px; padding:0; margin:0; line-height:1.25; }
+.stMarkdown .ngi-page-header p { color:#6a7b73 !important; margin:9px 0 0 !important;
+    font-size:14px !important; opacity:1 !important; }
+.ngi-breadcrumb { font-size:12px; color:#718379 !important; margin-bottom:20px; }
+[data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea,
+[data-testid="stNumberInput"] input, [data-testid="stDateInput"] input {
+    color:#182b28 !important; background:#fff; }
+[data-baseweb="input"], [data-baseweb="textarea"], [data-baseweb="select"] > div {
+    border-color:#dce5df; border-radius:8px; background:#fff; color:#182b28;
+}
+[data-testid="stButton"] button, [data-testid="stFormSubmitButton"] button,
+[data-testid="stDownloadButton"] button { border-radius:8px; font-weight:600; min-height:40px; }
+[data-testid="stButton"] button[kind="primary"],
+[data-testid="stFormSubmitButton"] button,
+[data-testid="baseButton-primary"], [data-testid="stBaseButton-primary"] {
+    background:#147746 !important; border-color:#147746 !important; color:white !important;
+}
+[data-testid="stButton"] button[kind="primary"] p,
+[data-testid="stFormSubmitButton"] button p { color:white !important; }
+[data-testid="stButton"] button[kind="primary"]:hover,
+[data-testid="stFormSubmitButton"] button:hover { background:#0d6036 !important; border-color:#0d6036 !important; }
+[data-testid="stForm"], [data-testid="stVerticalBlockBorderWrapper"] > div {
+    border-color:#e1e8e3; border-radius:12px;
+}
+[data-testid="stForm"] { background:#fff; padding:22px; }
+[data-testid="stDataFrame"] { border:1px solid #e1e8e3; border-radius:10px; overflow:hidden; }
+.painel-kpi-card, .rel-kpi-card { border-radius:12px !important; box-shadow:0 2px 8px #14382406; }
+.livros-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; margin:18px 0 26px; }
+.livro-card { box-sizing:border-box; display:flex; flex-direction:column; min-width:0;
+    height:340px; border:1px solid #e0e7e3; border-radius:12px; padding:14px;
+    background:#fff; overflow:hidden; box-shadow:0 2px 6px #15372604; }
+.livro-img-wrap { position:relative; flex:0 0 178px; height:178px; width:100%;
+    border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(120deg,#f0f3ef,#f7f8f5); }
+.livro-img-wrap img { display:block; max-width:calc(100% - 38px); max-height:154px;
+    width:auto; height:auto; object-fit:contain; margin:auto; filter:drop-shadow(0 3px 5px #142d2020); }
+.livro-img-placeholder { font-size:13px; color:#829187; }
+.livro-info { padding:13px 2px 0; min-height:0; flex:1; }
+.livro-titulo { font-size:14px; font-weight:700; color:#1c3027;
+    line-height:1.45; height:41px; display:-webkit-box; -webkit-line-clamp:2;
+    -webkit-box-orient:vertical; overflow:hidden; margin-bottom:7px; }
+.livro-meta { font-size:12px; color:#839187; }
+.livro-footer { flex:0 0 auto; font-size:13px; padding:12px 2px 0;
+    border-top:1px solid #eef2ef; color:#54665b; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.livro-footer strong { font-size:15px; }
+.livro-status { position:absolute; top:9px; right:9px; padding:5px 8px;
+    border-radius:7px; background:#e5f3ea; color:#17693f !important; font-size:10px; font-weight:700; }
+.livro-status.is-empty { background:#fcebed; color:#b73042 !important; }
+@media (min-width: 1000px) {
+    [data-testid="stSidebar"] { min-width:270px; max-width:290px; }
+}
+@media (max-width: 1100px) { .livros-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width: 640px) {
+    .livros-grid { grid-template-columns:minmax(0,1fr); gap:14px; }
+    .livro-card { height:340px; }
+    [data-testid="stMainBlockContainer"], .main .block-container { padding:2rem 1rem; }
+    .stMarkdown .ngi-page-header h1 { font-size:25px !important; }
+}
+</style>
+"""
+
+ESTILO_MENU_LATERAL_NGI = {
+    "container": {"padding": "0!important", "background-color": "#092e24", "border-radius": "0"},
+    "icon": {"color": "#afcdbd", "font-size": "17px"},
+    "nav-link": {"font-family": "'Manrope', 'Segoe UI', sans-serif", "font-size": "13px",
+                 "text-align": "left", "margin": "3px 0", "padding": "10px 12px",
+                 "color": "#e3eee8", "border-radius": "7px", "--hover-color": "#164335"},
+    "nav-link-selected": {"background-color": "#194b38", "color": "#ffffff",
+                          "font-weight": "600", "border-left": "3px solid #55bd75"},
+}
+
+def renderizar_catalogo_visual_ngi(dados):
+    """Exibe os mesmos registros recebidos; não filtra nem modifica saldos."""
+    cards = ['<div class="livros-grid">']
+    for _, item in dados.iterrows():
+        titulo = html.escape(str(item['titulo']), quote=True)
+        codigo = html.escape(str(item['codigo']), quote=True)
+        tipo = html.escape(str(item['tipo']), quote=True) if pd.notna(item['tipo']) and str(item['tipo']).strip() else '-'
+        if item['foto'] is not None:
+            foto = bytes(item['foto'])
+            mime = 'image/png' if foto[:8] == b'\x89PNG\r\n\x1a\n' else 'image/jpeg'
+            imagem = f'<img src="data:{mime};base64,{base64.b64encode(foto).decode()}" alt="Capa: {titulo}" loading="lazy">'
+        else:
+            imagem = '<div class="livro-img-placeholder">Sem foto</div>'
+        disponivel = item['quantidade'] > 0
+        status = 'Disponível' if disponivel else 'Sem estoque'
+        classe = '' if disponivel else ' is-empty'
+        cor = '#167543' if disponivel else '#ba3445'
+        quantidade = html.escape(str(item['quantidade']))
+        cards.append(
+            f'<article class="livro-card">'
+            f'<div class="livro-img-wrap">{imagem}<div class="livro-status{classe}">{status}</div></div>'
+            f'<div class="livro-info"><div class="livro-titulo" title="{titulo}">{titulo}</div>'
+            f'<div class="livro-meta">Código: {codigo} · {tipo}</div></div>'
+            f'<div class="livro-footer">Disponível: <strong style="color:{cor}">{quantidade}</strong></div>'
+            '</article>'
+        )
+    cards.append('</div>')
+    st.markdown(''.join(cards), unsafe_allow_html=True)
+
 def renderizar_banner(titulo, subtitulo, cor="#4CAF50"):
     """Cabeçalho padrão (banner colorido) usado no topo de cada tela do
     sistema, para manter o visual consistente entre todos os módulos."""
     st.markdown(f"""
-        <div style="background-color: {cor}; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
+        <div class="ngi-page-header" style="background-color: {cor}; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
             <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                 {titulo}
             </h1>
@@ -808,20 +947,12 @@ components.html("""
 
 # Dicionário de estilo adaptativo para os menus horizontais
 ESTILO_MENU_HORIZONTAL = {
-    "container": {"padding": "0!important", "background-color": "transparent"},
-    "icon": {"color": "#64748b", "font-size": "14px"}, 
-    "nav-link": {
-        "font-size": "14px", 
-        "text-align": "center", 
-        "margin": "0px 5px", 
-        "color": "var(--text-color)",
-        "--hover-color": "rgba(76, 175, 80, 0.12)"
-    },
-    "nav-link-selected": {
-        "background-color": "#4CAF50", 
-        "color": "white", 
-        "font-weight": "500"
-    },
+    "container": {"padding": "4px 0!important", "background-color": "transparent", "border-bottom": "1px solid #dfe7e1", "border-radius": "0"},
+    "icon": {"color": "#688172", "font-size": "15px"},
+    "nav-link": {"font-family": "'Manrope', 'Segoe UI', sans-serif", "font-size": "13px", "text-align": "center",
+                 "margin": "0px 2px", "padding": "11px 8px", "color": "#61766a",
+                 "border-radius": "0", "--hover-color": "#edf4ef"},
+    "nav-link-selected": {"background-color": "#edf4ef", "color": "#126239", "font-weight": "600", "border-bottom": "3px solid #187746"},
 }
 
 # --- GERENCIAMENTO DE SESSÃO ---
@@ -1158,15 +1289,12 @@ else:
     # --- MENU LATERAL ---
     label_solicitacoes = "Solicitações"
 
+    st.markdown(CSS_VISUAL_NGI, unsafe_allow_html=True)
     with st.sidebar:
-        st.markdown(f"""
-            <div style="display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; margin-bottom: 4px;">
-                <span class="material-symbols-rounded" style="font-size: 20px; color: #4CAF50;">account_circle</span>
-                Olá, {st.session_state.NOME_USUARIO_LOGADO}
-            </div>
-        """, unsafe_allow_html=True)
-        st.write("---")
-        
+        st.markdown('<div class="ngi-brand"><div class="ngi-brand-icon">◈</div>'
+                    '<div><div class="ngi-brand-name">NGI Carajás</div>'
+                    '<div class="ngi-brand-subtitle">Gestão de Almoxarifado</div></div></div>', unsafe_allow_html=True)
+
         if st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
             # ---------------------------------------------------------------
             # MENU RESTRITO - PERFIL USUÁRIO (MÓDULO DE SOLICITAÇÃO)
@@ -1188,22 +1316,7 @@ else:
                 icons=icones_menu_user,
                 menu_icon="cast",
                 default_index=0,
-                styles={
-                    "container": {"padding": "0!important", "background-color": "transparent"},
-                    "icon": {"color": "#64748b", "font-size": "15px"}, 
-                    "nav-link": {
-                        "font-size": "14px", 
-                        "text-align": "left", 
-                        "margin": "0px", 
-                        "color": "var(--text-color)",
-                        "--hover-color": "rgba(76, 175, 80, 0.12)"
-                    },
-                    "nav-link-selected": {
-                        "background-color": "#4CAF50", 
-                        "color": "white", 
-                        "font-weight": "500"
-                    },
-                }
+                styles=ESTILO_MENU_LATERAL_NGI
             )
         else:
             # ---------------------------------------------------------------
@@ -1239,23 +1352,17 @@ else:
                 icons=["grid", "box-seam", "arrow-repeat", "box", "fire", "book", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "laptop", "box-arrow-right"],
                 menu_icon="cast",
                 default_index=0,
-                styles={
-                    "container": {"padding": "0!important", "background-color": "transparent"},
-                    "icon": {"color": "#64748b", "font-size": "15px"}, 
-                    "nav-link": {
-                        "font-size": "14px", 
-                        "text-align": "left", 
-                        "margin": "0px", 
-                        "color": "var(--text-color)",
-                        "--hover-color": "rgba(76, 175, 80, 0.12)"
-                    },
-                    "nav-link-selected": {
-                        "background-color": "#4CAF50", 
-                        "color": "white", 
-                        "font-weight": "500"
-                    },
-                }
+                styles=ESTILO_MENU_LATERAL_NGI
             )
+
+    with st.sidebar:
+        st.markdown(
+            '<div class="ngi-profile"><div class="ngi-avatar">' +
+            html.escape(''.join(p[0] for p in str(st.session_state.NOME_USUARIO_LOGADO).split()[:2]).upper()) +
+            '</div><div><div class="ngi-profile-name">' + html.escape(str(st.session_state.NOME_USUARIO_LOGADO)) +
+            '</div><div class="ngi-profile-role">' + html.escape(str(st.session_state.PERFIL_USUARIO_LOGADO)) +
+            '</div></div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="ngi-breadcrumb">NGI Carajás &nbsp; / &nbsp; ' + html.escape(str(escolha)) + '</div>', unsafe_allow_html=True)
 
     if escolha == "Sair do Sistema":
         if st.session_state.SESSION_TOKEN:
@@ -1279,7 +1386,7 @@ else:
     # --- TELA: PAINEL GERAL ---
     elif escolha == "Painel Geral":
         st.markdown("""
-            <div style="background-color: #4CAF50; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
+            <div class="ngi-page-header" style="background-color: #4CAF50; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Painel Geral de Controle
                 </h1>
@@ -1842,7 +1949,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # =========================================================================
     elif escolha == "Materiais Disponíveis":
         st.markdown("""
-            <div style="background-color: #4CAF50; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
+            <div class="ngi-page-header" style="background-color: #4CAF50; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Materiais Disponíveis no Almoxarifado
                 </h1>
@@ -2301,106 +2408,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             if df_raw_livros.empty:
                 st.info("Nenhum livro ou produto cadastrado ainda.")
             else:
-                st.markdown("""
-                    <style>
-                    .livros-grid {
-                        display: grid;
-                        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-                        gap: 16px;
-                        margin-top: 12px;
-                    }
-                    .livro-card {
-                        display: flex;
-                        flex-direction: column;
-                        border: 1px solid #e5e5e5;
-                        border-radius: 10px;
-                        overflow: hidden;
-                        height: 270px;
-                        background: #ffffff;
-                        box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-                    }
-                    .livro-img-wrap {
-                        height: 130px;
-                        width: 100%;
-                        flex-shrink: 0;
-                        overflow: hidden;
-                        background: #f5f6f8;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                    }
-                    .livro-img-wrap img {
-                        max-width: 100%;
-                        max-height: 100%;
-                        object-fit: contain;
-                        display: block;
-                        margin: 0 auto;
-                    }
-                    .livro-img-placeholder {
-                        color: #aaaaaa;
-                        font-size: 12px;
-                        text-align: center;
-                    }
-                    .livro-info {
-                        padding: 10px 12px 6px 12px;
-                        flex: 1;
-                        display: flex;
-                        flex-direction: column;
-                        min-height: 0;
-                    }
-                    .livro-titulo {
-                        font-size: 13px;
-                        font-weight: 600;
-                        color: #1a1a1a;
-                        display: -webkit-box;
-                        -webkit-line-clamp: 2;
-                        -webkit-box-orient: vertical;
-                        overflow: hidden;
-                        line-height: 1.3;
-                        min-height: 34px;
-                        margin-bottom: 6px;
-                    }
-                    .livro-meta {
-                        font-size: 11px;
-                        color: #888888;
-                    }
-                    .livro-footer {
-                        padding: 8px 12px;
-                        font-size: 13px;
-                        font-weight: 700;
-                        border-top: 1px solid #f0f0f0;
-                        flex-shrink: 0;
-                    }
-                    </style>
-                """, unsafe_allow_html=True)
-
-                cards_html_livros = ['<div class="livros-grid">']
-                for _, linha_livro in df_raw_livros.iterrows():
-                    if linha_livro["foto"] is not None:
-                        foto_bytes_livro = bytes(linha_livro["foto"])
-                        mime_foto_livro = "image/png" if foto_bytes_livro[:8] == b'\x89PNG\r\n\x1a\n' else "image/jpeg"
-                        img_b64_livro = base64.b64encode(foto_bytes_livro).decode()
-                        img_tag_livro = f'<img src="data:{mime_foto_livro};base64,{img_b64_livro}">'
-                    else:
-                        img_tag_livro = '<div class="livro-img-placeholder">Sem foto</div>'
-
-                    cor_qtd = "#4CAF50" if linha_livro["quantidade"] > 0 else "#c62828"
-                    titulo_seguro = html.escape(str(linha_livro['titulo']))
-                    codigo_seguro = html.escape(str(linha_livro['codigo']))
-                    tipo_seguro = html.escape(str(linha_livro['tipo'])) if pd.notna(linha_livro['tipo']) and str(linha_livro['tipo']).strip() else '-'
-
-                    cards_html_livros.append(f'''
-                        <div class="livro-card">
-                            <div class="livro-img-wrap">{img_tag_livro}</div>
-                            <div class="livro-info">
-                                <div class="livro-titulo">{titulo_seguro}</div>
-                                <div class="livro-meta">Código: {codigo_seguro} · {tipo_seguro}</div>
-                            </div>
-                            <div class="livro-footer" style="color:{cor_qtd};">Disponível: {linha_livro['quantidade']}</div>
-                        </div>
-                    ''')
-                cards_html_livros.append('</div>')
-                st.markdown("".join(cards_html_livros), unsafe_allow_html=True)
+                renderizar_catalogo_visual_ngi(df_raw_livros)
 
         # ---------------------------------------------------------------
         # ABA 2: CADASTRAR ITEM (FOTO OBRIGATÓRIA)
@@ -2597,14 +2605,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         if df_disp_livros.empty:
             st.info("Nenhum livro ou produto disponível no momento.")
         else:
-            colunas_grade_user = st.columns(6)
-            for i_livro_u, linha_livro_u in df_disp_livros.reset_index(drop=True).iterrows():
-                with colunas_grade_user[i_livro_u % 6]:
-                    with st.container(border=True):
-                        if linha_livro_u["foto"] is not None:
-                            st.image(bytes(linha_livro_u["foto"]), width=110)
-                        st.markdown(f"<span style='font-size: 13px; font-weight: 600;'>{linha_livro_u['titulo']}</span>", unsafe_allow_html=True)
-                        st.caption(f"{linha_livro_u['tipo'] or '-'} · Disponível: {linha_livro_u['quantidade']}")
+            renderizar_catalogo_visual_ngi(df_disp_livros)
 
             st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
             st.markdown("### Nova Solicitação de Livros/Produtos")
@@ -2964,7 +2965,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # =========================================================================
     elif escolha == label_solicitacoes:
         st.markdown("""
-            <div style="background-color: #4CAF50; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
+            <div class="ngi-page-header" style="background-color: #4CAF50; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Solicitações de Usuários
                 </h1>
