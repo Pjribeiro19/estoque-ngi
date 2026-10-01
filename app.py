@@ -519,18 +519,27 @@ def navegar_emprestimo(destino, item_id):
     st.session_state.ngi_emp_item_alvo = int(item_id)
 
 
+def mudar_pagina_emprestimos(pagina):
+    st.session_state.ngi_emp_pagina = pagina
+
+
 def renderizar_catalogo_emprestimos(dados):
     st.markdown("""<style>
     .ngi-emp-stats {display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:12px 0 22px}
     .ngi-emp-stat {background:white;border:1px solid #dce5df;border-radius:10px;padding:16px 20px}
     .ngi-emp-stat span {color:#63756b;font-size:13px}.ngi-emp-stat strong {display:block;color:#153d2a;font-size:27px}
-    .ngi-emp-photo {height:170px;display:flex;align-items:center;justify-content:center;background:#f3f5f3;border-radius:8px;color:#7b8d82;overflow:hidden}
+    .ngi-emp-photo {height:145px;display:flex;align-items:center;justify-content:center;background:#f3f5f3;border-radius:8px;color:#7b8d82;overflow:hidden}
     .ngi-emp-photo img {width:100%;height:100%;object-fit:contain}
-    .ngi-emp-name {font-size:17px;font-weight:700;color:#182e22;height:48px;line-height:24px;overflow:hidden;margin:5px 0}
+    .ngi-emp-name {font-size:14px;font-weight:700;color:#182e22;height:40px;line-height:20px;overflow:hidden;margin:5px 0}
     .ngi-emp-code {font-size:12px;color:#718077;margin-top:10px}
-    .ngi-emp-counts {display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #e5ebe7;padding:12px 0;gap:8px}
-    .ngi-emp-counts span {font-size:11px;color:#617269}.ngi-emp-counts b {display:block;font-size:20px;color:#233e2d}
-    .ngi-emp-status {font-size:12px;color:#276644;background:#e9f4e9;padding:3px 9px;border-radius:15px;display:inline-block;margin-bottom:10px}
+    .ngi-emp-counts {display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #e5ebe7;padding:8px 0;gap:6px}
+    .ngi-emp-counts span {font-size:11px;color:#617269}.ngi-emp-counts b {display:block;font-size:17px;color:#233e2d}
+    .ngi-emp-status {font-size:12px;color:#276644;background:#e9f4e9;padding:3px 9px;border-radius:15px;display:inline-block;margin-bottom:5px}
+    [class*="st-key-ngi_emp_card_"] {background:#fff;border-radius:10px;}
+    [class*="st-key-ngi_emp_card_"] [data-testid="stVerticalBlock"] {gap:8px;}
+    [class*="st-key-ngi_emp_card_"] button {min-height:32px !important;padding:4px 8px !important;}
+    [class*="st-key-ngi_emp_card_"] button p {font-size:12px !important;}
+    [class*="st-key-ngi_emp_card_"] svg {width:16px !important;height:16px !important;}
     @media(max-width:700px){.ngi-emp-stats{grid-template-columns:repeat(2,1fr)}}
     </style>""", unsafe_allow_html=True)
     total = int(dados['Qtd Total'].sum())
@@ -547,18 +556,29 @@ def renderizar_catalogo_emprestimos(dados):
     if filtrados.empty:
         st.info("Nenhum material encontrado.")
         return
+    limite_col, pagina_col, anterior_col, proxima_col = st.columns([2, 2, 1, 1])
+    limite = limite_col.selectbox("Itens por página", [8, 16, 24], key="ngi_emp_limite")
+    paginas = max(1, (len(filtrados)+limite-1)//limite)
+    contexto = (busca.strip(), limite)
+    if st.session_state.get("ngi_emp_contexto") != contexto:
+        st.session_state.ngi_emp_pagina = 1
+        st.session_state.ngi_emp_contexto = contexto
+    st.session_state.ngi_emp_pagina = min(max(1, st.session_state.get("ngi_emp_pagina", 1)), paginas)
+    pagina = pagina_col.selectbox("Página", range(1, paginas+1), key="ngi_emp_pagina")
+    anterior_col.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+    proxima_col.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+    anterior_col.button("Anterior", key="ngi_emp_anterior", use_container_width=True, disabled=pagina<=1, on_click=mudar_pagina_emprestimos, args=(pagina-1,))
+    proxima_col.button("Próxima", key="ngi_emp_proxima", use_container_width=True, disabled=pagina>=paginas, on_click=mudar_pagina_emprestimos, args=(pagina+1,))
+    visiveis = filtrados.iloc[(pagina-1)*limite:pagina*limite]
+    st.caption(f"Exibindo {(pagina-1)*limite+1}–{min(pagina*limite,len(filtrados))} de {len(filtrados)} materiais · Página {pagina} de {paginas}")
     if modo == "Tabela":
-        st.dataframe(filtrados.drop(columns=['ID','foto']), use_container_width=True, hide_index=True)
+        st.dataframe(visiveis.drop(columns=['ID','foto']), use_container_width=True, hide_index=True)
         return
-    # Paginação limita as imagens exibidas por vez, sem ocultar itens cadastrados.
-    paginas = max(1, (len(filtrados)+11)//12)
-    pagina = st.selectbox("Página", range(1, paginas+1), key="ngi_emp_pagina") if paginas > 1 else 1
-    visiveis = filtrados.iloc[(pagina-1)*12:pagina*12]
-    for inicio in range(0, len(visiveis), 3):
-        colunas = st.columns(3)
-        for coluna, (_, item) in zip(colunas, visiveis.iloc[inicio:inicio+3].iterrows()):
+    for inicio in range(0, len(visiveis), 4):
+        colunas = st.columns(4)
+        for coluna, (_, item) in zip(colunas, visiveis.iloc[inicio:inicio+4].iterrows()):
             with coluna:
-                with st.container(border=True):
+                with st.container(border=True, key=f"ngi_emp_card_{item['ID']}"):
                     nome = html.escape(str(item['Item / Equipamento']))
                     codigo = html.escape(str(item['Código'] or 'Sem código'))
                     foto = item['foto']
