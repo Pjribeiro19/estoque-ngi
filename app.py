@@ -523,7 +523,7 @@ def mudar_pagina_emprestimos(pagina):
     st.session_state.ngi_emp_pagina = pagina
 
 
-def renderizar_catalogo_emprestimos(dados):
+def renderizar_catalogo_emprestimos(dados, solicitante=False):
     st.markdown("""<style>
     .ngi-emp-stats {display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:12px 0 22px}
     .ngi-emp-stat {background:white;border:1px solid #dce5df;border-radius:10px;padding:16px 20px}
@@ -589,20 +589,29 @@ def renderizar_catalogo_emprestimos(dados):
                     status = 'Disponível' if disponiveis > 0 else 'Indisponível'
                     metricas = [('Total',int(item['Qtd Total'])),('Disponíveis',disponiveis),('Emprestados',int(item['Emprestados']))]
                     st.markdown(f'<div class="ngi-emp-photo">{visual}</div><div class="ngi-emp-code">{codigo}</div><div class="ngi-emp-name" title="{nome}">{nome}</div><div class="ngi-emp-status">{status}</div><div class="ngi-emp-counts">'+''.join(f'<div><span>{n}</span><b>{v}</b></div>' for n,v in metricas)+'</div>',unsafe_allow_html=True)
-                    sair, editar = st.columns([3,1])
-                    sair.button("Registrar saída", key=f"ngi_emp_saida_{item['ID']}", use_container_width=True, disabled=disponiveis<=0, on_click=navegar_emprestimo, args=("Registrar Saída (Empréstimo)",int(item['ID'])))
-                    editar.button("Editar", key=f"ngi_emp_editar_{item['ID']}", use_container_width=True, on_click=navegar_emprestimo, args=("Itens Disponíveis",int(item['ID'])))
+                    if solicitante:
+                        previsao = item.get('Previsão de devolução')
+                        if disponiveis <= 0 and pd.notna(previsao):
+                            st.caption(f"Devolução prevista: {previsao.strftime('%d/%m/%Y')}")
+                        observacao = item.get('Observações')
+                        if pd.notna(observacao) and str(observacao).strip():
+                            with st.expander("Observações"):
+                                st.write(str(observacao))
+                    else:
+                        sair, editar = st.columns([3,1])
+                        sair.button("Registrar saída", key=f"ngi_emp_saida_{item['ID']}", use_container_width=True, disabled=disponiveis<=0, on_click=navegar_emprestimo, args=("Registrar Saída (Empréstimo)",int(item['ID'])))
+                        editar.button("Editar", key=f"ngi_emp_editar_{item['ID']}", use_container_width=True, on_click=navegar_emprestimo, args=("Itens Disponíveis",int(item['ID'])))
     st.caption(f"{len(filtrados)} materiais encontrados · página {pagina} de {paginas}")
 
 def renderizar_banner(titulo, subtitulo, cor="#147746"):
-    """Cabeçalho padrão (banner colorido) usado no topo de cada tela do
+    """Cabeçalho padrão sem fundo colorido usado no topo de cada tela do
     sistema, para manter o visual consistente entre todos os módulos."""
     st.markdown(f"""
-        <div class="ngi-page-header" style="background-color: {cor}; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
-            <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+        <div class="ngi-page-header" style="background: transparent; padding: 0 0 24px; margin-bottom: 8px;">
+            <h1 style="color: #122820; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                 {titulo}
             </h1>
-            <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+            <p style="color: #6a7b73; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                 {subtitulo}
             </p>
         </div>
@@ -1594,11 +1603,11 @@ else:
     # =========================================================================
     elif escolha == "Empréstimo de Material" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum":
         st.markdown("""
-            <div class="ngi-page-header" style="background-color: #145d3b; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
-                <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+            <div class="ngi-page-header" style="background: transparent; padding: 0 0 24px; margin-bottom: 8px;">
+                <h1 style="color: #122820; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Gestão de Empréstimo de Material
                 </h1>
-                <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                <p style="color: #6a7b73; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                     Módulo independente de empréstimos, controle de devoluções e histórico
                 </p>
             </div>
@@ -1958,7 +1967,7 @@ else:
                 df_raw_emp_admin = df_todos_itens_emprestimo_admin[df_todos_itens_emprestimo_admin["quantidade_disponivel"] > 0].reset_index(drop=True)
 
                 if df_raw_emp_admin.empty:
-                    st.warning("Nenhum item disponível para adicionar no momento — confira a previsão de devolução na tabela acima.")
+                    st.warning("Nenhum item disponível para adicionar no momento — confira a previsão de devolução no catálogo acima.")
                 else:
                     col_add_a1, col_add_a2, col_add_a3 = st.columns([3, 1, 1])
                     opcao_sol_admin = col_add_a1.selectbox(
@@ -2103,11 +2112,11 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # =========================================================================
     elif escolha == "Materiais Disponíveis":
         st.markdown("""
-            <div class="ngi-page-header" style="background-color: #147746; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
-                <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+            <div class="ngi-page-header" style="background: transparent; padding: 0 0 24px; margin-bottom: 8px;">
+                <h1 style="color: #122820; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Materiais Disponíveis no Almoxarifado
                 </h1>
-                <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                <p style="color: #6a7b73; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                     Consulte os itens em estoque e solicite a retirada de materiais
                 </p>
             </div>
@@ -2851,11 +2860,11 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         (escolha == "Solicitar Empréstimo" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum")
     ):
         st.markdown("""
-            <div style="background-color: #145d3b; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
-                <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+            <div class="ngi-page-header" style="background: transparent; padding: 0 0 24px; margin-bottom: 8px;">
+                <h1 style="color: #122820; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Itens Disponíveis para Empréstimo
                 </h1>
-                <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                <p style="color: #6a7b73; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                     Consulte os itens do catálogo de empréstimo e solicite a retirada
                 </p>
             </div>
@@ -2866,7 +2875,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             del st.session_state["msg_sucesso_emprestimo"]
 
         df_todos_itens_emprestimo = pd.read_sql_query("""
-            SELECT ei.id, ei.codigo, ei.item, ei.quantidade_disponivel, ei.observacao,
+            SELECT ei.id, ei.codigo, ei.item, ei.quantidade_total, ei.quantidade_disponivel, ei.observacao, ei.foto,
                    (SELECT MIN(er.data_prevista) FROM emprestimo_registros er WHERE er.item_id = ei.id AND er.status = 'EMPRESTADO') AS previsao_devolucao
             FROM emprestimo_itens ei
             ORDER BY ei.codigo ASC;
@@ -2875,29 +2884,14 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         if df_todos_itens_emprestimo.empty:
             st.info("Nenhum item cadastrado para empréstimo no momento.")
         else:
-            def status_texto_emprestimo(row):
-                if row["quantidade_disponivel"] > 0:
-                    return f"Disponível ({row['quantidade_disponivel']})"
-                elif row["previsao_devolucao"] is not None:
-                    return f"Em uso — devolução prevista: {row['previsao_devolucao'].strftime('%d/%m/%Y')}"
-                else:
-                    return "Em uso"
-
-            def destacar_status_emprestimo(val):
-                if val.startswith("Disponível"):
-                    return 'background-color: #d4edda; color: #155724; font-weight: bold;'
-                elif val.startswith("Em uso"):
-                    return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
-                return ''
-
-            df_emp_disp_user = df_todos_itens_emprestimo.copy()
-            df_emp_disp_user["Status"] = df_emp_disp_user.apply(status_texto_emprestimo, axis=1)
-            df_emp_disp_user = df_emp_disp_user.rename(columns={
-                "codigo": "Código", "item": "Item / Equipamento", "observacao": "Observações"
-            })[["Código", "Item / Equipamento", "Status", "Observações"]]
-
-            st.dataframe(df_emp_disp_user.style.map(destacar_status_emprestimo, subset=['Status']), use_container_width=True, hide_index=True)
-            st.caption("Um item indisponível não aparece na lista de seleção abaixo — verifique aqui a previsão de devolução antes de planejar sua retirada.")
+            df_emp_disp_user = df_todos_itens_emprestimo.rename(columns={
+                "id": "ID", "codigo": "Código", "item": "Item / Equipamento",
+                "quantidade_total": "Qtd Total", "quantidade_disponivel": "Qtd Disponível",
+                "observacao": "Observações", "previsao_devolucao": "Previsão de devolução"
+            }).copy()
+            df_emp_disp_user["Emprestados"] = df_emp_disp_user["Qtd Total"] - df_emp_disp_user["Qtd Disponível"]
+            renderizar_catalogo_emprestimos(df_emp_disp_user, solicitante=True)
+            st.caption("Itens indisponíveis podem ser consultados no catálogo, mas não podem ser adicionados à solicitação.")
 
             st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
             st.markdown("### Nova Solicitação de Empréstimo")
@@ -2916,7 +2910,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             df_raw_emp_user = df_todos_itens_emprestimo[df_todos_itens_emprestimo["quantidade_disponivel"] > 0].reset_index(drop=True)
 
             if df_raw_emp_user.empty:
-                st.warning("Nenhum item disponível para adicionar no momento — confira a previsão de devolução na tabela acima.")
+                st.warning("Nenhum item disponível para adicionar no momento — confira a previsão de devolução no catálogo acima.")
             else:
                 col_add_e1, col_add_e2, col_add_e3 = st.columns([3, 1, 1])
                 opcao_sol_emp = col_add_e1.selectbox(
@@ -3131,11 +3125,11 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # =========================================================================
     elif escolha == label_solicitacoes:
         st.markdown("""
-            <div class="ngi-page-header" style="background-color: #147746; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
-                <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+            <div class="ngi-page-header" style="background: transparent; padding: 0 0 24px; margin-bottom: 8px;">
+                <h1 style="color: #122820; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Solicitações de Usuários
                 </h1>
-                <p style="color: #E8F5E9; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                <p style="color: #6a7b73; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                     Analise, aprove ou rejeite as solicitações de materiais e empréstimos
                 </p>
             </div>
@@ -3747,11 +3741,11 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         COR_TEXTO_CLARO = "#e8f0d8"
 
         st.markdown(f"""
-            <div style="background-color: {COR_CARD_FUNDO}; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
-                <h1 class="kpi-valor-limao" style="margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 700;">
+            <div class="ngi-page-header" style="background: transparent; padding: 0 0 24px; margin-bottom: 8px;">
+                <h1 style="color: #122820; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 700;">
                     Relatórios e Dashboard
                 </h1>
-                <p class="kpi-titulo-branco" style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                <p style="color: #6a7b73; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                     Visão consolidada de Estoque, Solicitações, Movimentações e Empréstimos
                 </p>
             </div>
