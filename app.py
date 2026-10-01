@@ -497,6 +497,83 @@ def renderizar_catalogo_visual_ngi(dados):
     cards.append('</div>')
     st.markdown(''.join(cards), unsafe_allow_html=True)
 
+
+def foto_emprestimo_upload(arquivo):
+    """Valida a imagem antes de armazená-la no catálogo."""
+    if arquivo is None:
+        return None
+    dados = arquivo.getvalue()
+    if len(dados) > 5 * 1024 * 1024:
+        raise ValueError("A foto deve ter até 5 MB.")
+    from PIL import Image, ImageOps
+    with Image.open(io.BytesIO(dados)) as original:
+        imagem = ImageOps.exif_transpose(original).convert("RGB")
+        imagem.thumbnail((1000, 1000))
+        destino = io.BytesIO()
+        imagem.save(destino, format="JPEG", quality=85)
+        return destino.getvalue()
+
+
+def navegar_emprestimo(destino, item_id):
+    st.session_state.ngi_emp_nav = destino
+    st.session_state.ngi_emp_item_alvo = int(item_id)
+
+
+def renderizar_catalogo_emprestimos(dados):
+    st.markdown("""<style>
+    .ngi-emp-stats {display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:12px 0 22px}
+    .ngi-emp-stat {background:white;border:1px solid #dce5df;border-radius:10px;padding:16px 20px}
+    .ngi-emp-stat span {color:#63756b;font-size:13px}.ngi-emp-stat strong {display:block;color:#153d2a;font-size:27px}
+    .ngi-emp-photo {height:170px;display:flex;align-items:center;justify-content:center;background:#f3f5f3;border-radius:8px;color:#7b8d82;overflow:hidden}
+    .ngi-emp-photo img {width:100%;height:100%;object-fit:contain}
+    .ngi-emp-name {font-size:17px;font-weight:700;color:#182e22;height:48px;line-height:24px;overflow:hidden;margin:5px 0}
+    .ngi-emp-code {font-size:12px;color:#718077;margin-top:10px}
+    .ngi-emp-counts {display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #e5ebe7;padding:12px 0;gap:8px}
+    .ngi-emp-counts span {font-size:11px;color:#617269}.ngi-emp-counts b {display:block;font-size:20px;color:#233e2d}
+    .ngi-emp-status {font-size:12px;color:#276644;background:#e9f4e9;padding:3px 9px;border-radius:15px;display:inline-block;margin-bottom:10px}
+    @media(max-width:700px){.ngi-emp-stats{grid-template-columns:repeat(2,1fr)}}
+    </style>""", unsafe_allow_html=True)
+    total = int(dados['Qtd Total'].sum())
+    disponivel = int(dados['Qtd Disponível'].sum())
+    indicadores = [('Tipos de materiais', len(dados)), ('Total no acervo', total), ('Disponíveis', disponivel), ('Emprestados', total-disponivel)]
+    st.markdown('<div class="ngi-emp-stats">'+''.join(f'<div class="ngi-emp-stat"><span>{nome}</span><strong>{valor}</strong></div>' for nome,valor in indicadores)+'</div>', unsafe_allow_html=True)
+    st.subheader("Materiais para empréstimo")
+    busca_col, modo_col = st.columns([3, 1])
+    busca = busca_col.text_input("Buscar por nome ou código", key="ngi_emp_busca", placeholder="Digite o material ou o código...")
+    modo = modo_col.radio("Visualização", ["Cartões", "Tabela"], horizontal=True, key="ngi_emp_modo")
+    filtrados = dados
+    if busca.strip():
+        filtrados = dados[dados['Item / Equipamento'].fillna('').str.contains(busca.strip(), case=False, regex=False) | dados['Código'].fillna('').str.contains(busca.strip(), case=False, regex=False)]
+    if filtrados.empty:
+        st.info("Nenhum material encontrado.")
+        return
+    if modo == "Tabela":
+        st.dataframe(filtrados.drop(columns=['ID','foto']), use_container_width=True, hide_index=True)
+        return
+    # Paginação limita as imagens exibidas por vez, sem ocultar itens cadastrados.
+    paginas = max(1, (len(filtrados)+11)//12)
+    pagina = st.selectbox("Página", range(1, paginas+1), key="ngi_emp_pagina") if paginas > 1 else 1
+    visiveis = filtrados.iloc[(pagina-1)*12:pagina*12]
+    for inicio in range(0, len(visiveis), 3):
+        colunas = st.columns(3)
+        for coluna, (_, item) in zip(colunas, visiveis.iloc[inicio:inicio+3].iterrows()):
+            with coluna:
+                with st.container(border=True):
+                    nome = html.escape(str(item['Item / Equipamento']))
+                    codigo = html.escape(str(item['Código'] or 'Sem código'))
+                    foto = item['foto']
+                    visual = 'Sem foto'
+                    if foto is not None:
+                        visual = '<img alt="'+nome+'" src="data:image/jpeg;base64,'+base64.b64encode(bytes(foto)).decode()+'">'
+                    disponiveis = int(item['Qtd Disponível'])
+                    status = 'Disponível' if disponiveis > 0 else 'Indisponível'
+                    metricas = [('Total',int(item['Qtd Total'])),('Disponíveis',disponiveis),('Emprestados',int(item['Emprestados']))]
+                    st.markdown(f'<div class="ngi-emp-photo">{visual}</div><div class="ngi-emp-code">{codigo}</div><div class="ngi-emp-name" title="{nome}">{nome}</div><div class="ngi-emp-status">{status}</div><div class="ngi-emp-counts">'+''.join(f'<div><span>{n}</span><b>{v}</b></div>' for n,v in metricas)+'</div>',unsafe_allow_html=True)
+                    sair, editar = st.columns([3,1])
+                    sair.button("Registrar saída", key=f"ngi_emp_saida_{item['ID']}", use_container_width=True, disabled=disponiveis<=0, on_click=navegar_emprestimo, args=("Registrar Saída (Empréstimo)",int(item['ID'])))
+                    editar.button("Editar", key=f"ngi_emp_editar_{item['ID']}", use_container_width=True, on_click=navegar_emprestimo, args=("Itens Disponíveis",int(item['ID'])))
+    st.caption(f"{len(filtrados)} materiais encontrados · página {pagina} de {paginas}")
+
 def renderizar_banner(titulo, subtitulo, cor="#4CAF50"):
     """Cabeçalho padrão (banner colorido) usado no topo de cada tela do
     sistema, para manter o visual consistente entre todos os módulos."""
@@ -602,6 +679,8 @@ def inicializar_banco_automatico():
             observacao TEXT
         );
     """)
+
+    cursor.execute("ALTER TABLE emprestimo_itens ADD COLUMN IF NOT EXISTS foto BYTEA;")
 
     # 7. Tabela de Registros de Empréstimos e Devoluções
     cursor.execute("""
@@ -1495,7 +1574,7 @@ else:
     # =========================================================================
     elif escolha == "Empréstimo de Material" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum":
         st.markdown("""
-            <div style="background-color: #2E7D32; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
+            <div class="ngi-page-header" style="background-color: #2E7D32; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Gestão de Empréstimo de Material
                 </h1>
@@ -1505,19 +1584,11 @@ else:
             </div>
         """, unsafe_allow_html=True)
 
-        sub_emp = option_menu(
-            menu_title=None,
-            options=[
-                "Itens Disponíveis", 
-                "Cadastrar Item Empréstimo", 
-                "Registrar Saída (Empréstimo)", 
-                "Registrar Devolução", 
-                "Histórico de Movimentação",
-                "Fazer Solicitação"
-            ],
-            icons=["box-seam", "plus-circle", "box-arrow-right", "box-arrow-in-left", "journal-text", "send"],
-            orientation="horizontal",
-            styles=ESTILO_MENU_HORIZONTAL
+        sub_emp = st.radio(
+            "Navegação de empréstimos",
+            ["Itens Disponíveis", "Cadastrar Item Empréstimo", "Registrar Saída (Empréstimo)",
+             "Registrar Devolução", "Histórico de Movimentação", "Fazer Solicitação"],
+            key="ngi_emp_nav", horizontal=True, label_visibility="collapsed"
         )
 
         cursor = conn.cursor()
@@ -1526,7 +1597,6 @@ else:
         # SUB-ABA 1: ITENS DISPONÍVEIS (PAINEL + EDITAR / EXCLUIR)
         # ---------------------------------------------------------------------
         if sub_emp == "Itens Disponíveis":
-            st.subheader("Painel de Disponibilidade de Empréstimos")
             
             df_emp_itens = pd.read_sql_query("""
                 SELECT 
@@ -1536,27 +1606,31 @@ else:
                     quantidade_total AS "Qtd Total", 
                     quantidade_disponivel AS "Qtd Disponível",
                     (quantidade_total - quantidade_disponivel) AS "Emprestados",
-                    observacao AS "Observações"
+                    observacao AS "Observações", foto
                 FROM emprestimo_itens ORDER BY codigo ASC;
             """, conn)
 
             if df_emp_itens.empty:
                 st.info("Nenhum item cadastrado no catálogo exclusivo de empréstimos ainda.")
             else:
-                # Exibe a tabela ocultando a coluna técnica 'ID'
-                df_exibir = df_emp_itens.drop(columns=["ID"])
-                st.dataframe(df_exibir, use_container_width=True, hide_index=True)
+                renderizar_catalogo_emprestimos(df_emp_itens)
 
                 st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
-                st.markdown("### Gerenciar / Editar / Excluir Item de Empréstimo")
+                st.markdown("### Gerenciar material")
 
                 # Seleção do item
                 df_raw_emp = pd.read_sql_query("SELECT id, codigo, item, quantidade_total, quantidade_disponivel, observacao FROM emprestimo_itens ORDER BY codigo ASC;", conn)
                 
                 if not df_raw_emp.empty:
+                    alvo_emp = st.session_state.pop("ngi_emp_item_alvo", None)
+                    if alvo_emp is not None:
+                        indices_emp = df_raw_emp.index[df_raw_emp['id'] == alvo_emp].tolist()
+                        if indices_emp:
+                            st.session_state.ngi_emp_edicao = indices_emp[0]
                     opcao_emp_sel = st.selectbox(
                         "Selecione o item para modificar ou excluir:",
                         df_raw_emp.index,
+                        key="ngi_emp_edicao",
                         format_func=lambda x: f"{df_raw_emp.loc[x, 'item']} (Código: {df_raw_emp.loc[x, 'codigo'] or 'S/N'})"
                     )
 
@@ -1568,21 +1642,32 @@ else:
                     obs_emp_sel = df_raw_emp.loc[opcao_emp_sel, "observacao"] or ""
 
                     col_ed_e1, col_ed_e2 = st.columns(2)
-                    edit_cod_emp = col_ed_e1.text_input("Código / Patrimônio:", value=cod_emp_sel, key="ed_cod_emp")
-                    edit_nome_emp = col_ed_e2.text_input("Nome do Item / Equipamento:", value=nome_emp_sel, key="ed_nome_emp")
+                    edit_cod_emp = col_ed_e1.text_input("Código / Patrimônio:", value=cod_emp_sel, key=f"ed_cod_emp_{id_emp_sel}")
+                    edit_nome_emp = col_ed_e2.text_input("Nome do Item / Equipamento:", value=nome_emp_sel, key=f"ed_nome_emp_{id_emp_sel}")
                     
                     qtd_emprestados_atual = qtd_tot_sel - qtd_disp_sel
-                    edit_qtd_tot = col_ed_e1.number_input("Quantidade Total em Acervo:", min_value=qtd_emprestados_atual, value=qtd_tot_sel, step=1, key="ed_qtd_tot_emp")
+                    edit_qtd_tot = col_ed_e1.number_input("Quantidade Total em Acervo:", min_value=qtd_emprestados_atual, value=qtd_tot_sel, step=1, key=f"ed_qtd_tot_emp_{id_emp_sel}")
                     
                     if qtd_emprestados_atual > 0:
                         st.caption(f"Existem {qtd_emprestados_atual} unidade(s) emprestada(s) no momento. A quantidade total não pode ser menor que isso.")
 
-                    edit_obs_emp = col_ed_e2.text_area("Observações / Descrição:", value=obs_emp_sel, key="ed_obs_emp")
+                    edit_obs_emp = col_ed_e2.text_area("Observações / Descrição:", value=obs_emp_sel, key=f"ed_obs_emp_{id_emp_sel}")
+
+                    nova_foto_emp = st.file_uploader("Foto do material (opcional, até 5 MB)", type=["png", "jpg", "jpeg"], key=f"ngi_emp_foto_{id_emp_sel}")
+                    remover_foto_emp = st.checkbox("Remover foto atual", key=f"ngi_emp_sem_foto_{id_emp_sel}")
+                    foto_emp_bytes = None
+                    foto_emp_valida = True
+                    if nova_foto_emp is not None:
+                        try:
+                            foto_emp_bytes = foto_emprestimo_upload(nova_foto_emp)
+                        except Exception:
+                            foto_emp_valida = False
+                            st.error("Selecione uma imagem PNG ou JPEG válida, com até 5 MB.")
 
                     col_btn_e1, col_btn_e2 = st.columns([1, 4])
                     
                     with col_btn_e1:
-                        if st.button("Salvar Alterações", type="primary", key="btn_salvar_emp"):
+                        if st.button("Salvar Alterações", type="primary", key="btn_salvar_emp", disabled=not foto_emp_valida):
                             if edit_nome_emp.strip():
                                 nova_qtd_disp = edit_qtd_tot - qtd_emprestados_atual
                                 try:
@@ -1591,6 +1676,10 @@ else:
                                         SET codigo = %s, item = %s, quantidade_total = %s, quantidade_disponivel = %s, observacao = %s 
                                         WHERE id = %s;
                                     """, (edit_cod_emp.strip() if edit_cod_emp.strip() else None, edit_nome_emp.strip(), edit_qtd_tot, nova_qtd_disp, edit_obs_emp.strip(), id_emp_sel))
+                                    if foto_emp_bytes is not None:
+                                        cursor.execute("UPDATE emprestimo_itens SET foto = %s WHERE id = %s;", (psycopg2.Binary(foto_emp_bytes), id_emp_sel))
+                                    elif remover_foto_emp:
+                                        cursor.execute("UPDATE emprestimo_itens SET foto = NULL WHERE id = %s;", (id_emp_sel,))
                                     conn.commit()
                                     st.success(f"Item '{edit_nome_emp}' atualizado com sucesso!")
                                     st.rerun()
@@ -1632,20 +1721,28 @@ else:
                 qtd_total = col_e1.number_input("Quantidade Total em Acervo*", min_value=1, value=1, step=1)
                 obs_emp = col_e2.text_area("Observações / Descrição", placeholder="Ex: Acompanha cabo de força e maleta")
 
+                foto_cad_emp = st.file_uploader("Foto do material (opcional, até 5 MB)", type=["png", "jpg", "jpeg"], key="ngi_emp_foto_cadastro")
                 if st.form_submit_button("Cadastrar Item", type="primary"):
-                    if item_emp.strip():
+                    foto_cad_bytes = None
+                    foto_cad_valida = True
+                    try:
+                        foto_cad_bytes = foto_emprestimo_upload(foto_cad_emp)
+                    except Exception:
+                        foto_cad_valida = False
+                        st.error("Selecione uma imagem PNG ou JPEG válida, com até 5 MB.")
+                    if item_emp.strip() and foto_cad_valida:
                         try:
                             cursor.execute("""
-                                INSERT INTO emprestimo_itens (codigo, item, quantidade_total, quantidade_disponivel, observacao)
-                                VALUES (%s, %s, %s, %s, %s);
-                            """, (cod_emp.strip() if cod_emp else None, item_emp.strip(), qtd_total, qtd_total, obs_emp.strip()))
+                                INSERT INTO emprestimo_itens (codigo, item, quantidade_total, quantidade_disponivel, observacao, foto)
+                                VALUES (%s, %s, %s, %s, %s, %s);
+                            """, (cod_emp.strip() if cod_emp else None, item_emp.strip(), qtd_total, qtd_total, obs_emp.strip(), psycopg2.Binary(foto_cad_bytes) if foto_cad_bytes else None))
                             conn.commit()
                             st.success(f"Item '{item_emp}' cadastrado com sucesso para empréstimos!")
                             st.rerun()
                         except psycopg2.IntegrityError:
                             conn.rollback()
                             st.error("Erro: Já existe um item de empréstimo com este mesmo Código/Patrimônio.")
-                    else:
+                    elif not item_emp.strip():
                         st.error("O campo 'Nome do Item' é obrigatório!")
 
         # ---------------------------------------------------------------------
@@ -1667,7 +1764,9 @@ else:
                 opcoes_usuarios = {f"{u[0]} ({u[1]})": (u[0], u[1]) for u in usuarios_cadastrados}
 
                 with st.form("form_registro_saida_emp", clear_on_submit=True):
-                    item_selecionado_label = st.selectbox("Selecione o Item para Empréstimo*", list(opcoes_itens.keys()))
+                    alvo_saida_emp = st.session_state.pop("ngi_emp_item_alvo", None)
+                    indice_saida_emp = next((i for i, valor in enumerate(opcoes_itens.values()) if valor[0] == alvo_saida_emp), 0)
+                    item_selecionado_label = st.selectbox("Selecione o Item para Empréstimo*", list(opcoes_itens.keys()), index=indice_saida_emp)
                     item_id, item_nome, max_qtd = opcoes_itens[item_selecionado_label]
 
                     col_s1, col_s2 = st.columns(2)
