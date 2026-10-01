@@ -89,8 +89,8 @@ st.markdown("""
     [data-testid="baseButton-primaryFormSubmit"],
     [data-testid="stBaseButton-primaryFormSubmit"],
     [data-testid="stFormSubmitButton"] button {
-        background-color: #4CAF50 !important;
-        border-color: #4CAF50 !important;
+        background-color: #147746 !important;
+        border-color: #147746 !important;
         color: white !important;
     }
     button[kind="primary"]:hover,
@@ -103,19 +103,19 @@ st.markdown("""
     [data-testid="baseButton-primaryFormSubmit"]:hover,
     [data-testid="stBaseButton-primaryFormSubmit"]:hover,
     [data-testid="stFormSubmitButton"] button:hover {
-        background-color: #43a047 !important;
-        border-color: #43a047 !important;
+        background-color: #0d6036 !important;
+        border-color: #0d6036 !important;
     }
 
     /* Botões "Adicionar" (carrinho, categorias) - verde suave */
     [class*="st-key-btn_add_"] button {
-        background-color: rgba(76, 175, 80, 0.14) !important;
-        border-color: rgba(76, 175, 80, 0.45) !important;
-        color: #2E7D32 !important;
+        background-color: rgba(20, 119, 70, 0.14) !important;
+        border-color: rgba(20, 119, 70, 0.45) !important;
+        color: #145d3b !important;
     }
     [class*="st-key-btn_add_"] button:hover {
-        background-color: rgba(76, 175, 80, 0.24) !important;
-        border-color: #4CAF50 !important;
+        background-color: rgba(20, 119, 70, 0.24) !important;
+        border-color: #147746 !important;
     }
 
     /* Botões "Remover" (itens do carrinho, categorias) - cinza neutro */
@@ -594,7 +594,7 @@ def renderizar_catalogo_emprestimos(dados):
                     editar.button("Editar", key=f"ngi_emp_editar_{item['ID']}", use_container_width=True, on_click=navegar_emprestimo, args=("Itens Disponíveis",int(item['ID'])))
     st.caption(f"{len(filtrados)} materiais encontrados · página {pagina} de {paginas}")
 
-def renderizar_banner(titulo, subtitulo, cor="#4CAF50"):
+def renderizar_banner(titulo, subtitulo, cor="#147746"):
     """Cabeçalho padrão (banner colorido) usado no topo de cada tela do
     sistema, para manter o visual consistente entre todos os módulos."""
     st.markdown(f"""
@@ -984,7 +984,7 @@ def enviar_email_notificacao(destinatario, assunto, corpo_html):
         # legitimidade do e-mail perante os filtros anti-spam.
         corpo_html_completo = f"""
         <div style="font-family: Arial, Helvetica, sans-serif; max-width: 560px; margin: 0 auto; color: #1a1a1a;">
-            <div style="background-color: #4CAF50; padding: 18px 24px; border-radius: 8px 8px 0 0;">
+            <div style="background-color: #147746; padding: 18px 24px; border-radius: 8px 8px 0 0;">
                 <h2 style="color: #ffffff; margin: 0; font-size: 17px; font-weight: 600;">Gestão de Almoxarifado NGI Carajás</h2>
             </div>
             <div style="padding: 24px; border: 1px solid #e5e5e5; border-top: none; font-size: 14px; line-height: 1.5;">
@@ -1256,7 +1256,7 @@ if token_redefinicao_url and not st.session_state.autenticado:
                 <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="280">
             </div>
         """, unsafe_allow_html=True)
-        st.markdown('<h3 style="display: flex; align-items: center; gap: 8px;"><span class="material-symbols-rounded" style="font-size: 22px; color: #4CAF50;">lock</span>Criar Nova Senha</h3>', unsafe_allow_html=True)
+        st.markdown('<h3 style="display: flex; align-items: center; gap: 8px;"><span class="material-symbols-rounded" style="font-size: 22px; color: #147746;">lock</span>Criar Nova Senha</h3>', unsafe_allow_html=True)
 
         try:
             cursor_reset = conn.cursor()
@@ -1398,7 +1398,7 @@ if not st.session_state.autenticado:
         col_r1, col_r2, col_r3 = st.columns([1, 1.2, 1])
         with col_r2:
             st.write("<br><br>", unsafe_allow_html=True)
-            st.markdown('<h3 style="display: flex; align-items: center; gap: 8px;"><span class="material-symbols-rounded" style="font-size: 22px; color: #4CAF50;">key</span>Recuperar Acesso</h3>', unsafe_allow_html=True)
+            st.markdown('<h3 style="display: flex; align-items: center; gap: 8px;"><span class="material-symbols-rounded" style="font-size: 22px; color: #147746;">key</span>Recuperar Acesso</h3>', unsafe_allow_html=True)
             email_recuperar = st.text_input("E-mail corporativo", placeholder="exemplo@icmbio.gov.br")
 
             if st.button("Enviar Instruções", type="primary", use_container_width=True):
@@ -1430,7 +1430,7 @@ if not st.session_state.autenticado:
                                     <p>Recebemos uma solicitação para redefinir a senha da sua conta no Sistema de Gestão de Almoxarifado.</p>
                                     <p>Para criar sua nova senha, clique no botão abaixo:</p>
                                     <p style="text-align: center; margin: 24px 0;">
-                                        <a href="{link_redefinicao}" style="background-color: #4CAF50; color: #ffffff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Criar Nova Senha</a>
+                                        <a href="{link_redefinicao}" style="background-color: #147746; color: #ffffff; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; display: inline-block;">Criar Nova Senha</a>
                                     </p>
                                     <p>Ou copie e cole este link no seu navegador:<br>{link_redefinicao}</p>
                                     <p>Este link é válido por {REDEFINICAO_SENHA_DURACAO_MINUTOS} minutos. Se você não solicitou essa redefinição, pode ignorar este e-mail com segurança.</p>
@@ -1594,7 +1594,7 @@ else:
     # =========================================================================
     elif escolha == "Empréstimo de Material" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum":
         st.markdown("""
-            <div class="ngi-page-header" style="background-color: #2E7D32; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
+            <div class="ngi-page-header" style="background-color: #145d3b; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Gestão de Empréstimo de Material
                 </h1>
@@ -1983,7 +1983,7 @@ else:
                     for i_carr_a, item_carr_a in enumerate(st.session_state.carrinho_emprestimo):
                         col_ca1, col_ca2 = st.columns([5, 1])
                         col_ca1.markdown(f"""
-                            <div style="background-color: rgba(46, 125, 50, 0.08); border-left: 4px solid #2E7D32; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
+                            <div style="background-color: rgba(20, 93, 59, 0.08); border-left: 4px solid #145d3b; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
                                 <span style="font-size: 15px; font-weight: 600; color: #1a1a1a;">{item_carr_a['item']}</span>
                                 <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_a['quantidade']}</span>
                             </div>
@@ -2103,7 +2103,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # =========================================================================
     elif escolha == "Materiais Disponíveis":
         st.markdown("""
-            <div class="ngi-page-header" style="background-color: #4CAF50; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
+            <div class="ngi-page-header" style="background-color: #147746; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Materiais Disponíveis no Almoxarifado
                 </h1>
@@ -2122,7 +2122,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         if df_disp_material.empty:
             st.info("Nenhum material disponível em estoque no momento.")
         else:
-            st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
+            st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #147746; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
 
             lista_categorias_user = sorted(df_disp_material["Categoria"].dropna().unique().tolist())
             col_filtro_u1, col_filtro_u2 = st.columns([2, 1])
@@ -2177,8 +2177,8 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 for i_carr, item_carr in enumerate(st.session_state.carrinho_material):
                     col_cm1, col_cm2 = st.columns([5, 1])
                     col_cm1.markdown(f"""
-                        <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 4px solid #4CAF50; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
-                            <span style="font-size: 12px; font-weight: 700; color: #4CAF50; text-transform: uppercase; letter-spacing: 0.3px;">{item_carr['codigo']}</span><br>
+                        <div style="background-color: rgba(20, 119, 70, 0.08); border-left: 4px solid #147746; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
+                            <span style="font-size: 12px; font-weight: 700; color: #147746; text-transform: uppercase; letter-spacing: 0.3px;">{item_carr['codigo']}</span><br>
                             <span style="font-size: 15px; font-weight: 600; color: #1a1a1a;">{item_carr['item']}</span>
                             <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr['quantidade']}</span>
                         </div>
@@ -2463,7 +2463,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             if df_disp_brigada.empty:
                 st.info("Nenhum material disponível no estoque da Brigada no momento.")
             else:
-                st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
+                st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #147746; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
 
                 termo_busca_brig = st.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...", key="busca_material_brigada")
                 df_disp_brigada_filtrado = df_disp_brigada.copy()
@@ -2506,8 +2506,8 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                     for i_carr_br, item_carr_br in enumerate(st.session_state.carrinho_brigada):
                         col_cbr1, col_cbr2 = st.columns([5, 1])
                         col_cbr1.markdown(f"""
-                            <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 4px solid #4CAF50; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
-                                <span style="font-size: 12px; font-weight: 700; color: #4CAF50; text-transform: uppercase; letter-spacing: 0.3px;">{item_carr_br['codigo']}</span><br>
+                            <div style="background-color: rgba(20, 119, 70, 0.08); border-left: 4px solid #147746; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
+                                <span style="font-size: 12px; font-weight: 700; color: #147746; text-transform: uppercase; letter-spacing: 0.3px;">{item_carr_br['codigo']}</span><br>
                                 <span style="font-size: 15px; font-weight: 600; color: #1a1a1a;">{item_carr_br['item']}</span>
                                 <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_br['quantidade']}</span>
                             </div>
@@ -2769,77 +2769,79 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         if df_disp_livros.empty:
             st.info("Nenhum livro ou produto disponível no momento.")
         else:
-            renderizar_catalogo_visual_ngi(df_disp_livros)
+            aba_catalogo_livros, aba_solicitar_livros = st.tabs(["Itens disponíveis", "Fazer solicitação"])
+            with aba_catalogo_livros:
+                renderizar_catalogo_visual_ngi(df_disp_livros)
 
-            st.markdown("<hr style='margin: 25px 0 15px 0; opacity: 0.2;'>", unsafe_allow_html=True)
-            st.markdown("### Nova Solicitação de Livros/Produtos")
-            st.caption("Adicione quantos itens forem necessários ao carrinho. Todos serão enviados em uma única solicitação.")
+            with aba_solicitar_livros:
+                st.markdown("### Nova Solicitação de Livros/Produtos")
+                st.caption("Adicione quantos itens forem necessários ao carrinho. Todos serão enviados em uma única solicitação.")
 
-            if "carrinho_livros" not in st.session_state:
-                st.session_state.carrinho_livros = []
+                if "carrinho_livros" not in st.session_state:
+                    st.session_state.carrinho_livros = []
 
-            col_add_lv1, col_add_lv2, col_add_lv3 = st.columns([3, 1, 1])
-            opcao_sol_livro = col_add_lv1.selectbox(
-                "Selecione o Item:",
-                df_disp_livros.index,
-                format_func=lambda x: f"{df_disp_livros.loc[x, 'titulo']} (Disponível: {df_disp_livros.loc[x, 'quantidade']})",
-                key="select_livro_carrinho"
-            )
-            qtd_sol_livro = col_add_lv2.number_input("Quantidade:", min_value=1, max_value=int(df_disp_livros.loc[opcao_sol_livro, "quantidade"]), value=1, step=1, key="qtd_livro_carrinho")
-            col_add_lv3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-            with col_add_lv3:
-                with st.container(key="btn_add_5"):
-                    clicou_add_5 = st.button("+ Adicionar", key="add_carrinho_livro", use_container_width=True)
-            if clicou_add_5:
-                cod_sel_livro = df_disp_livros.loc[opcao_sol_livro, "codigo"]
-                titulo_sel_livro = df_disp_livros.loc[opcao_sol_livro, "titulo"]
-                st.session_state.carrinho_livros.append({"codigo": cod_sel_livro, "item": titulo_sel_livro, "quantidade": int(qtd_sol_livro)})
-                st.rerun()
+                col_add_lv1, col_add_lv2, col_add_lv3 = st.columns([3, 1, 1])
+                opcao_sol_livro = col_add_lv1.selectbox(
+                    "Selecione o Item:",
+                    df_disp_livros.index,
+                    format_func=lambda x: f"{df_disp_livros.loc[x, 'titulo']} (Disponível: {df_disp_livros.loc[x, 'quantidade']})",
+                    key="select_livro_carrinho"
+                )
+                qtd_sol_livro = col_add_lv2.number_input("Quantidade:", min_value=1, max_value=int(df_disp_livros.loc[opcao_sol_livro, "quantidade"]), value=1, step=1, key="qtd_livro_carrinho")
+                col_add_lv3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                with col_add_lv3:
+                    with st.container(key="btn_add_5"):
+                        clicou_add_5 = st.button("+ Adicionar", key="add_carrinho_livro", use_container_width=True)
+                if clicou_add_5:
+                    cod_sel_livro = df_disp_livros.loc[opcao_sol_livro, "codigo"]
+                    titulo_sel_livro = df_disp_livros.loc[opcao_sol_livro, "titulo"]
+                    st.session_state.carrinho_livros.append({"codigo": cod_sel_livro, "item": titulo_sel_livro, "quantidade": int(qtd_sol_livro)})
+                    st.rerun()
 
-            if st.session_state.carrinho_livros:
-                st.markdown("**Itens no carrinho:**")
-                for i_carr_lv, item_carr_lv in enumerate(st.session_state.carrinho_livros):
-                    col_clv1, col_clv2 = st.columns([5, 1])
-                    col_clv1.markdown(f"""
-                        <div style="background-color: rgba(76, 175, 80, 0.08); border-left: 4px solid #4CAF50; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
-                            <span style="font-size: 15px; font-weight: 600; color: #1a1a1a;">{item_carr_lv['item']}</span>
-                            <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_lv['quantidade']}</span>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    with col_clv2:
-                        with st.container(key=f"btn_remove_4_{i_carr_lv}"):
-                            clicou_remover_4 = st.button("Remover", key=f"remover_carrinho_livro_{i_carr_lv}")
-                    if clicou_remover_4:
-                        st.session_state.carrinho_livros.pop(i_carr_lv)
-                        st.rerun()
-
-                st.markdown("<br>", unsafe_allow_html=True)
-                lista_siglas_coord_livro_user = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
-                coord_sol_livro = st.selectbox("Coordenação: *", lista_siglas_coord_livro_user, key="coord_carrinho_livro")
-                justificativa_sol_livro = st.text_area("Justificativa: *", placeholder="Explique o motivo da solicitação (ex: atividade de educação ambiental, distribuição em evento, etc.)", key="obs_carrinho_livro")
-
-                if st.button("Enviar Solicitação", type="primary", key="enviar_carrinho_livro"):
-                    if not justificativa_sol_livro.strip():
-                        st.error("A Justificativa é obrigatória para solicitar livros/livretos!")
-                    else:
-                        try:
-                            lote_id_livro = str(uuid.uuid4())
-                            cursor = conn.cursor()
-                            for item_carr_lv in st.session_state.carrinho_livros:
-                                cursor.execute("""
-                                    INSERT INTO solicitacoes_almoxarifado 
-                                    (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, status, observacao, lote_id, origem_estoque)
-                                    VALUES ('MATERIAL', %s, %s, %s, %s, %s, %s, 'PENDENTE', %s, %s, 'LIVROS');
-                                """, (item_carr_lv["codigo"], item_carr_lv["item"], item_carr_lv["quantidade"], st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_livro, justificativa_sol_livro.strip(), lote_id_livro))
-                            conn.commit()
-                            st.session_state.carrinho_livros = []
-                            st.session_state["msg_sucesso_livros"] = True
+                if st.session_state.carrinho_livros:
+                    st.markdown("**Itens no carrinho:**")
+                    for i_carr_lv, item_carr_lv in enumerate(st.session_state.carrinho_livros):
+                        col_clv1, col_clv2 = st.columns([5, 1])
+                        col_clv1.markdown(f"""
+                            <div style="background-color: rgba(20, 119, 70, 0.08); border-left: 4px solid #147746; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
+                                <span style="font-size: 15px; font-weight: 600; color: #1a1a1a;">{item_carr_lv['item']}</span>
+                                <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_lv['quantidade']}</span>
+                            </div>
+                        """, unsafe_allow_html=True)
+                        with col_clv2:
+                            with st.container(key=f"btn_remove_4_{i_carr_lv}"):
+                                clicou_remover_4 = st.button("Remover", key=f"remover_carrinho_livro_{i_carr_lv}")
+                        if clicou_remover_4:
+                            st.session_state.carrinho_livros.pop(i_carr_lv)
                             st.rerun()
-                        except Exception as ex_livro:
-                            conn.rollback()
-                            st.error(f"Erro ao enviar solicitação: {ex_livro}")
-            else:
-                st.info("Adicione pelo menos um item ao carrinho para enviar a solicitação.")
+
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    lista_siglas_coord_livro_user = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
+                    coord_sol_livro = st.selectbox("Coordenação: *", lista_siglas_coord_livro_user, key="coord_carrinho_livro")
+                    justificativa_sol_livro = st.text_area("Justificativa: *", placeholder="Explique o motivo da solicitação (ex: atividade de educação ambiental, distribuição em evento, etc.)", key="obs_carrinho_livro")
+
+                    if st.button("Enviar Solicitação", type="primary", key="enviar_carrinho_livro"):
+                        if not justificativa_sol_livro.strip():
+                            st.error("A Justificativa é obrigatória para solicitar livros/livretos!")
+                        else:
+                            try:
+                                lote_id_livro = str(uuid.uuid4())
+                                cursor = conn.cursor()
+                                for item_carr_lv in st.session_state.carrinho_livros:
+                                    cursor.execute("""
+                                        INSERT INTO solicitacoes_almoxarifado 
+                                        (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, status, observacao, lote_id, origem_estoque)
+                                        VALUES ('MATERIAL', %s, %s, %s, %s, %s, %s, 'PENDENTE', %s, %s, 'LIVROS');
+                                    """, (item_carr_lv["codigo"], item_carr_lv["item"], item_carr_lv["quantidade"], st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_livro, justificativa_sol_livro.strip(), lote_id_livro))
+                                conn.commit()
+                                st.session_state.carrinho_livros = []
+                                st.session_state["msg_sucesso_livros"] = True
+                                st.rerun()
+                            except Exception as ex_livro:
+                                conn.rollback()
+                                st.error(f"Erro ao enviar solicitação: {ex_livro}")
+                else:
+                    st.info("Adicione pelo menos um item ao carrinho para enviar a solicitação.")
 
     # =========================================================================
     # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL USUÁRIO): EMPRÉSTIMO DISPONÍVEL
@@ -2849,7 +2851,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         (escolha == "Solicitar Empréstimo" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum")
     ):
         st.markdown("""
-            <div style="background-color: #2E7D32; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
+            <div style="background-color: #145d3b; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Itens Disponíveis para Empréstimo
                 </h1>
@@ -2939,7 +2941,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 for i_carr_e, item_carr_e in enumerate(st.session_state.carrinho_emprestimo):
                     col_ce1, col_ce2 = st.columns([5, 1])
                     col_ce1.markdown(f"""
-                        <div style="background-color: rgba(46, 125, 50, 0.08); border-left: 4px solid #2E7D32; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
+                        <div style="background-color: rgba(20, 93, 59, 0.08); border-left: 4px solid #145d3b; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px;">
                             <span style="font-size: 15px; font-weight: 600; color: #1a1a1a;">{item_carr_e['item']}</span>
                             <span style="font-size: 13px; color: #666; margin-left: 8px;">Qtd: {item_carr_e['quantidade']}</span>
                         </div>
@@ -3129,7 +3131,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # =========================================================================
     elif escolha == label_solicitacoes:
         st.markdown("""
-            <div class="ngi-page-header" style="background-color: #4CAF50; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
+            <div class="ngi-page-header" style="background-color: #147746; padding: 26px 28px; border-radius: 12px; margin-bottom: 28px;">
                 <h1 style="color: white; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Solicitações de Usuários
                 </h1>
@@ -3160,7 +3162,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             else:
                 for _, sol in df_pendentes.iterrows():
                     tipo_label = "Material (Almoxarifado)" if sol["tipo"] == "MATERIAL" else "Empréstimo de Material"
-                    cor_tag = "#4CAF50" if sol["tipo"] == "MATERIAL" else "#2E7D32"
+                    cor_tag = "#147746" if sol["tipo"] == "MATERIAL" else "#145d3b"
                     data_hora_sol = converter_para_horario_br(sol["data_solicitacao"]).strftime('%d/%m/%Y às %H:%M') if sol["data_solicitacao"] is not None else "-"
 
                     linha_datas = ""
@@ -3170,7 +3172,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                         dev_fmt = sol["data_prevista"].strftime('%d/%m/%Y') if sol["data_prevista"] is not None else "-"
                         linha_datas = f"Retirada: {ret_fmt} | Devolução: {dev_fmt}<br>"
                         if sol["termo_aceito"] and sol["data_aceite_termo"] is not None:
-                            linha_termo = f"<span class=\"material-symbols-rounded\" style=\"font-size: 15px; color: #4CAF50; vertical-align: -3px;\">check_circle</span> Termo de Responsabilidade aceito em {converter_para_horario_br(sol['data_aceite_termo']).strftime('%d/%m/%Y %H:%M')}<br>"
+                            linha_termo = f"<span class=\"material-symbols-rounded\" style=\"font-size: 15px; color: #147746; vertical-align: -3px;\">check_circle</span> Termo de Responsabilidade aceito em {converter_para_horario_br(sol['data_aceite_termo']).strftime('%d/%m/%Y %H:%M')}<br>"
                     linha_atividade = f"Atividade Associada: {sol['atividade_associada']}<br>" if sol["atividade_associada"] else ""
                     linha_obs = f"Observações: {sol['observacao']}" if sol["observacao"] else ""
 
@@ -3944,7 +3946,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         # ---------------------------------------------------------------
         # EXPORTAÇÃO EM EXCEL
         # ---------------------------------------------------------------
-        st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Exportar Relatório Geral</h3>', unsafe_allow_html=True)
+        st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #147746; margin-right: 8px; border-radius: 2px;"></span>Exportar Relatório Geral</h3>', unsafe_allow_html=True)
         st.caption("Gera uma planilha Excel com abas separadas: Estoque, Movimentações, Solicitações e Empréstimos.")
 
         if st.button("Gerar Relatório em Excel", type="primary", icon=":material/table_view:"):
@@ -4063,7 +4065,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             if df_raw_equip.empty:
                 st.info("Nenhum equipamento registrado até o momento.")
             else:
-                st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
+                st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #147746; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
 
                 col_feq1, col_feq2, col_feq3 = st.columns(3)
                 busca_equip = col_feq1.text_input("Buscar por Item, Solicitante ou Patrimônio:", placeholder="Digite para pesquisar...")
@@ -4106,7 +4108,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                     st.info("Nenhum equipamento encontrado com os filtros aplicados.")
                 else:
                     st.markdown("<br>", unsafe_allow_html=True)
-                    st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Editar / Excluir Registro</h3>', unsafe_allow_html=True)
+                    st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #147746; margin-right: 8px; border-radius: 2px;"></span>Editar / Excluir Registro</h3>', unsafe_allow_html=True)
 
                     df_filtrado_equip_idx = df_filtrado_equip.reset_index(drop=True)
                     opcao_equip = st.selectbox(
