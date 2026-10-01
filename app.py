@@ -357,6 +357,26 @@ CSS_VISUAL_NGI = """
     [data-testid="stMainBlockContainer"], .main .block-container { padding:2rem 1rem; }
     .stMarkdown .ngi-page-header h1 { font-size:25px !important; }
 }
+
+/* Indicadores do acervo: apresentação dos dados já carregados. */
+.ngi-acervo-kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:16px; margin:8px 0 18px; }
+.ngi-acervo-kpi { display:flex; align-items:center; gap:16px; min-width:0;
+    padding:18px 20px; background:#fff; border:1px solid #e0e7e3; border-radius:10px; }
+.ngi-acervo-kpi-icon { display:grid; place-items:center; flex:0 0 48px; height:48px;
+    background:#e8f4ed; color:#17693f; border-radius:10px; }
+.ngi-acervo-kpi-icon svg { width:25px; height:25px; }
+.ngi-acervo-kpi-value { color:#153d2c; font-size:24px; line-height:1.2; font-weight:800; }
+.ngi-acervo-kpi-label { color:#718077; font-size:13px; margin-top:4px; }
+.ngi-acervo-kpi-empty .ngi-acervo-kpi-icon { background:#fff0f1; color:#d6424e; }
+.ngi-acervo-kpi-empty .ngi-acervo-kpi-value { color:#b73042; }
+@media (max-width:900px) {
+    .ngi-acervo-kpi { padding:14px 12px; gap:10px; }
+    .ngi-acervo-kpi-value { font-size:22px; }
+}
+@media (max-width:640px) {
+    .ngi-acervo-kpis { grid-template-columns:minmax(0,1fr); gap:10px; }
+}
 </style>
 """
 
@@ -369,6 +389,30 @@ ESTILO_MENU_LATERAL_NGI = {
     "nav-link-selected": {"background-color": "#194b38", "color": "#ffffff",
                           "font-weight": "600", "border-left": "3px solid #55bd75"},
 }
+
+def renderizar_indicadores_acervo_ngi(dados):
+    """Resumo de leitura: usa somente o catálogo já consultado pela página."""
+    quantidades = pd.to_numeric(dados['quantidade'], errors='coerce').fillna(0)
+    totais = (len(dados), int(quantidades.clip(lower=0).sum()), int((quantidades <= 0).sum()))
+    rotulos = ('títulos cadastrados', 'exemplares disponíveis', 'títulos sem estoque')
+    desenhos = (
+        '<path d="M12 5C9 3 5 3 3 4v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-2-1-6-1-9 1Z"/><path d="M12 5v15"/>',
+        '<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/>',
+        '<path d="m10.3 4-8 14a2 2 0 0 0 1.7 3h16a2 2 0 0 0 1.7-3l-8-14a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4m0 4h.01"/>'
+    )
+    partes = ['<div class="ngi-acervo-kpis">']
+    for indice, (total, rotulo, desenho) in enumerate(zip(totais, rotulos, desenhos)):
+        classe = ' ngi-acervo-kpi-empty' if indice == 2 else ''
+        valor = format(total, ',').replace(',', '.')
+        partes.append(
+            f'<div class="ngi-acervo-kpi{classe}"><div class="ngi-acervo-kpi-icon" aria-hidden="true">'
+            f'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" '
+            f'stroke-linecap="round" stroke-linejoin="round">{desenho}</svg></div>'
+            f'<div><div class="ngi-acervo-kpi-value">{valor}</div>'
+            f'<div class="ngi-acervo-kpi-label">{rotulo}</div></div></div>'
+        )
+    partes.append('</div>')
+    st.markdown(''.join(partes), unsafe_allow_html=True)
 
 def renderizar_catalogo_visual_ngi(dados):
     """Exibe os mesmos registros recebidos; não filtra nem modifica saldos."""
@@ -2393,6 +2437,9 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # =========================================================================
     elif escolha == "Livros e Produtos" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum":
         renderizar_banner("Livros e Produtos", "Catálogo de livros e livretos disponíveis, com foto de referência")
+        df_raw_livros = pd.read_sql_query("SELECT codigo, titulo, tipo, quantidade, foto FROM produtos_livros ORDER BY titulo ASC;", conn)
+        renderizar_indicadores_acervo_ngi(df_raw_livros)
+
         aba_livros_admin = option_menu(
             menu_title=None,
             options=["Itens Disponíveis", "Cadastrar Item", "Registro de Entrada", "Registro de Saída", "Histórico de Movimentação", "Editar / Excluir Item"],
@@ -2401,7 +2448,6 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             styles=ESTILO_MENU_HORIZONTAL
         )
 
-        df_raw_livros = pd.read_sql_query("SELECT codigo, titulo, tipo, quantidade, foto FROM produtos_livros ORDER BY titulo ASC;", conn)
         lista_siglas_coord_livros = df_coordenacoes["Sigla"].tolist() if not df_coordenacoes.empty else ["GERAL"]
 
         # ---------------------------------------------------------------
