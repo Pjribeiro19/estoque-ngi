@@ -67,7 +67,7 @@ st.markdown("""
         [data-testid*="ollapse"] {display: none !important;}
     }
 
-    html, body, [data-testid="stWidgetLabel"] p, .stMarkdown p, label, span {
+    html, body, [data-testid="stWidgetLabel"] p {
         color: var(--text-color) !important;
     }
     
@@ -265,11 +265,13 @@ CSS_VISUAL_NGI = """
 <style>
 /* Tema visual NGI Carajás. Aplicado somente após a autenticação. */
 [data-testid="stAppViewContainer"], .stApp {
-    --text-color: #182b28; --background-color: #f6f8f7;
-    --secondary-background-color: #edf3ef; --primary-color: #147746;
-    background: #f6f8f7; color: #182b28;
+    /* Usa o tema real do Streamlit, inclusive quando ele muda no navegador. */
+    --ngi-surface: var(--secondary-background-color);
+    --ngi-border: color-mix(in srgb, var(--text-color) 18%, transparent);
+    --ngi-muted: color-mix(in srgb, var(--text-color) 78%, var(--background-color));
+    background: var(--background-color); color: var(--text-color);
 }
-[data-testid="stHeader"] { background: #f6f8f7; }
+[data-testid="stHeader"] { background: var(--background-color); }
 /* Aproveita a largura disponível, sem grandes margens junto ao menu. */
 [data-testid="stMainBlockContainer"],
 [data-testid="stMain"] .block-container, .main .block-container {
@@ -297,17 +299,17 @@ CSS_VISUAL_NGI = """
 .ngi-profile-name { color:#eff6f2 !important; font-size:13px; font-weight:600; overflow-wrap:anywhere; }
 .ngi-profile-role { color:#a9c2b5 !important; font-size:11px; margin-top:3px; }
 .ngi-page-header { background:transparent !important; padding:0 0 24px !important;
-    border-radius:0 !important; margin-bottom:8px !important; border-bottom:1px solid #e0e7e3; }
-.stMarkdown .ngi-page-header h1 { color:#122820 !important; font-size:30px !important;
+    border-radius:0 !important; margin-bottom:8px !important; border-bottom:1px solid var(--ngi-border); }
+.stMarkdown .ngi-page-header h1 { color:var(--text-color) !important; font-size:30px !important;
     font-weight:800 !important; letter-spacing:-1px; padding:0; margin:0; line-height:1.25; }
-.stMarkdown .ngi-page-header p { color:#6a7b73 !important; margin:9px 0 0 !important;
+.stMarkdown .ngi-page-header p { color:var(--ngi-muted) !important; margin:9px 0 0 !important;
     font-size:14px !important; opacity:1 !important; }
-.ngi-breadcrumb { font-size:12px; color:#718379 !important; margin-bottom:20px; }
+.ngi-breadcrumb { font-size:12px; color:var(--ngi-muted) !important; margin-bottom:20px; }
 [data-testid="stTextInput"] input, [data-testid="stTextArea"] textarea,
 [data-testid="stNumberInput"] input, [data-testid="stDateInput"] input {
-    color:#182b28 !important; background:#fff; }
+    color:var(--text-color) !important; background:var(--ngi-surface); }
 [data-baseweb="input"], [data-baseweb="textarea"], [data-baseweb="select"] > div {
-    border-color:#dce5df; border-radius:8px; background:#fff; color:#182b28;
+    border-color:var(--ngi-border); border-radius:8px; background:var(--ngi-surface); color:var(--text-color);
 }
 [data-testid="stButton"] button, [data-testid="stFormSubmitButton"] button,
 [data-testid="stDownloadButton"] button { border-radius:8px; font-weight:600; min-height:40px; }
@@ -321,28 +323,28 @@ CSS_VISUAL_NGI = """
 [data-testid="stButton"] button[kind="primary"]:hover,
 [data-testid="stFormSubmitButton"] button:hover { background:#0d6036 !important; border-color:#0d6036 !important; }
 [data-testid="stForm"], [data-testid="stVerticalBlockBorderWrapper"] > div {
-    border-color:#e1e8e3; border-radius:12px;
+    border-color:var(--ngi-border); border-radius:12px;
 }
-[data-testid="stForm"] { background:#fff; padding:22px; }
-[data-testid="stDataFrame"] { border:1px solid #e1e8e3; border-radius:10px; overflow:hidden; }
+[data-testid="stForm"] { background:var(--ngi-surface); padding:22px; }
+[data-testid="stDataFrame"] { border:1px solid var(--ngi-border); border-radius:10px; overflow:hidden; }
 .painel-kpi-card, .rel-kpi-card { border-radius:12px !important; box-shadow:0 2px 8px #14382406; }
 .livros-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; margin:18px 0 26px; }
 .livro-card { box-sizing:border-box; display:flex; flex-direction:column; min-width:0;
-    height:340px; border:1px solid #e0e7e3; border-radius:12px; padding:14px;
-    background:#fff; overflow:hidden; box-shadow:0 2px 6px #15372604; }
+    height:340px; border:1px solid var(--ngi-border); border-radius:12px; padding:14px;
+    background:var(--ngi-surface); overflow:hidden; box-shadow:0 2px 6px #15372604; }
 .livro-img-wrap { position:relative; flex:0 0 178px; height:178px; width:100%;
     border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center;
-    background:linear-gradient(120deg,#f0f3ef,#f7f8f5); }
+    background:var(--ngi-surface); }
 .livro-img-wrap img { display:block; max-width:calc(100% - 38px); max-height:154px;
     width:auto; height:auto; object-fit:contain; margin:auto; filter:drop-shadow(0 3px 5px #142d2020); }
-.livro-img-placeholder { font-size:13px; color:#829187; }
+.livro-img-placeholder { font-size:13px; color:var(--ngi-muted); }
 .livro-info { padding:13px 2px 0; min-height:0; flex:1; }
-.livro-titulo { font-size:14px; font-weight:700; color:#1c3027;
+.livro-titulo { font-size:14px; font-weight:700; color:var(--text-color);
     line-height:1.45; height:41px; display:-webkit-box; -webkit-line-clamp:2;
     -webkit-box-orient:vertical; overflow:hidden; margin-bottom:7px; }
-.livro-meta { font-size:12px; color:#839187; }
+.livro-meta { font-size:12px; color:var(--ngi-muted); }
 .livro-footer { flex:0 0 auto; font-size:13px; padding:12px 2px 0;
-    border-top:1px solid #eef2ef; color:#54665b; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    border-top:1px solid var(--ngi-border); color:var(--ngi-muted); display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .livro-footer strong { font-size:15px; }
 .livro-status { position:absolute; top:9px; right:9px; padding:5px 8px;
     border-radius:7px; background:#e5f3ea; color:#17693f !important; font-size:10px; font-weight:700; }
@@ -362,12 +364,12 @@ CSS_VISUAL_NGI = """
 .ngi-acervo-kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
     gap:16px; margin:8px 0 18px; }
 .ngi-acervo-kpi { display:flex; align-items:center; gap:16px; min-width:0;
-    padding:18px 20px; background:#fff; border:1px solid #e0e7e3; border-radius:10px; }
+    padding:18px 20px; background:var(--ngi-surface); border:1px solid var(--ngi-border); border-radius:10px; }
 .ngi-acervo-kpi-icon { display:grid; place-items:center; flex:0 0 48px; height:48px;
     background:#e8f4ed; color:#17693f; border-radius:10px; }
 .ngi-acervo-kpi-icon svg { width:25px; height:25px; }
-.ngi-acervo-kpi-value { color:#153d2c; font-size:24px; line-height:1.2; font-weight:800; }
-.ngi-acervo-kpi-label { color:#718077; font-size:13px; margin-top:4px; }
+.ngi-acervo-kpi-value { color:var(--text-color); font-size:24px; line-height:1.2; font-weight:800; }
+.ngi-acervo-kpi-label { color:var(--ngi-muted); font-size:13px; margin-top:4px; }
 .ngi-acervo-kpi-empty .ngi-acervo-kpi-icon { background:#fff0f1; color:#d6424e; }
 .ngi-acervo-kpi-empty .ngi-acervo-kpi-value { color:#b73042; }
 @media (max-width:900px) {
@@ -381,25 +383,25 @@ CSS_VISUAL_NGI = """
 /* Painel geral: indicadores claros e consulta integrada. */
 .ngi-painel-kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; margin:8px 0 22px; }
 .ngi-painel-kpi { display:flex; align-items:center; gap:20px; padding:24px;
-    min-height:132px; box-sizing:border-box; background:#fff; border:1px solid #e5ece7;
+    min-height:132px; box-sizing:border-box; background:var(--ngi-surface); border:1px solid var(--ngi-border);
     border-radius:12px; box-shadow:0 3px 12px #15372605; }
 .ngi-painel-icon { flex:0 0 64px; height:64px; display:grid; place-items:center;
     border-radius:13px; background:#eaf5e7; color:#17803f; }
 .ngi-painel-icon svg { width:34px; height:34px; }
 .ngi-painel-icon.alerta { background:#ffedef; color:#bd2535; }
 .ngi-painel-icon.mov { background:#e6f7ed; color:#11794a; }
-.ngi-painel-label { font-size:15px; color:#53675c; line-height:1.4; }
-.ngi-painel-value { font-size:36px; font-weight:800; color:#147348; line-height:1.2; margin-top:8px; }
+.ngi-painel-label { font-size:15px; color:var(--ngi-muted); line-height:1.4; }
+.ngi-painel-value { font-size:36px; font-weight:800; color:var(--text-color); line-height:1.2; margin-top:8px; }
 .ngi-painel-value.alerta { color:#bd2535; }
 [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ngi-stock-heading) {
-    background:#fff; border-radius:12px; padding:22px;
+    background:var(--ngi-surface); border-radius:12px; padding:22px;
 }
 [data-testid="stVerticalBlockBorderWrapper"]:has(.ngi-stock-heading) > div {
-    background:#fff; border-color:#e1e8e3; border-radius:12px;
+    background:var(--ngi-surface); border-color:var(--ngi-border); border-radius:12px;
 }
 .ngi-stock-heading { margin-bottom:6px; }
-.stMarkdown .ngi-stock-heading h3 { padding:0; margin:0; font-size:23px; color:#172b22 !important; font-weight:800 !important; }
-.stMarkdown .ngi-stock-heading p { margin:5px 0 12px; font-size:14px; color:#74867a !important; }
+.stMarkdown .ngi-stock-heading h3 { padding:0; margin:0; font-size:23px; color:var(--text-color) !important; font-weight:800 !important; }
+.stMarkdown .ngi-stock-heading p { margin:5px 0 12px; font-size:14px; color:var(--ngi-muted) !important; }
 @media(max-width:1100px) {
     .ngi-painel-kpi { gap:12px; padding:18px; }
     .ngi-painel-icon { flex-basis:48px; height:48px; }
@@ -411,6 +413,27 @@ CSS_VISUAL_NGI = """
     .ngi-painel-value { font-size:28px; margin-top:4px; }
     [data-testid="stVerticalBlock"]:has(> [data-testid="stElementContainer"] .ngi-stock-heading) { padding:12px; }
 }
+
+/* Contraste de controles e navegação nos dois temas. */
+[data-testid="stMain"] input::placeholder,
+[data-testid="stMain"] textarea::placeholder { color:var(--ngi-muted) !important; opacity:1; }
+[data-testid="stMain"] [class*="st-key-btn_add_"] button {
+    color:var(--text-color) !important; border-color:#147746 !important;
+}
+[data-testid="stMain"] [class*="st-key-btn_add_"] button p { color:inherit !important; }
+[class*="st-key-ngi_menu_"] [role="radiogroup"] {
+    gap:4px; border-bottom:1px solid var(--ngi-border); padding-bottom:6px;
+}
+[class*="st-key-ngi_menu_"] [role="radiogroup"] label {
+    padding:8px 12px; border-radius:7px; margin:0;
+}
+[class*="st-key-ngi_menu_"] [role="radiogroup"] label:has(input:checked) {
+    background:#147746; color:#fff;
+}
+[class*="st-key-ngi_menu_"] [role="radiogroup"] label:has(input:checked) p { color:#fff !important; }
+[class*="st-key-ngi_menu_"] [role="radiogroup"] label > div:first-child { display:none; }
+.livro-footer strong, .ngi-painel-value.alerta,
+.ngi-acervo-kpi-empty .ngi-acervo-kpi-value { color:var(--text-color) !important; }
 </style>
 """
 
@@ -526,19 +549,19 @@ def mudar_pagina_emprestimos(pagina):
 def renderizar_catalogo_emprestimos(dados, solicitante=False):
     st.markdown("""<style>
     .ngi-emp-stats {display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:12px 0 22px}
-    .ngi-emp-stat {background:white;border:1px solid #dce5df;border-radius:10px;padding:16px 20px}
-    .ngi-emp-stat span {color:#63756b;font-size:13px}.ngi-emp-stat strong {display:block;color:#153d2a;font-size:27px}
-    .ngi-emp-photo {height:145px;display:flex;align-items:center;justify-content:center;background:#f3f5f3;border-radius:8px;color:#7b8d82;overflow:hidden}
+    .ngi-emp-stat {background:var(--ngi-surface);border:1px solid var(--ngi-border);border-radius:10px;padding:16px 20px}
+    .ngi-emp-stat span {color:var(--ngi-muted);font-size:13px}.ngi-emp-stat strong {display:block;color:var(--text-color);font-size:27px}
+    .ngi-emp-photo {height:145px;display:flex;align-items:center;justify-content:center;background:var(--ngi-surface);border-radius:8px;color:var(--ngi-muted);overflow:hidden}
     .ngi-emp-photo img {width:100%;height:100%;object-fit:contain}
-    .ngi-emp-name {font-size:14px;font-weight:700;color:#182e22;height:40px;line-height:20px;overflow:hidden;margin:5px 0}
-    .ngi-emp-code {font-size:12px;color:#718077;margin-top:10px}
-    .ngi-emp-counts {display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #e5ebe7;padding:8px 0;gap:6px}
-    .ngi-emp-counts span {font-size:11px;color:#617269}.ngi-emp-counts b {display:block;font-size:17px;color:#233e2d}
+    .ngi-emp-name {font-size:14px;font-weight:700;color:var(--text-color);height:40px;line-height:20px;overflow:hidden;margin:5px 0}
+    .ngi-emp-code {font-size:12px;color:var(--ngi-muted);margin-top:10px}
+    .ngi-emp-counts {display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--ngi-border);padding:8px 0;gap:6px}
+    .ngi-emp-counts span {font-size:11px;color:var(--ngi-muted)}.ngi-emp-counts b {display:block;font-size:17px;color:var(--text-color)}
     .ngi-emp-details {height:96px;overflow:hidden;}
-    .ngi-emp-return {height:36px;font-size:12px;line-height:18px;color:#6a7b73;}
-    .ngi-emp-note {height:52px;overflow:auto;font-size:12px;line-height:17px;color:#6a7b73;overflow-wrap:anywhere;}
+    .ngi-emp-return {height:36px;font-size:12px;line-height:18px;color:var(--ngi-muted);}
+    .ngi-emp-note {height:52px;overflow:auto;font-size:12px;line-height:17px;color:var(--ngi-muted);overflow-wrap:anywhere;}
     .ngi-emp-status {font-size:12px;color:#276644;background:#e9f4e9;padding:3px 9px;border-radius:15px;display:inline-block;margin-bottom:5px}
-    [class*="st-key-ngi_emp_card_"] {background:#fff;border-radius:10px;}
+    [class*="st-key-ngi_emp_card_"] {background:var(--ngi-surface);border-radius:10px;}
     [class*="st-key-ngi_emp_card_"] [data-testid="stVerticalBlock"] {gap:8px;}
     [class*="st-key-ngi_emp_card_"] button {min-height:32px !important;padding:4px 8px !important;}
     [class*="st-key-ngi_emp_card_"] button p {font-size:12px !important;}
@@ -627,22 +650,22 @@ def pagina_solicitacoes_ngi(pagina):
 
 def indicadores_solicitacoes_ngi(dados):
     st.markdown("""<style>
-    .st-key-ngi_sol_aba [role="radiogroup"]{gap:0;background:#fff;border-bottom:1px solid #dce6df;padding:0 8px;margin-bottom:10px}
+    .st-key-ngi_sol_aba [role="radiogroup"]{gap:0;background:var(--ngi-surface);border-bottom:1px solid var(--ngi-border);padding:0 8px;margin-bottom:10px}
     .st-key-ngi_sol_aba [role="radiogroup"] label{padding:10px 24px;margin:0;border-bottom:3px solid transparent;cursor:pointer}
     .st-key-ngi_sol_aba [role="radiogroup"] label:has(input:checked){border-color:#147746;background:#f1f7f3}
     .st-key-ngi_sol_aba [role="radiogroup"] label:has(input:checked) p{color:#145d3b !important;font-weight:700}
     .st-key-ngi_sol_aba [role="radiogroup"] label>div:first-child{display:none}
     .ngi-sol-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:8px 0 20px}
-    .ngi-sol-kpi{display:flex;align-items:center;gap:16px;padding:18px 22px;border:1px solid #e2e9e4;border-radius:10px;background:#f0f7f3}
-    .ngi-sol-kpi:first-child{background:#fffbf1;border-color:#f1e6c7}.ngi-sol-kpi:last-child{background:#f2f6fc}
-    .ngi-sol-kpi svg{width:26px;height:26px;flex-shrink:0;stroke:#185b3e;fill:none;stroke-width:1.7}
-    .ngi-sol-kpi small{font-size:13px;color:#53645b}.ngi-sol-kpi strong{display:block;font-size:28px;color:#152d21}
+    .ngi-sol-kpi{display:flex;align-items:center;gap:16px;padding:18px 22px;border:1px solid var(--ngi-border);border-radius:10px;background:var(--ngi-surface)}
+    .ngi-sol-kpi:first-child{background:var(--ngi-surface);border-color:var(--ngi-border)}.ngi-sol-kpi:last-child{background:var(--ngi-surface)}
+    .ngi-sol-kpi svg{width:26px;height:26px;flex-shrink:0;stroke:var(--text-color);fill:none;stroke-width:1.7}
+    .ngi-sol-kpi small{font-size:13px;color:var(--ngi-muted)}.ngi-sol-kpi strong{display:block;font-size:28px;color:var(--text-color)}
     .ngi-sol-tag{display:inline-block;padding:3px 8px;border-radius:5px;font-size:12px;background:#e3f2e9;color:#155737 !important}
     .ngi-sol-tag.livro{background:#eaf1ff;color:#285293 !important}.ngi-sol-tag.emprestimo{background:#efeafb;color:#66439a !important}
     .ngi-sol-cell{font-size:13px;line-height:19px;padding:7px 0;overflow-wrap:anywhere}
-    .ngi-sol-th{font-size:12px;font-weight:700;color:#5b6d62;padding:6px 0}
-    .st-key-ngi_sol_tabela{background:white;border:1px solid #e0e7e2;border-radius:12px;padding:16px}
-    .st-key-ngi_sol_tabela [data-testid="stHorizontalBlock"]{border-bottom:1px solid #edf1ee;align-items:center;gap:10px}
+    .ngi-sol-th{font-size:12px;font-weight:700;color:var(--ngi-muted);padding:6px 0}
+    .st-key-ngi_sol_tabela{background:var(--ngi-surface);border:1px solid var(--ngi-border);border-radius:12px;padding:16px}
+    .st-key-ngi_sol_tabela [data-testid="stHorizontalBlock"]{border-bottom:1px solid var(--ngi-border);align-items:center;gap:10px}
     .st-key-ngi_sol_tabela button{min-height:30px !important;padding:3px 10px !important;border-color:#32785a !important}
     .st-key-ngi_sol_tabela button p{font-size:12px !important}
     @media(max-width:700px){.ngi-sol-kpis{gap:6px}.ngi-sol-kpi{padding:10px;gap:7px}.ngi-sol-kpi svg{display:none}}
@@ -1294,6 +1317,14 @@ ESTILO_MENU_HORIZONTAL = {
     "nav-link-selected": {"background-color": "#edf4ef", "color": "#126239", "font-weight": "600", "border-bottom": "3px solid #187746"},
 }
 
+def menu_horizontal_ngi(menu_title=None, options=(), icons=None, orientation="horizontal", styles=None, default_index=0, key=None):
+    """Navegação nativa com as mesmas opções, adaptada ao tema claro/escuro."""
+    return st.radio(
+        menu_title or "Navegação do módulo", options, index=default_index,
+        horizontal=True, label_visibility="collapsed",
+        key=key or "ngi_menu_" + "_".join(options),
+    )
+
 # --- GERENCIAMENTO DE SESSÃO ---
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
@@ -1726,7 +1757,7 @@ else:
                         return ['background-color: rgba(198, 40, 40, 0.12); color: #c62828; font-weight: bold;'] * len(row)
                     return [''] * len(row)
                 
-                st.dataframe(df_display.style.set_properties(**{"background-color": "#ffffff", "color": "#334b3e"}).apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
+                st.dataframe(df_display.style.apply(destacar_zerados, axis=1), use_container_width=True, hide_index=True)
 
     # =========================================================================
     # NOVA TELA: EMPRÉSTIMO DE MATERIAL (INDEPENDENTE)
@@ -1734,10 +1765,10 @@ else:
     elif escolha == "Empréstimo de Material" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum":
         st.markdown("""
             <div class="ngi-page-header" style="background: transparent; padding: 0 0 24px; margin-bottom: 8px;">
-                <h1 style="color: #122820; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+                <h1 style="color: var(--text-color); margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Gestão de Empréstimo de Material
                 </h1>
-                <p style="color: #6a7b73; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                <p style="color: var(--ngi-muted); margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                     Módulo independente de empréstimos, controle de devoluções e histórico
                 </p>
             </div>
@@ -2243,10 +2274,10 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     elif escolha == "Materiais Disponíveis":
         st.markdown("""
             <div class="ngi-page-header" style="background: transparent; padding: 0 0 24px; margin-bottom: 8px;">
-                <h1 style="color: #122820; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+                <h1 style="color: var(--text-color); margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Materiais Disponíveis no Almoxarifado
                 </h1>
-                <p style="color: #6a7b73; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                <p style="color: var(--ngi-muted); margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                     Consulte os itens em estoque e solicite a retirada de materiais
                 </p>
             </div>
@@ -2358,7 +2389,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # =========================================================================
     elif escolha == "Materiais Brigada" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum":
         renderizar_banner("Materiais Brigada", "Estoque próprio da Brigada, separado do almoxarifado geral")
-        aba_brigada_admin = option_menu(
+        aba_brigada_admin = menu_horizontal_ngi(
             menu_title=None,
             options=["Itens Disponíveis", "Cadastrar Item", "Gerenciar Categorias", "Registro de Entrada", "Registro de Saída", "Histórico de Movimentação", "Editar / Excluir Item"],
             icons=["box-seam", "plus-circle", "tags", "arrow-down-circle", "arrow-up-circle", "journal-text", "pencil-square"],
@@ -2689,7 +2720,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         df_raw_livros = pd.read_sql_query("SELECT codigo, titulo, tipo, quantidade, foto FROM produtos_livros ORDER BY titulo ASC;", conn)
         renderizar_indicadores_acervo_ngi(df_raw_livros)
 
-        aba_livros_admin = option_menu(
+        aba_livros_admin = menu_horizontal_ngi(
             menu_title=None,
             options=["Itens Disponíveis", "Cadastrar Item", "Registro de Entrada", "Registro de Saída", "Histórico de Movimentação", "Editar / Excluir Item"],
             icons=["images", "plus-circle", "arrow-down-circle", "arrow-up-circle", "journal-text", "pencil-square"],
@@ -2991,10 +3022,10 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     ):
         st.markdown("""
             <div class="ngi-page-header" style="background: transparent; padding: 0 0 24px; margin-bottom: 8px;">
-                <h1 style="color: #122820; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+                <h1 style="color: var(--text-color); margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Itens Disponíveis para Empréstimo
                 </h1>
-                <p style="color: #6a7b73; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                <p style="color: var(--ngi-muted); margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                     Consulte os itens do catálogo de empréstimo e solicite a retirada
                 </p>
             </div>
@@ -3257,10 +3288,10 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     elif escolha == label_solicitacoes:
         st.markdown("""
             <div class="ngi-page-header" style="background: transparent; padding: 0 0 24px; margin-bottom: 8px;">
-                <h1 style="color: #122820; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
+                <h1 style="color: var(--text-color); margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
                     Solicitações de Usuários
                 </h1>
-                <p style="color: #6a7b73; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
+                <p style="color: var(--ngi-muted); margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
                     Analise, aprove ou rejeite as solicitações de materiais e empréstimos
                 </p>
             </div>
@@ -3538,7 +3569,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # --- TELA: CADASTRAR CATEGORIA ---
     elif escolha == "Cadastrar Categoria":
         renderizar_banner("Gerenciamento de Categorias", "Organize as categorias usadas para classificar os produtos")
-        aba_selecionada = option_menu(
+        aba_selecionada = menu_horizontal_ngi(
             menu_title=None,
             options=["Nova Categoria", "Editar / Excluir Categorias"],
             icons=["plus-circle", "pencil-square"],
@@ -3591,7 +3622,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # --- TELA: CADASTRAR USUÁRIO ---
     elif escolha == "Cadastrar Usuário":
         renderizar_banner("Cadastrar Usuário", "Gerencie os usuários com acesso ao sistema")
-        aba_selecionada = option_menu(
+        aba_selecionada = menu_horizontal_ngi(
             menu_title=None,
             options=["Novo Usuário", "Editar / Excluir Usuários"],
             icons=["person-plus", "pencil-square"],
@@ -3703,7 +3734,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # --- TELA: CADASTRAR COORDENAÇÃO ---
     elif escolha == "Cadastrar Coordenação":
         renderizar_banner("Cadastrar Coordenação", "Gerencie as coordenações utilizadas nas solicitações e movimentações")
-        aba_selecionada = option_menu(
+        aba_selecionada = menu_horizontal_ngi(
             menu_title=None,
             options=["Nova Coordenação", "Editar / Excluir Coordenação"],
             icons=["building-add", "pencil-square"],
@@ -3762,7 +3793,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     elif escolha == "Movimentação de Estoque":
         renderizar_banner("Movimentação de Estoque", "Registre entradas e saídas, e consulte o histórico de movimentações")
         
-        aba_movimentacao = option_menu(
+        aba_movimentacao = menu_horizontal_ngi(
             menu_title=None,
             options=["Registro de Entrada", "Registro de Saída", "Histórico de Movimentação"],
             icons=["arrow-down-circle", "arrow-up-circle", ""], # Ícone de histórico removido completamente para não parecer IA
@@ -4118,7 +4149,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
     # =========================================================================
     elif escolha == "Controle de Equipamentos Emprestados":
         renderizar_banner("Controle de Equipamentos Emprestados", "Registre e acompanhe notebooks, desktops e acessórios emprestados por tempo indeterminado")
-        aba_equipamento = option_menu(
+        aba_equipamento = menu_horizontal_ngi(
             menu_title=None,
             options=["Novo Registro", "Consultar / Editar / Excluir"],
             icons=["plus-circle", "pencil-square"],
