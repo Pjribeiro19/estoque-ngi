@@ -638,107 +638,213 @@ def tipo_solicitacao_visual(sol):
 
 
 def selecionar_solicitacao_ngi(identificador=None):
-    chaves = ['ngi_sol_pagina', 'ngi_sol_limite', 'ngi_sol_busca', 'ngi_sol_tipo', 'ngi_sol_coord', 'ngi_sol_ordem']
-    if identificador is not None:
-        st.session_state.ngi_sol_retorno = {chave: st.session_state[chave] for chave in chaves if chave in st.session_state}
-    else:
-        for chave, valor in st.session_state.get('ngi_sol_retorno', {}).items():
-            st.session_state[chave] = valor
     st.session_state.ngi_sol_aberta = identificador
+    st.session_state.ngi_sol_fechada = identificador is None
 
 
 def pagina_solicitacoes_ngi(pagina):
     st.session_state.ngi_sol_pagina = pagina
+    st.session_state.ngi_sol_aberta = None
+    st.session_state.ngi_sol_fechada = False
 
 
 def indicadores_solicitacoes_ngi(dados):
-    st.markdown("""<style>
-    .st-key-ngi_sol_aba [role="radiogroup"]{gap:0;background:#fff;border-bottom:1px solid #dce6df;padding:0 8px;margin-bottom:10px}
-    .st-key-ngi_sol_aba [role="radiogroup"] label{padding:10px 24px;margin:0;border-bottom:3px solid transparent;cursor:pointer}
-    .st-key-ngi_sol_aba [role="radiogroup"] label:has(input:checked){border-color:#147746;background:#f1f7f3}
+    st.markdown('''<style>
+    .ngi-sol-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin:0 0 12px}
+    .ngi-sol-kpi{display:flex;align-items:center;gap:18px;padding:18px 20px;border:1px solid #dce9e1;border-radius:10px;background:#f0f7f3;min-height:96px;box-sizing:border-box}
+    .ngi-sol-kpi:first-child{background:#fffbf1;border-color:#f1e6c7}.ngi-sol-kpi:last-child{background:#f2f6fc;border-color:#dde6f3}
+    .ngi-sol-kpi-icon{width:46px;height:46px;flex:0 0 46px;display:grid;place-items:center;background:#e3f0e8;border-radius:9px}
+    .ngi-sol-kpi:first-child .ngi-sol-kpi-icon{background:#fff3d7}.ngi-sol-kpi:last-child .ngi-sol-kpi-icon{background:#e6eefb}
+    .ngi-sol-kpi svg{width:25px;height:25px;stroke:#185b3e;fill:none;stroke-width:1.7}
+    .ngi-sol-kpi strong{display:block;font-size:28px;line-height:1.2;color:#172d24}.ngi-sol-kpi small{display:block;font-size:13px;color:#53645b;margin-top:5px}
+    .st-key-ngi_sol_aba [role="radiogroup"]{gap:0;border-bottom:1px solid #dce6df;margin-bottom:6px}
+    .st-key-ngi_sol_aba [role="radiogroup"] label{padding:9px 20px;margin:0;border-bottom:3px solid transparent;cursor:pointer}
+    .st-key-ngi_sol_aba [role="radiogroup"] label:has(input:checked){border-color:#147746;background:white}
     .st-key-ngi_sol_aba [role="radiogroup"] label:has(input:checked) p{color:#145d3b !important;font-weight:700}
     .st-key-ngi_sol_aba [role="radiogroup"] label>div:first-child{display:none}
-    .ngi-sol-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:8px 0 20px}
-    .ngi-sol-kpi{display:flex;align-items:center;gap:16px;padding:18px 22px;border:1px solid #e2e9e4;border-radius:10px;background:#f0f7f3}
-    .ngi-sol-kpi:first-child{background:#fffbf1;border-color:#f1e6c7}.ngi-sol-kpi:last-child{background:#f2f6fc}
-    .ngi-sol-kpi svg{width:26px;height:26px;flex-shrink:0;stroke:#185b3e;fill:none;stroke-width:1.7}
-    .ngi-sol-kpi small{font-size:13px;color:#53645b}.ngi-sol-kpi strong{display:block;font-size:28px;color:#152d21}
-    .ngi-sol-tag{display:inline-block;padding:3px 8px;border-radius:5px;font-size:12px;background:#e3f2e9;color:#155737 !important}
-    .ngi-sol-tag.livro{background:#eaf1ff;color:#285293 !important}.ngi-sol-tag.emprestimo{background:#efeafb;color:#66439a !important}
-    .ngi-sol-cell{font-size:13px;line-height:19px;padding:7px 0;overflow-wrap:anywhere}
-    .ngi-sol-th{font-size:12px;font-weight:700;color:#5b6d62;padding:6px 0}
-    .st-key-ngi_sol_tabela{background:white;border:1px solid #e0e7e2;border-radius:12px;padding:16px}
-    .st-key-ngi_sol_tabela [data-testid="stHorizontalBlock"]{border-bottom:1px solid #edf1ee;align-items:center;gap:10px}
-    .st-key-ngi_sol_tabela button{min-height:30px !important;padding:3px 10px !important;border-color:#32785a !important}
-    .st-key-ngi_sol_tabela button p{font-size:12px !important}
-    @media(max-width:700px){.ngi-sol-kpis{gap:6px}.ngi-sol-kpi{padding:10px;gap:7px}.ngi-sol-kpi svg{display:none}}
-    </style>""", unsafe_allow_html=True)
+    .st-key-ngi_req_workspace{gap:14px}
+    .st-key-ngi_req_table{background:#fff;border:1px solid #dfe7e2;border-radius:11px;overflow:hidden;gap:0!important}
+    .st-key-ngi_req_table [data-testid="stVerticalBlock"]{gap:0}
+    .st-key-ngi_req_header{background:#f8faf9;border-bottom:1px solid #e4ebe6;padding:12px 14px}
+    .ngi-req-th{font-size:12px;font-weight:700;color:#55675d}
+    [class*="st-key-ngi_req_row_"]{padding:5px 12px;border-bottom:1px solid #edf1ee;border-left:3px solid transparent}
+    [class*="st-key-ngi_req_row_active_"]{background:#edf6f0;border-left-color:#147746}
+    [class*="st-key-ngi_req_row_"] [data-testid="stHorizontalBlock"]{align-items:center;gap:9px!important}
+    [class*="st-key-ngi_req_row_"] [data-testid="stButton"] button{border:none!important;background:transparent!important;box-shadow:none!important;min-height:42px!important;padding:4px 0!important;justify-content:flex-start;color:#244335!important;width:100%}
+    [class*="st-key-ngi_req_row_"] [data-testid="stButton"] button p{font-size:12px!important;line-height:1.4;text-align:left}
+    [class*="st-key-ngi_req_row_"] [data-testid="stButton"] button:hover{color:#147746!important;text-decoration:underline}
+    .ngi-req-cell{font-size:12px;line-height:18px;color:#354d41;overflow-wrap:anywhere;padding:5px 0}
+    .ngi-req-date{font-size:11px;color:#63766a;white-space:nowrap}
+    .ngi-sol-tag{display:inline-block;padding:3px 7px;border-radius:5px;font-size:10px;line-height:17px;background:#e3f2e9;color:#155737!important;white-space:nowrap}
+    .ngi-sol-tag.livro{background:#eaf1ff;color:#285293!important}.ngi-sol-tag.emprestimo{background:#efeafb;color:#66439a!important}
+    .st-key-ngi_req_footer{padding:12px 14px;gap:8px!important}
+    .st-key-ngi_req_footer [data-testid="stHorizontalBlock"]{align-items:center;gap:5px!important}
+    .st-key-ngi_req_footer button{min-height:32px!important;padding:3px 7px!important}
+    .st-key-ngi_req_footer button p{font-size:12px!important}
+    .ngi-req-page-info{font-size:12px;color:#728178;white-space:nowrap}
+    .st-key-ngi_req_detail{background:#fff;border:1px solid #dfe7e2;border-radius:11px;padding:18px;gap:12px!important}
+    .st-key-ngi_req_detail [data-testid="stVerticalBlock"]{gap:12px}
+    .ngi-req-detail-title{font-weight:700;color:#253b30;font-size:15px;padding-top:6px}
+    .st-key-ngi_req_close button{border:0!important;background:transparent!important;min-height:28px!important;padding:0!important;color:#66796b!important}
+    .ngi-req-id{display:flex;align-items:center;gap:14px;margin:0 0 15px}.ngi-req-id strong{font-size:28px;color:#182e23}.ngi-req-pending{background:#fff0d7;color:#8e560c!important;border-radius:16px;padding:4px 10px;font-size:11px}
+    .ngi-req-person{font-weight:700;font-size:14px;color:#213d2c;margin-bottom:8px}
+    .ngi-req-meta{font-size:12px;line-height:1.8;color:#65776b;overflow-wrap:anywhere}
+    .ngi-req-divider{height:1px;background:#e7ece9;margin:16px 0}
+    .ngi-req-item-label{font-size:12px;color:#6a7b71;margin-bottom:5px}.ngi-req-item{font-size:17px;font-weight:700;line-height:1.4;color:#1b3627;overflow-wrap:anywhere}
+    .ngi-req-amounts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}.ngi-req-amount{border:1px solid #e1e8e3;border-radius:8px;padding:12px 10px;min-width:0}.ngi-req-amount small{font-size:11px;color:#687b6e;display:block}.ngi-req-amount strong{display:block;font-size:15px;margin-top:5px;color:#1c3828}
+    .ngi-req-note{font-size:12px;line-height:1.6;color:#5f7365;margin-top:12px;overflow-wrap:anywhere}
+    .ngi-req-note b{color:#294535}.ngi-req-hint{font-size:11px;color:#748277;margin:14px 0 0}
+    .st-key-ngi_req_detail textarea{min-height:80px!important}
+    .st-key-ngi_req_detail [data-testid="stWidgetLabel"] p{font-size:12px!important}
+    .st-key-ngi_req_detail [data-testid="stButton"] button p{font-size:12px!important}
+    @media(max-width:1100px){.ngi-sol-kpi{padding:14px;gap:10px}.ngi-sol-kpi strong{font-size:25px}.ngi-sol-kpi small{font-size:12px}.st-key-ngi_req_detail{padding:14px}}
+    @media(max-width:760px){.ngi-sol-kpis{gap:7px}.ngi-sol-kpi{padding:12px 9px;gap:0;min-height:80px}.ngi-sol-kpi-icon{display:none}.ngi-sol-kpi small{font-size:10px}.ngi-sol-kpi strong{font-size:23px}
+    .st-key-ngi_req_workspace>[data-testid="stHorizontalBlock"]{flex-wrap:wrap}.st-key-ngi_req_workspace>[data-testid="stHorizontalBlock"]>[data-testid="stColumn"]{width:100%!important;flex:1 1 100%!important;min-width:0!important}
+    .st-key-ngi_req_table [data-testid="stHorizontalBlock"]{flex-wrap:nowrap!important}.st-key-ngi_req_table [data-testid="stColumn"]{min-width:0!important;width:auto!important}
+    .ngi-req-cell{font-size:11px}.ngi-req-date{white-space:normal;font-size:10px}.ngi-sol-tag{font-size:9px;padding:2px 4px}.ngi-req-th{font-size:10px}
+    [class*="st-key-ngi_req_row_"]{padding:4px 6px}[class*="st-key-ngi_req_row_"] [data-testid="stButton"] button p{font-size:10px!important}}
+    @media(max-width:760px){
+    .st-key-ngi_req_header [data-testid="stColumn"]:nth-child(4),
+    [class*="st-key-ngi_req_row_"] [data-testid="stColumn"]:nth-child(4){display:none!important}
+    .st-key-ngi_req_header [data-testid="stColumn"]:nth-child(3),
+    [class*="st-key-ngi_req_row_"] [data-testid="stColumn"]:nth-child(3){flex:1.45 1 0!important}
+    [class*="st-key-ngi_req_row_"] [data-testid="stButton"] button p{white-space:normal!important;overflow-wrap:anywhere!important}
+    }
+    </style>''', unsafe_allow_html=True)
     tipos = dados.apply(tipo_solicitacao_visual, axis=1) if not dados.empty else pd.Series(dtype=str)
-    valores = [len(dados), int((tipos == "Material").sum()), int(tipos.isin(["Livro", "Empréstimo"]).sum())]
-    icones = ['<path d="M6 17h12l-2-3V9a4 4 0 0 0-8 0v5l-2 3ZM10 20h4"/>','<path d="m12 3 9 5-9 5-9-5 9-5Zm-9 5v9l9 5 9-5V8M12 13v9"/>','<path d="M12 5C8 3 5 3 3 4v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1Zm0 0v15"/>']
-    st.markdown('<div class="ngi-sol-kpis">'+''.join(f'<div class="ngi-sol-kpi"><svg viewBox="0 0 24 24">{icone}</svg><div><small>{nome}</small><strong>{valor}</strong></div></div>' for nome,valor,icone in zip(['Pendentes','Materiais','Livros e empréstimos'],valores,icones))+'</div>',unsafe_allow_html=True)
+    valores = [len(dados), int((tipos == 'Material').sum()), int(tipos.isin(['Livro', 'Empréstimo']).sum())]
+    icones = ['<path d="M6 17h12l-2-3V9a4 4 0 0 0-8 0v5l-2 3ZM10 20h4"/>', '<path d="m12 3 9 5-9 5-9-5 9-5Zm-9 5v9l9 5 9-5V8M12 13v9"/>', '<path d="M12 5C8 3 5 3 3 4v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1Zm0 0v15"/>']
+    st.markdown('<div class="ngi-sol-kpis">' + ''.join(f'<div class="ngi-sol-kpi"><div class="ngi-sol-kpi-icon"><svg viewBox="0 0 24 24">{icone}</svg></div><div><strong>{valor}</strong><small>{nome}</small></div></div>' for nome, valor, icone in zip(['Pendentes','Materiais','Livros e empréstimos'], valores, icones)) + '</div>', unsafe_allow_html=True)
 
 
 def tabela_solicitacoes_ngi(dados):
-    """Consulta e navegação: nunca aprova nem altera estoque."""
-    aberta = st.session_state.get('ngi_sol_aberta')
-    if aberta is not None:
-        selecionada = dados[dados['id']==aberta]
-        if not selecionada.empty:
-            st.button('Voltar às solicitações', key='ngi_sol_voltar', on_click=selecionar_solicitacao_ngi)
-            st.subheader(f'Solicitação nº {aberta}')
-            st.caption('Aguardando análise')
-            return selecionada
-        st.session_state.ngi_sol_aberta = None
-    col_busca,col_tipo,col_coord,col_ordem = st.columns([3,1.4,1.8,1.8])
-    busca=col_busca.text_input('Buscar nº, item ou solicitante',key='ngi_sol_busca',placeholder='Digite para pesquisar...')
-    tipo=col_tipo.selectbox('Tipo',['Todos os tipos','Material','Livro','Empréstimo'],key='ngi_sol_tipo')
-    coords=sorted({str(v) for v in dados['coordenacao'].dropna() if str(v).strip()})
-    coord=col_coord.selectbox('Coordenação',['Todas as coordenações']+coords,key='ngi_sol_coord')
-    ordem=col_ordem.selectbox('Ordenar',['Mais antigas primeiro','Mais recentes primeiro'],key='ngi_sol_ordem')
-    filtrados=dados.copy()
-    filtrados['_tipo_visual']=filtrados.apply(tipo_solicitacao_visual,axis=1)
-    if busca.strip():
-        texto=filtrados[['id','item_nome','solicitante_nome']].fillna('').astype(str).agg(' '.join,axis=1)
-        filtrados=filtrados[texto.str.contains(busca.strip(),case=False,regex=False)]
-    if tipo!='Todos os tipos':filtrados=filtrados[filtrados['_tipo_visual']==tipo]
-    if coord!='Todas as coordenações':filtrados=filtrados[filtrados['coordenacao']==coord]
-    filtrados=filtrados.sort_values(['data_solicitacao','id'],ascending=ordem=='Mais antigas primeiro',na_position='last')
-    contexto=(busca,tipo,coord,ordem)
-    if st.session_state.get('ngi_sol_filtro')!=contexto:
-        st.session_state.ngi_sol_pagina=1
-        st.session_state.ngi_sol_filtro=contexto
-    limite=st.session_state.get('ngi_sol_limite',10)
-    paginas=max(1,(len(filtrados)+limite-1)//limite)
-    pagina=min(max(1,st.session_state.get('ngi_sol_pagina',1)),paginas)
-    st.session_state.ngi_sol_pagina=pagina
-    inicio=(pagina-1)*limite
-    visiveis=filtrados.iloc[inicio:inicio+limite]
-    larguras=[.55,1.5,1.1,2.3,.5,1.1,1.5,1]
-    with st.container(key='ngi_sol_tabela'):
-        st.markdown(f'**{len(filtrados)} solicitações pendentes**')
-        for coluna,titulo in zip(st.columns(larguras),['Nº','Solicitante','Tipo','Item solicitado','Qtd.','Coordenação','Solicitado em','Ação']):
-            coluna.markdown(f'<div class="ngi-sol-th">{titulo}</div>',unsafe_allow_html=True)
-        for _,sol in visiveis.iterrows():
-            colunas=st.columns(larguras)
-            tipo_visual=sol['_tipo_visual']
-            classe={'Material':'material','Livro':'livro','Empréstimo':'emprestimo'}[tipo_visual]
-            data=converter_para_horario_br(sol['data_solicitacao']).strftime('%d/%m/%Y %H:%M') if pd.notna(sol['data_solicitacao']) else '-'
-            valores=[sol['id'],sol['solicitante_nome'],tipo_visual,sol['item_nome'],sol['quantidade'],sol['coordenacao'] or '-',data]
-            for i,valor in enumerate(valores):
-                texto=html.escape(str(valor))
-                if i==2:texto=f'<span class="ngi-sol-tag {classe}">{texto}</span>'
-                colunas[i].markdown(f'<div class="ngi-sol-cell">{texto}</div>',unsafe_allow_html=True)
-            colunas[7].button('Analisar →',key=f"ngi_sol_analisar_{sol['id']}",use_container_width=True,on_click=selecionar_solicitacao_ngi,args=(int(sol['id']),))
-        if visiveis.empty:st.info('Nenhuma solicitação encontrada com esses filtros.')
-    info,tamanho,anterior,seletor,proxima=st.columns([3,1.4,1,1.2,1])
-    info.caption(f'Exibindo {inicio+1 if len(filtrados) else 0}–{min(inicio+limite,len(filtrados))} de {len(filtrados)} solicitações')
-    tamanho.selectbox('Por página',[10,25,50],key='ngi_sol_limite',on_change=pagina_solicitacoes_ngi,args=(1,))
-    anterior.button('Anterior',disabled=pagina<=1,key='ngi_sol_anterior',on_click=pagina_solicitacoes_ngi,args=(pagina-1,))
-    seletor.selectbox('Página',list(range(1,paginas+1)),key='ngi_sol_pagina')
-    proxima.button('Próxima',disabled=pagina>=paginas,key='ngi_sol_proxima',on_click=pagina_solicitacoes_ngi,args=(pagina+1,))
-    st.caption('Abra uma solicitação para consultar os detalhes e aprovar ou rejeitar.')
-    return dados.iloc[0:0]
+    """Lista e painel lado a lado; devolve somente o pedido selecionado."""
+    with st.container(key='ngi_req_workspace'):
+        lista, detalhe = st.columns([1.9, 1], gap='medium')
+    with lista:
+        busca_col, tipo_col, coord_col = st.columns([2.3, 1.1, 1.2], gap='small')
+        busca = busca_col.text_input('Buscar por número, item ou solicitante', key='ngi_sol_busca', placeholder='Buscar por nº, item ou solicitante...', label_visibility='collapsed')
+        tipo = tipo_col.selectbox('Tipo', ['Todos os tipos','Material','Livro','Empréstimo'], key='ngi_sol_tipo', label_visibility='collapsed')
+        coords = sorted({str(v) for v in dados['coordenacao'].dropna() if str(v).strip()})
+        opcoes_coord = ['Todas as coordenações'] + coords
+        if st.session_state.get('ngi_sol_coord') not in opcoes_coord:
+            st.session_state.ngi_sol_coord = opcoes_coord[0]
+        coord = coord_col.selectbox('Coordenação', opcoes_coord, key='ngi_sol_coord', label_visibility='collapsed')
+        filtrados = dados.copy()
+        filtrados['_tipo_visual'] = filtrados.apply(tipo_solicitacao_visual, axis=1) if not filtrados.empty else pd.Series(dtype=str)
+        if busca.strip():
+            textos = filtrados[['id','item_nome','solicitante_nome']].fillna('').astype(str).agg(' '.join, axis=1)
+            filtrados = filtrados[textos.str.contains(busca.strip(), case=False, regex=False)]
+        if tipo != 'Todos os tipos':
+            filtrados = filtrados[filtrados['_tipo_visual'] == tipo]
+        if coord != 'Todas as coordenações':
+            filtrados = filtrados[filtrados['coordenacao'] == coord]
+        filtrados = filtrados.sort_values(['data_solicitacao','id'], ascending=False, na_position='last')
+        contexto = (busca, tipo, coord)
+        if st.session_state.get('ngi_sol_filtro') != contexto:
+            pagina_solicitacoes_ngi(1)
+            st.session_state.ngi_sol_filtro = contexto
+        if st.session_state.get('ngi_sol_limite') not in [8,16,32]:
+            st.session_state.ngi_sol_limite = 8
+        limite = st.session_state.ngi_sol_limite
+        paginas = max(1, (len(filtrados) + limite - 1) // limite)
+        pagina = min(max(1, st.session_state.get('ngi_sol_pagina',1)), paginas)
+        st.session_state.ngi_sol_pagina = pagina
+        inicio = (pagina - 1) * limite
+        visiveis = filtrados.iloc[inicio:inicio + limite]
+        aberta = st.session_state.get('ngi_sol_aberta')
+        if aberta not in visiveis['id'].tolist():
+            aberta = None
+            if not visiveis.empty and not st.session_state.get('ngi_sol_fechada',False):
+                aberta = int(visiveis.iloc[0]['id'])
+            st.session_state.ngi_sol_aberta = aberta
+        larguras = [2.0, 1.8, 1.0, 1.1, .24]
+        with st.container(key='ngi_req_table'):
+            with st.container(key='ngi_req_header'):
+                for col, titulo in zip(st.columns(larguras, gap='small'), ['Pedido / Solicitante','Item solicitado','Tipo','Data','']):
+                    col.markdown(f'<div class="ngi-req-th">{titulo}</div>', unsafe_allow_html=True)
+            for _, sol in visiveis.iterrows():
+                identificador = int(sol['id'])
+                ativo = 'active_' if identificador == aberta else ''
+                with st.container(key=f'ngi_req_row_{ativo}{identificador}'):
+                    cols = st.columns(larguras, gap='small')
+                    # Nome e número são texto simples: sem cerquilha nem HTML do usuário.
+                    cols[0].button(f"{identificador} · {sol['solicitante_nome']}", key=f'ngi_sol_analisar_{identificador}', use_container_width=True, on_click=selecionar_solicitacao_ngi, args=(identificador,))
+                    cols[1].markdown(f'<div class="ngi-req-cell">{html.escape(str(sol["item_nome"]))}</div>', unsafe_allow_html=True)
+                    classe = {'Material':'material','Livro':'livro','Empréstimo':'emprestimo'}[sol['_tipo_visual']]
+                    cols[2].markdown(f'<span class="ngi-sol-tag {classe}">{sol["_tipo_visual"]}</span>', unsafe_allow_html=True)
+                    data = converter_para_horario_br(sol['data_solicitacao']).strftime('%d/%m · %H:%M') if pd.notna(sol['data_solicitacao']) else '—'
+                    cols[3].markdown(f'<div class="ngi-req-date">{data}</div>', unsafe_allow_html=True)
+                    cols[4].button('›', key=f'ngi_sol_abrir_{identificador}', help=f'Abrir solicitação {identificador}', on_click=selecionar_solicitacao_ngi, args=(identificador,))
+            if visiveis.empty:
+                st.info('Nenhuma solicitação encontrada com esses filtros.')
+            with st.container(key='ngi_req_footer'):
+                info, tamanho = st.columns([2,1], gap='small')
+                info.markdown(f'<div class="ngi-req-page-info">{inicio + 1 if len(filtrados) else 0}–{min(inicio + limite, len(filtrados))} de {len(filtrados)} solicitações</div>', unsafe_allow_html=True)
+                tamanho.selectbox('Solicitações por página', [8,16,32], key='ngi_sol_limite', format_func=lambda n:f'{n} por página', label_visibility='collapsed', on_change=pagina_solicitacoes_ngi, args=(1,))
+                numeros = sorted({1, paginas, *range(max(1,pagina-1), min(paginas,pagina+1)+1)})
+                if pagina == 1 and paginas >= 3:
+                    numeros = sorted(set(numeros + [2,3]))
+                botoes = [0]
+                ultimo = 0
+                for n in numeros:
+                    if ultimo and n > ultimo+1:botoes.append(None)
+                    botoes.append(n);ultimo=n
+                botoes.append(-1)
+                pag_cols = st.columns([max(1,10-len(botoes))]+[1]*len(botoes), gap='small')
+                for col, n in zip(pag_cols[1:], botoes):
+                    if n is None:col.markdown('<div class="ngi-req-page-info">…</div>', unsafe_allow_html=True)
+                    elif n == 0:col.button('‹',key='ngi_sol_anterior',help='Página anterior',disabled=pagina<=1,on_click=pagina_solicitacoes_ngi,args=(pagina-1,))
+                    elif n == -1:col.button('›',key='ngi_sol_proxima',help='Próxima página',disabled=pagina>=paginas,on_click=pagina_solicitacoes_ngi,args=(pagina+1,))
+                    else:col.button(str(n),key=f'ngi_sol_pag_{n}',type='primary' if n==pagina else 'secondary',on_click=pagina_solicitacoes_ngi,args=(n,))
+    with detalhe:
+        painel = st.container(key='ngi_req_detail')
+    with painel:
+        cab, fechar = st.columns([7,1])
+        cab.markdown('<div class="ngi-req-detail-title">Detalhes do pedido</div>',unsafe_allow_html=True)
+        with fechar:
+            with st.container(key='ngi_req_close'):
+                st.button('×',key='ngi_sol_fechar',help='Fechar detalhes',disabled=aberta is None,on_click=selecionar_solicitacao_ngi)
+        if aberta is None:
+            st.caption('Selecione uma solicitação na lista para consultar os detalhes.')
+    selecionada = dados[dados['id'] == aberta] if aberta is not None else dados.iloc[0:0]
+    return selecionada, painel
+
+
+def detalhes_solicitacao_ngi(sol, conn):
+    """Resumo visual; consulta somente o saldo do item selecionado."""
+    esc = lambda v: html.escape(str(v)) if v is not None and pd.notna(v) else '—'
+    data = converter_para_horario_br(sol['data_solicitacao']).strftime('%d/%m/%Y às %H:%M') if pd.notna(sol['data_solicitacao']) else '—'
+    st.markdown(f'<div class="ngi-req-id"><strong>{int(sol["id"])}</strong><span class="ngi-req-pending">Pendente</span></div><div class="ngi-req-person">{esc(sol["solicitante_nome"])}</div><div class="ngi-req-meta">Coordenação: {esc(sol["coordenacao"])}<br>Solicitado em {data}<br>{esc(sol["solicitante_email"])}</div><div class="ngi-req-divider"></div><div class="ngi-req-item-label">{tipo_solicitacao_visual(sol)} solicitado</div><div class="ngi-req-item">{esc(sol["item_nome"])}</div>', unsafe_allow_html=True)
+    saldo = None
+    cursor_saldo = conn.cursor()
+    try:
+        if sol['tipo'] == 'EMPRESTIMO':
+            cursor_saldo.execute('SELECT quantidade_disponivel FROM emprestimo_itens WHERE id = %s;', (int(sol['referencia_codigo']),))
+        else:
+            tabela = {'BRIGADA':'produtos_brigada','LIVROS':'produtos_livros'}.get(sol.get('origem_estoque'),'produtos')
+            cursor_saldo.execute(f'SELECT quantidade FROM {tabela} WHERE codigo = %s;', (sol['referencia_codigo'],))
+        registro = cursor_saldo.fetchone()
+        if registro is not None:saldo = registro[0]
+    finally:
+        cursor_saldo.close()
+    quantidade = int(sol['quantidade'])
+    quantidade_txt = f'{quantidade} unidade' + ('s' if quantidade != 1 else '')
+    saldo_txt = f'{int(saldo)} unidade' + ('s' if int(saldo) != 1 else '') if saldo is not None else 'Item não encontrado'
+    st.markdown(f'<div class="ngi-req-amounts"><div class="ngi-req-amount"><small>Quantidade solicitada</small><strong>{quantidade_txt}</strong></div><div class="ngi-req-amount"><small>Disponível em estoque</small><strong>{saldo_txt}</strong></div></div>', unsafe_allow_html=True)
+    if sol['tipo'] == 'EMPRESTIMO':
+        ret = sol['data_retirada'].strftime('%d/%m/%Y') if pd.notna(sol['data_retirada']) else '—'
+        dev = sol['data_prevista'].strftime('%d/%m/%Y') if pd.notna(sol['data_prevista']) else '—'
+        st.markdown(f'<div class="ngi-req-note"><b>Retirada:</b> {ret}<br><b>Devolução prevista:</b> {dev}</div>', unsafe_allow_html=True)
+        if sol['termo_aceito'] and pd.notna(sol['data_aceite_termo']):
+            aceite = converter_para_horario_br(sol['data_aceite_termo']).strftime('%d/%m/%Y %H:%M')
+            st.markdown(f'<div class="ngi-req-note">Termo de Responsabilidade aceito em {aceite}</div>',unsafe_allow_html=True)
+    for campo, nome in [('atividade_associada','Atividade associada'),('observacao','Observações do solicitante')]:
+        if pd.notna(sol[campo]) and str(sol[campo]).strip():
+            st.markdown(f'<div class="ngi-req-note"><b>{nome}:</b> {esc(sol[campo])}</div>',unsafe_allow_html=True)
+    if tipo_solicitacao_visual(sol) != 'Material':
+        foto_solicitacao_ngi(sol, conn)
+    st.markdown('<div class="ngi-req-hint">Confira o item e a quantidade antes de aprovar.</div><div class="ngi-req-divider"></div>',unsafe_allow_html=True)
 
 
 def foto_solicitacao_ngi(sol, conn):
@@ -3284,10 +3390,10 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
         st.markdown("""
             <div class="ngi-page-header" style="background: transparent; padding: 0 0 24px; margin-bottom: 8px;">
                 <h1 style="color: #122820; margin: 0; font-size: 26px; font-family: sans-serif; font-weight: 600;">
-                    Solicitações de Usuários
+                    Solicitações
                 </h1>
                 <p style="color: #6a7b73; margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">
-                    Analise, aprove ou rejeite as solicitações de materiais e empréstimos
+                    Analise os pedidos sem sair da lista.
                 </p>
             </div>
         """, unsafe_allow_html=True)
@@ -3304,155 +3410,129 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             if df_pendentes.empty:
                 st.info("Nenhuma solicitação pendente no momento.")
             else:
-                df_para_analisar = tabela_solicitacoes_ngi(df_pendentes)
-                for _, sol in df_para_analisar.iterrows():
-                    foto_solicitacao_ngi(sol, conn)
-                    tipo_label = tipo_solicitacao_visual(sol)
-                    cor_tag = "#147746" if sol["tipo"] == "MATERIAL" else "#145d3b"
-                    data_hora_sol = converter_para_horario_br(sol["data_solicitacao"]).strftime('%d/%m/%Y às %H:%M') if sol["data_solicitacao"] is not None else "-"
+                df_para_analisar, painel_detalhe = tabela_solicitacoes_ngi(df_pendentes)
+                with painel_detalhe:
+                    for _, sol in df_para_analisar.iterrows():
+                        detalhes_solicitacao_ngi(sol, conn)
+                        just_rejeicao = st.text_area(
+                            "Justificativa (obrigatória para rejeitar)",
+                            key=f"just_rejeitar_{sol['id']}",
+                            placeholder="Informe o motivo caso precise rejeitar...",
+                            height=80,
+                        )
+                        col_ap1, col_ap2 = st.columns([1.65, 1])
+                        with col_ap1:
+                            if st.button("Aprovar solicitação", key=f"aprovar_{sol['id']}", type="primary", icon=":material/check:", use_container_width=True):
+                                try:
+                                    if sol["tipo"] == "MATERIAL":
+                                        origem_sol = sol.get("origem_estoque")
+                                        if origem_sol == "BRIGADA":
+                                            tabela_estoque, tabela_movimentacao, coluna_item_mov = "produtos_brigada", "movimentacoes_brigada", "item"
+                                        elif origem_sol == "LIVROS":
+                                            tabela_estoque, tabela_movimentacao, coluna_item_mov = "produtos_livros", "movimentacoes_livros", "titulo"
+                                        else:
+                                            tabela_estoque, tabela_movimentacao, coluna_item_mov = "produtos", "movimentacoes", "item"
+                                        cursor.execute(f"SELECT quantidade FROM {tabela_estoque} WHERE codigo = %s;", (sol["referencia_codigo"],))
+                                        res_prod = cursor.fetchone()
+                                        if not res_prod or res_prod[0] < sol["quantidade"]:
+                                            st.error("Saldo insuficiente em estoque para aprovar esta solicitação.")
+                                        else:
+                                            cursor.execute(f"UPDATE {tabela_estoque} SET quantidade = quantidade - %s WHERE codigo = %s;", (sol["quantidade"], sol["referencia_codigo"]))
+                                            cursor.execute(f"""
+                                                INSERT INTO {tabela_movimentacao} (data, tipo, codigo, {coluna_item_mov}, quantidade, responsavel, coordenacao)
+                                                VALUES (%s, %s, %s, %s, %s, %s, %s);
+                                            """, (date.today().strftime("%Y-%m-%d"), "Saída", sol["referencia_codigo"], sol["item_nome"], sol["quantidade"], sol["solicitante_nome"], sol["coordenacao"]))
+                                            cursor.execute("""
+                                                UPDATE solicitacoes_almoxarifado SET status = 'APROVADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s 
+                                                WHERE id = %s;
+                                            """, (st.session_state.NOME_USUARIO_LOGADO, sol["id"]))
+                                            conn.commit()
 
-                    linha_datas = ""
-                    linha_termo = ""
-                    if sol["tipo"] == "EMPRESTIMO":
-                        ret_fmt = sol["data_retirada"].strftime('%d/%m/%Y') if sol["data_retirada"] is not None else "-"
-                        dev_fmt = sol["data_prevista"].strftime('%d/%m/%Y') if sol["data_prevista"] is not None else "-"
-                        linha_datas = f"Retirada: {ret_fmt} | Devolução: {dev_fmt}<br>"
-                        if sol["termo_aceito"] and sol["data_aceite_termo"] is not None:
-                            linha_termo = f"<span class=\"material-symbols-rounded\" style=\"font-size: 15px; color: #147746; vertical-align: -3px;\">check_circle</span> Termo de Responsabilidade aceito em {converter_para_horario_br(sol['data_aceite_termo']).strftime('%d/%m/%Y %H:%M')}<br>"
-                    linha_atividade = f"Atividade Associada: {sol['atividade_associada']}<br>" if sol["atividade_associada"] else ""
-                    linha_obs = f"Observações: {sol['observacao']}" if sol["observacao"] else ""
-
-                    st.markdown(f"""
-                        <div style="border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px; margin-bottom: 14px;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
-                                <span style="background-color: {cor_tag}; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;">{tipo_label}</span>
-                                <span style="font-size: 12px; color: #888;">Solicitação Nº {sol['id']}</span>
-                            </div>
-                            <p style="margin: 0 0 4px 0; font-size: 15px; font-weight: 600;">{sol['item_nome']} <span style="font-weight: 400; color: #666;">(Quantidade: {sol['quantidade']})</span></p>
-                            <p style="margin: 0 0 4px 0; font-size: 13.5px; color: #333;">Solicitante: <b>{sol['solicitante_nome']}</b> ({sol['solicitante_email']}) &nbsp;|&nbsp; Coordenação: {sol['coordenacao'] or '-'}</p>
-                            <p style="margin: 0 0 8px 0; font-size: 13.5px; color: #333;">Solicitado em: <b>{data_hora_sol}</b></p>
-                            <p style="margin: 0; font-size: 13.5px; color: #333;">{linha_datas}{linha_termo}{linha_atividade}{linha_obs}</p>
-                        </div>
-                    """, unsafe_allow_html=True)
-
-                    just_rejeicao = st.text_area(
-                        "Justificativa da Reprovação (obrigatória caso vá rejeitar):",
-                        key=f"just_rejeitar_{sol['id']}",
-                        placeholder="Descreva o motivo da reprovação desta solicitação..."
-                    )
-
-                    col_ap3, col_ap2, col_ap1 = st.columns([4, 1, 1.5])
-                    with col_ap1:
-                        if st.button("Aprovar solicitação", key=f"aprovar_{sol['id']}", type="primary", icon=":material/check:"):
-                            try:
-                                if sol["tipo"] == "MATERIAL":
-                                    origem_sol = sol.get("origem_estoque")
-                                    if origem_sol == "BRIGADA":
-                                        tabela_estoque, tabela_movimentacao, coluna_item_mov = "produtos_brigada", "movimentacoes_brigada", "item"
-                                    elif origem_sol == "LIVROS":
-                                        tabela_estoque, tabela_movimentacao, coluna_item_mov = "produtos_livros", "movimentacoes_livros", "titulo"
+                                            threading.Thread(
+                                                target=enviar_email_notificacao,
+                                                args=(
+                                                    sol["solicitante_email"],
+                                                    "Solicitação de Material Aprovada",
+                                                    f"""
+                                                    <p>Olá, {sol['solicitante_nome']},</p>
+                                                    <p>Sua solicitação do item <b>{sol['item_nome']}</b> (Quantidade: {sol['quantidade']}) foi <b>aprovada</b>.</p>
+                                                    <p>O material já está disponível para retirada no Almoxarifado.</p>
+                                                    <p>Atenciosamente,<br>Gestão de Almoxarifado NGI Carajás</p>
+                                                    """
+                                                ),
+                                                daemon=True
+                                            ).start()
+                                            st.success("Solicitação aprovada e usuário notificado por e-mail!")
+                                            st.rerun()
                                     else:
-                                        tabela_estoque, tabela_movimentacao, coluna_item_mov = "produtos", "movimentacoes", "item"
-                                    cursor.execute(f"SELECT quantidade FROM {tabela_estoque} WHERE codigo = %s;", (sol["referencia_codigo"],))
-                                    res_prod = cursor.fetchone()
-                                    if not res_prod or res_prod[0] < sol["quantidade"]:
-                                        st.error("Saldo insuficiente em estoque para aprovar esta solicitação.")
-                                    else:
-                                        cursor.execute(f"UPDATE {tabela_estoque} SET quantidade = quantidade - %s WHERE codigo = %s;", (sol["quantidade"], sol["referencia_codigo"]))
-                                        cursor.execute(f"""
-                                            INSERT INTO {tabela_movimentacao} (data, tipo, codigo, {coluna_item_mov}, quantidade, responsavel, coordenacao)
-                                            VALUES (%s, %s, %s, %s, %s, %s, %s);
-                                        """, (date.today().strftime("%Y-%m-%d"), "Saída", sol["referencia_codigo"], sol["item_nome"], sol["quantidade"], sol["solicitante_nome"], sol["coordenacao"]))
-                                        cursor.execute("""
-                                            UPDATE solicitacoes_almoxarifado SET status = 'APROVADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s 
-                                            WHERE id = %s;
-                                        """, (st.session_state.NOME_USUARIO_LOGADO, sol["id"]))
-                                        conn.commit()
+                                        cursor.execute("SELECT quantidade_disponivel FROM emprestimo_itens WHERE id = %s;", (int(sol["referencia_codigo"]),))
+                                        res_emp = cursor.fetchone()
+                                        if not res_emp or res_emp[0] < sol["quantidade"]:
+                                            st.error("Saldo insuficiente disponível para aprovar este empréstimo.")
+                                        else:
+                                            cursor.execute("""
+                                                INSERT INTO emprestimo_registros 
+                                                (item_id, item_nome, quantidade, pessoa, coordenacao, data_retirada, data_prevista, status, email_pessoa)
+                                                VALUES (%s, %s, %s, %s, %s, %s, %s, 'EMPRESTADO', %s);
+                                            """, (int(sol["referencia_codigo"]), sol["item_nome"], sol["quantidade"], sol["solicitante_nome"], sol["coordenacao"], sol["data_retirada"] if sol["data_retirada"] is not None else date.today(), sol["data_prevista"], sol["solicitante_email"]))
+                                            cursor.execute("""
+                                                UPDATE emprestimo_itens SET quantidade_disponivel = quantidade_disponivel - %s WHERE id = %s;
+                                            """, (sol["quantidade"], int(sol["referencia_codigo"])))
+                                            cursor.execute("""
+                                                UPDATE solicitacoes_almoxarifado SET status = 'APROVADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s 
+                                                WHERE id = %s;
+                                            """, (st.session_state.NOME_USUARIO_LOGADO, sol["id"]))
+                                            conn.commit()
 
-                                        threading.Thread(
-                                            target=enviar_email_notificacao,
-                                            args=(
-                                                sol["solicitante_email"],
-                                                "Solicitação de Material Aprovada",
-                                                f"""
-                                                <p>Olá, {sol['solicitante_nome']},</p>
-                                                <p>Sua solicitação do item <b>{sol['item_nome']}</b> (Quantidade: {sol['quantidade']}) foi <b>aprovada</b>.</p>
-                                                <p>O material já está disponível para retirada no Almoxarifado.</p>
-                                                <p>Atenciosamente,<br>Gestão de Almoxarifado NGI Carajás</p>
-                                                """
-                                            ),
-                                            daemon=True
-                                        ).start()
-                                        st.success("Solicitação aprovada e usuário notificado por e-mail!")
-                                        st.rerun()
+                                            threading.Thread(
+                                                target=enviar_email_notificacao,
+                                                args=(
+                                                    sol["solicitante_email"],
+                                                    "Solicitação de Empréstimo Aprovada",
+                                                    f"""
+                                                    <p>Olá, {sol['solicitante_nome']},</p>
+                                                    <p>Sua solicitação de empréstimo do item <b>{sol['item_nome']}</b> (Quantidade: {sol['quantidade']}) foi <b>aprovada</b>.</p>
+                                                    <p>O item já está disponível para retirada no Almoxarifado.</p>
+                                                    <p>Atenciosamente,<br>Gestão de Almoxarifado NGI Carajás</p>
+                                                    """
+                                                ),
+                                                daemon=True
+                                            ).start()
+                                            st.success("Empréstimo aprovado e usuário notificado por e-mail!")
+                                            st.rerun()
+                                except Exception as ex:
+                                    conn.rollback()
+                                    st.error(f"Erro ao aprovar solicitação: {ex}")
+
+                        with col_ap2:
+                            if st.button("Rejeitar", key=f"rejeitar_{sol['id']}", icon=":material/close:", use_container_width=True):
+                                if not just_rejeicao.strip():
+                                    st.error("Para rejeitar, é obrigatório informar a Justificativa da Reprovação!")
                                 else:
-                                    cursor.execute("SELECT quantidade_disponivel FROM emprestimo_itens WHERE id = %s;", (int(sol["referencia_codigo"]),))
-                                    res_emp = cursor.fetchone()
-                                    if not res_emp or res_emp[0] < sol["quantidade"]:
-                                        st.error("Saldo insuficiente disponível para aprovar este empréstimo.")
-                                    else:
-                                        cursor.execute("""
-                                            INSERT INTO emprestimo_registros 
-                                            (item_id, item_nome, quantidade, pessoa, coordenacao, data_retirada, data_prevista, status, email_pessoa)
-                                            VALUES (%s, %s, %s, %s, %s, %s, %s, 'EMPRESTADO', %s);
-                                        """, (int(sol["referencia_codigo"]), sol["item_nome"], sol["quantidade"], sol["solicitante_nome"], sol["coordenacao"], sol["data_retirada"] if sol["data_retirada"] is not None else date.today(), sol["data_prevista"], sol["solicitante_email"]))
-                                        cursor.execute("""
-                                            UPDATE emprestimo_itens SET quantidade_disponivel = quantidade_disponivel - %s WHERE id = %s;
-                                        """, (sol["quantidade"], int(sol["referencia_codigo"])))
-                                        cursor.execute("""
-                                            UPDATE solicitacoes_almoxarifado SET status = 'APROVADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s 
-                                            WHERE id = %s;
-                                        """, (st.session_state.NOME_USUARIO_LOGADO, sol["id"]))
-                                        conn.commit()
+                                    cursor.execute("""
+                                        UPDATE solicitacoes_almoxarifado 
+                                        SET status = 'REJEITADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s, justificativa_rejeicao = %s 
+                                        WHERE id = %s;
+                                    """, (st.session_state.NOME_USUARIO_LOGADO, just_rejeicao.strip(), sol["id"]))
+                                    conn.commit()
 
-                                        threading.Thread(
-                                            target=enviar_email_notificacao,
-                                            args=(
-                                                sol["solicitante_email"],
-                                                "Solicitação de Empréstimo Aprovada",
-                                                f"""
-                                                <p>Olá, {sol['solicitante_nome']},</p>
-                                                <p>Sua solicitação de empréstimo do item <b>{sol['item_nome']}</b> (Quantidade: {sol['quantidade']}) foi <b>aprovada</b>.</p>
-                                                <p>O item já está disponível para retirada no Almoxarifado.</p>
-                                                <p>Atenciosamente,<br>Gestão de Almoxarifado NGI Carajás</p>
-                                                """
-                                            ),
-                                            daemon=True
-                                        ).start()
-                                        st.success("Empréstimo aprovado e usuário notificado por e-mail!")
-                                        st.rerun()
-                            except Exception as ex:
-                                conn.rollback()
-                                st.error(f"Erro ao aprovar solicitação: {ex}")
+                                    threading.Thread(
+                                        target=enviar_email_notificacao,
+                                        args=(
+                                            sol["solicitante_email"],
+                                            "Solicitação Reprovada",
+                                            f"""
+                                            <p>Olá, {sol['solicitante_nome']},</p>
+                                            <p>Sua solicitação do item <b>{sol['item_nome']}</b> (Quantidade: {sol['quantidade']}) foi <b>reprovada</b>.</p>
+                                            <p><b>Justificativa:</b> {just_rejeicao.strip()}</p>
+                                            <p>Atenciosamente,<br>Gestão de Almoxarifado NGI Carajás</p>
+                                            """
+                                        ),
+                                        daemon=True
+                                    ).start()
+                                    st.warning("Solicitação rejeitada e usuário notificado por e-mail!")
+                                    st.rerun()
 
-                    with col_ap2:
-                        if st.button("Rejeitar", key=f"rejeitar_{sol['id']}", icon=":material/close:"):
-                            if not just_rejeicao.strip():
-                                st.error("Para rejeitar, é obrigatório informar a Justificativa da Reprovação!")
-                            else:
-                                cursor.execute("""
-                                    UPDATE solicitacoes_almoxarifado 
-                                    SET status = 'REJEITADA', data_decisao = CURRENT_TIMESTAMP, aprovador = %s, justificativa_rejeicao = %s 
-                                    WHERE id = %s;
-                                """, (st.session_state.NOME_USUARIO_LOGADO, just_rejeicao.strip(), sol["id"]))
-                                conn.commit()
-
-                                threading.Thread(
-                                    target=enviar_email_notificacao,
-                                    args=(
-                                        sol["solicitante_email"],
-                                        "Solicitação Reprovada",
-                                        f"""
-                                        <p>Olá, {sol['solicitante_nome']},</p>
-                                        <p>Sua solicitação do item <b>{sol['item_nome']}</b> (Quantidade: {sol['quantidade']}) foi <b>reprovada</b>.</p>
-                                        <p><b>Justificativa:</b> {just_rejeicao.strip()}</p>
-                                        <p>Atenciosamente,<br>Gestão de Almoxarifado NGI Carajás</p>
-                                        """
-                                    ),
-                                    daemon=True
-                                ).start()
-                                st.warning("Solicitação rejeitada e usuário notificado por e-mail!")
-                                st.rerun()
 
         elif aba_solicitacao == "Histórico":
             df_hist_sol = pd.read_sql_query("""
