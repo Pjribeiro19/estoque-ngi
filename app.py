@@ -604,6 +604,135 @@ def renderizar_catalogo_emprestimos(dados, solicitante=False):
                         editar.button("Editar", key=f"ngi_emp_editar_{item['ID']}", use_container_width=True, on_click=navegar_emprestimo, args=("Itens Disponíveis",int(item['ID'])))
     st.caption(f"{len(filtrados)} materiais encontrados · página {pagina} de {paginas}")
 
+
+def tipo_solicitacao_visual(sol):
+    if sol.get("tipo") == "EMPRESTIMO":
+        return "Empréstimo"
+    return "Livro" if sol.get("origem_estoque") == "LIVROS" else "Material"
+
+
+def selecionar_solicitacao_ngi(identificador=None):
+    chaves = ['ngi_sol_pagina', 'ngi_sol_limite', 'ngi_sol_busca', 'ngi_sol_tipo', 'ngi_sol_coord', 'ngi_sol_ordem']
+    if identificador is not None:
+        st.session_state.ngi_sol_retorno = {chave: st.session_state[chave] for chave in chaves if chave in st.session_state}
+    else:
+        for chave, valor in st.session_state.get('ngi_sol_retorno', {}).items():
+            st.session_state[chave] = valor
+    st.session_state.ngi_sol_aberta = identificador
+
+
+def pagina_solicitacoes_ngi(pagina):
+    st.session_state.ngi_sol_pagina = pagina
+
+
+def indicadores_solicitacoes_ngi(dados):
+    st.markdown("""<style>
+    .st-key-ngi_sol_aba [role="radiogroup"]{gap:0;background:#fff;border-bottom:1px solid #dce6df;padding:0 8px;margin-bottom:10px}
+    .st-key-ngi_sol_aba [role="radiogroup"] label{padding:10px 24px;margin:0;border-bottom:3px solid transparent;cursor:pointer}
+    .st-key-ngi_sol_aba [role="radiogroup"] label:has(input:checked){border-color:#147746;background:#f1f7f3}
+    .st-key-ngi_sol_aba [role="radiogroup"] label:has(input:checked) p{color:#145d3b !important;font-weight:700}
+    .st-key-ngi_sol_aba [role="radiogroup"] label>div:first-child{display:none}
+    .ngi-sol-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:8px 0 20px}
+    .ngi-sol-kpi{display:flex;align-items:center;gap:16px;padding:18px 22px;border:1px solid #e2e9e4;border-radius:10px;background:#f0f7f3}
+    .ngi-sol-kpi:first-child{background:#fffbf1;border-color:#f1e6c7}.ngi-sol-kpi:last-child{background:#f2f6fc}
+    .ngi-sol-kpi svg{width:26px;height:26px;flex-shrink:0;stroke:#185b3e;fill:none;stroke-width:1.7}
+    .ngi-sol-kpi small{font-size:13px;color:#53645b}.ngi-sol-kpi strong{display:block;font-size:28px;color:#152d21}
+    .ngi-sol-tag{display:inline-block;padding:3px 8px;border-radius:5px;font-size:12px;background:#e3f2e9;color:#155737 !important}
+    .ngi-sol-tag.livro{background:#eaf1ff;color:#285293 !important}.ngi-sol-tag.emprestimo{background:#efeafb;color:#66439a !important}
+    .ngi-sol-cell{font-size:13px;line-height:19px;padding:7px 0;overflow-wrap:anywhere}
+    .ngi-sol-th{font-size:12px;font-weight:700;color:#5b6d62;padding:6px 0}
+    .st-key-ngi_sol_tabela{background:white;border:1px solid #e0e7e2;border-radius:12px;padding:16px}
+    .st-key-ngi_sol_tabela [data-testid="stHorizontalBlock"]{border-bottom:1px solid #edf1ee;align-items:center;gap:10px}
+    .st-key-ngi_sol_tabela button{min-height:30px !important;padding:3px 10px !important;border-color:#32785a !important}
+    .st-key-ngi_sol_tabela button p{font-size:12px !important}
+    @media(max-width:700px){.ngi-sol-kpis{gap:6px}.ngi-sol-kpi{padding:10px;gap:7px}.ngi-sol-kpi svg{display:none}}
+    </style>""", unsafe_allow_html=True)
+    tipos = dados.apply(tipo_solicitacao_visual, axis=1) if not dados.empty else pd.Series(dtype=str)
+    valores = [len(dados), int((tipos == "Material").sum()), int(tipos.isin(["Livro", "Empréstimo"]).sum())]
+    icones = ['<path d="M6 17h12l-2-3V9a4 4 0 0 0-8 0v5l-2 3ZM10 20h4"/>','<path d="m12 3 9 5-9 5-9-5 9-5Zm-9 5v9l9 5 9-5V8M12 13v9"/>','<path d="M12 5C8 3 5 3 3 4v15c3-1 6-1 9 1 3-2 6-2 9-1V4c-3-1-6-1-9 1Zm0 0v15"/>']
+    st.markdown('<div class="ngi-sol-kpis">'+''.join(f'<div class="ngi-sol-kpi"><svg viewBox="0 0 24 24">{icone}</svg><div><small>{nome}</small><strong>{valor}</strong></div></div>' for nome,valor,icone in zip(['Pendentes','Materiais','Livros e empréstimos'],valores,icones))+'</div>',unsafe_allow_html=True)
+
+
+def tabela_solicitacoes_ngi(dados):
+    """Consulta e navegação: nunca aprova nem altera estoque."""
+    aberta = st.session_state.get('ngi_sol_aberta')
+    if aberta is not None:
+        selecionada = dados[dados['id']==aberta]
+        if not selecionada.empty:
+            st.button('Voltar às solicitações', key='ngi_sol_voltar', on_click=selecionar_solicitacao_ngi)
+            st.subheader(f'Solicitação nº {aberta}')
+            st.caption('Aguardando análise')
+            return selecionada
+        st.session_state.ngi_sol_aberta = None
+    col_busca,col_tipo,col_coord,col_ordem = st.columns([3,1.4,1.8,1.8])
+    busca=col_busca.text_input('Buscar nº, item ou solicitante',key='ngi_sol_busca',placeholder='Digite para pesquisar...')
+    tipo=col_tipo.selectbox('Tipo',['Todos os tipos','Material','Livro','Empréstimo'],key='ngi_sol_tipo')
+    coords=sorted({str(v) for v in dados['coordenacao'].dropna() if str(v).strip()})
+    coord=col_coord.selectbox('Coordenação',['Todas as coordenações']+coords,key='ngi_sol_coord')
+    ordem=col_ordem.selectbox('Ordenar',['Mais antigas primeiro','Mais recentes primeiro'],key='ngi_sol_ordem')
+    filtrados=dados.copy()
+    filtrados['_tipo_visual']=filtrados.apply(tipo_solicitacao_visual,axis=1)
+    if busca.strip():
+        texto=filtrados[['id','item_nome','solicitante_nome']].fillna('').astype(str).agg(' '.join,axis=1)
+        filtrados=filtrados[texto.str.contains(busca.strip(),case=False,regex=False)]
+    if tipo!='Todos os tipos':filtrados=filtrados[filtrados['_tipo_visual']==tipo]
+    if coord!='Todas as coordenações':filtrados=filtrados[filtrados['coordenacao']==coord]
+    filtrados=filtrados.sort_values(['data_solicitacao','id'],ascending=ordem=='Mais antigas primeiro',na_position='last')
+    contexto=(busca,tipo,coord,ordem)
+    if st.session_state.get('ngi_sol_filtro')!=contexto:
+        st.session_state.ngi_sol_pagina=1
+        st.session_state.ngi_sol_filtro=contexto
+    limite=st.session_state.get('ngi_sol_limite',10)
+    paginas=max(1,(len(filtrados)+limite-1)//limite)
+    pagina=min(max(1,st.session_state.get('ngi_sol_pagina',1)),paginas)
+    st.session_state.ngi_sol_pagina=pagina
+    inicio=(pagina-1)*limite
+    visiveis=filtrados.iloc[inicio:inicio+limite]
+    larguras=[.55,1.5,1.1,2.3,.5,1.1,1.5,1]
+    with st.container(key='ngi_sol_tabela'):
+        st.markdown(f'**{len(filtrados)} solicitações pendentes**')
+        for coluna,titulo in zip(st.columns(larguras),['Nº','Solicitante','Tipo','Item solicitado','Qtd.','Coordenação','Solicitado em','Ação']):
+            coluna.markdown(f'<div class="ngi-sol-th">{titulo}</div>',unsafe_allow_html=True)
+        for _,sol in visiveis.iterrows():
+            colunas=st.columns(larguras)
+            tipo_visual=sol['_tipo_visual']
+            classe={'Material':'material','Livro':'livro','Empréstimo':'emprestimo'}[tipo_visual]
+            data=converter_para_horario_br(sol['data_solicitacao']).strftime('%d/%m/%Y %H:%M') if pd.notna(sol['data_solicitacao']) else '-'
+            valores=[sol['id'],sol['solicitante_nome'],tipo_visual,sol['item_nome'],sol['quantidade'],sol['coordenacao'] or '-',data]
+            for i,valor in enumerate(valores):
+                texto=html.escape(str(valor))
+                if i==2:texto=f'<span class="ngi-sol-tag {classe}">{texto}</span>'
+                colunas[i].markdown(f'<div class="ngi-sol-cell">{texto}</div>',unsafe_allow_html=True)
+            colunas[7].button('Analisar →',key=f"ngi_sol_analisar_{sol['id']}",use_container_width=True,on_click=selecionar_solicitacao_ngi,args=(int(sol['id']),))
+        if visiveis.empty:st.info('Nenhuma solicitação encontrada com esses filtros.')
+    info,tamanho,anterior,seletor,proxima=st.columns([3,1.4,1,1.2,1])
+    info.caption(f'Exibindo {inicio+1 if len(filtrados) else 0}–{min(inicio+limite,len(filtrados))} de {len(filtrados)} solicitações')
+    tamanho.selectbox('Por página',[10,25,50],key='ngi_sol_limite',on_change=pagina_solicitacoes_ngi,args=(1,))
+    anterior.button('Anterior',disabled=pagina<=1,key='ngi_sol_anterior',on_click=pagina_solicitacoes_ngi,args=(pagina-1,))
+    seletor.selectbox('Página',list(range(1,paginas+1)),key='ngi_sol_pagina')
+    proxima.button('Próxima',disabled=pagina>=paginas,key='ngi_sol_proxima',on_click=pagina_solicitacoes_ngi,args=(pagina+1,))
+    st.caption('Abra uma solicitação para consultar os detalhes e aprovar ou rejeitar.')
+    return dados.iloc[0:0]
+
+
+def foto_solicitacao_ngi(sol, conn):
+    # Fotos existem apenas nos catálogos de livros e empréstimos.
+    if sol['tipo']=='EMPRESTIMO':
+        consulta='SELECT foto FROM emprestimo_itens WHERE id = %s;'
+        parametro=int(sol['referencia_codigo'])
+    elif sol.get('origem_estoque')=='LIVROS':
+        consulta='SELECT foto FROM produtos_livros WHERE codigo = %s;'
+        parametro=sol['referencia_codigo']
+    else:
+        return
+    cursor_foto=conn.cursor()
+    try:
+        cursor_foto.execute(consulta,(parametro,))
+        registro=cursor_foto.fetchone()
+        if registro and registro[0]:st.image(bytes(registro[0]),width=150)
+    finally:
+        cursor_foto.close()
+
 def renderizar_banner(titulo, subtitulo, cor="#147746"):
     """Cabeçalho padrão sem fundo colorido usado no topo de cada tela do
     sistema, para manter o visual consistente entre todos os módulos."""
@@ -3137,27 +3266,22 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
             </div>
         """, unsafe_allow_html=True)
 
-        aba_solicitacao = option_menu(
-            menu_title=None,
-            options=["Pendentes", "Histórico"],
-            icons=["hourglass-split", "journal-text"],
-            orientation="horizontal",
-            styles=ESTILO_MENU_HORIZONTAL
-        )
-
+        df_pendentes = pd.read_sql_query("""
+            SELECT id, tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_solicitacao, data_retirada, data_prevista, atividade_associada, observacao, termo_aceito, data_aceite_termo, origem_estoque
+            FROM solicitacoes_almoxarifado WHERE status = 'PENDENTE' ORDER BY id ASC;
+        """, conn)
+        indicadores_solicitacoes_ngi(df_pendentes)
+        aba_solicitacao = st.radio("Visualização de solicitações", ["Pendentes", "Histórico"], horizontal=True, label_visibility="collapsed", key="ngi_sol_aba")
         cursor = conn.cursor()
-
         if aba_solicitacao == "Pendentes":
-            df_pendentes = pd.read_sql_query("""
-                SELECT id, tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, data_solicitacao, data_retirada, data_prevista, atividade_associada, observacao, termo_aceito, data_aceite_termo, origem_estoque
-                FROM solicitacoes_almoxarifado WHERE status = 'PENDENTE' ORDER BY id ASC;
-            """, conn)
 
             if df_pendentes.empty:
                 st.info("Nenhuma solicitação pendente no momento.")
             else:
-                for _, sol in df_pendentes.iterrows():
-                    tipo_label = "Material (Almoxarifado)" if sol["tipo"] == "MATERIAL" else "Empréstimo de Material"
+                df_para_analisar = tabela_solicitacoes_ngi(df_pendentes)
+                for _, sol in df_para_analisar.iterrows():
+                    foto_solicitacao_ngi(sol, conn)
+                    tipo_label = tipo_solicitacao_visual(sol)
                     cor_tag = "#147746" if sol["tipo"] == "MATERIAL" else "#145d3b"
                     data_hora_sol = converter_para_horario_br(sol["data_solicitacao"]).strftime('%d/%m/%Y às %H:%M') if sol["data_solicitacao"] is not None else "-"
 
@@ -3191,9 +3315,9 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                         placeholder="Descreva o motivo da reprovação desta solicitação..."
                     )
 
-                    col_ap1, col_ap2, col_ap3 = st.columns([1, 1, 4])
+                    col_ap3, col_ap2, col_ap1 = st.columns([4, 1, 1.5])
                     with col_ap1:
-                        if st.button("Aprovar", key=f"aprovar_{sol['id']}", type="primary", icon=":material/check:"):
+                        if st.button("Aprovar solicitação", key=f"aprovar_{sol['id']}", type="primary", icon=":material/check:"):
                             try:
                                 if sol["tipo"] == "MATERIAL":
                                     origem_sol = sol.get("origem_estoque")
