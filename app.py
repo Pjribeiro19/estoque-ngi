@@ -3938,30 +3938,6 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 if df_filtrado_equip.empty:
                     st.info("Nenhum equipamento encontrado com os filtros aplicados.")
                 else:
-                    df_excel_equip = df_exibir_equip.drop(columns=["id"]).copy()
-                    for col_data in ["Data da Retirada", "Data Prevista Devolução", "Data da Devolução"]:
-                        df_excel_equip[col_data] = pd.to_datetime(df_excel_equip[col_data], errors="coerce").dt.strftime("%d/%m/%Y").fillna("-")
-                    df_excel_equip = df_excel_equip.fillna("-")
-
-                    buffer_excel_equip = io.BytesIO()
-                    with pd.ExcelWriter(buffer_excel_equip, engine="openpyxl") as writer_equip:
-                        df_excel_equip.to_excel(writer_equip, sheet_name="Equipamentos Emprestados", index=False)
-                        ws_equip = writer_equip.sheets["Equipamentos Emprestados"]
-                        for col_cells in ws_equip.columns:
-                            maior = max(len(str(c.value)) if c.value is not None else 0 for c in col_cells)
-                            ws_equip.column_dimensions[col_cells[0].column_letter].width = min(max(maior + 3, 12), 50)
-                        ws_equip.freeze_panes = "A2"
-
-                    st.download_button(
-                        "Exportar para Excel",
-                        data=buffer_excel_equip.getvalue(),
-                        file_name=f"Controle_Equipamentos_Emprestados_{date.today().strftime('%Y%m%d')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        icon=":material/download:",
-                        key="btn_download_equip_excel"
-                    )
-                    st.caption("A planilha respeita os filtros aplicados acima.")
-
                     st.markdown("<br>", unsafe_allow_html=True)
                     st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #4CAF50; margin-right: 8px; border-radius: 2px;"></span>Editar / Excluir Registro</h3>', unsafe_allow_html=True)
 
