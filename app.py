@@ -1150,6 +1150,66 @@ def gerar_excel_equipamentos_ngi(df_planilha, filtros_texto):
             ws.auto_filter.ref = f"A4:{get_column_letter(total_colunas)}{len(df_planilha) + 4}"
     return buffer.getvalue()
 
+def formulario_solicitacao_livros_ngi(df_disp_livros):
+    """Carrinho de solicitação de livros/produtos. Usado pelo usuário comum
+    (aba "Fazer solicitação") e pelo administrador (menu "Fazer Solicitação")."""
+    if "carrinho_livros" not in st.session_state:
+        st.session_state.carrinho_livros = []
+
+    with st.container(border=True):
+        cabecalho_pedido_ngi("Nova solicitação de livros/produtos", "Siga os 3 passos. Todos os itens do carrinho seguem juntos em um único pedido.")
+        passo_pedido_ngi(1, 'Escolha o item e clique em "Adicionar ao carrinho"')
+        col_add_lv1, col_add_lv2, col_add_lv3 = st.columns([3, 1, 1.3])
+        opcao_sol_livro = col_add_lv1.selectbox(
+            "Item:",
+            df_disp_livros.index,
+            format_func=lambda x: f"{df_disp_livros.loc[x, 'titulo']} (Disponível: {df_disp_livros.loc[x, 'quantidade']})",
+            key="select_livro_carrinho"
+        )
+        qtd_sol_livro = col_add_lv2.number_input("Quantidade:", min_value=1, max_value=int(df_disp_livros.loc[opcao_sol_livro, "quantidade"]), value=1, step=1, key="qtd_livro_carrinho")
+        col_add_lv3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+        with col_add_lv3:
+            with st.container(key="btn_add_5"):
+                clicou_add_5 = st.button("Adicionar ao carrinho", icon=":material/add_shopping_cart:", key="add_carrinho_livro", use_container_width=True)
+        if clicou_add_5:
+            cod_sel_livro = df_disp_livros.loc[opcao_sol_livro, "codigo"]
+            titulo_sel_livro = df_disp_livros.loc[opcao_sol_livro, "titulo"]
+            adicionar_item_carrinho_ngi("carrinho_livros", {"codigo": cod_sel_livro, "item": titulo_sel_livro, "quantidade": int(qtd_sol_livro)}, df_disp_livros.loc[opcao_sol_livro, "quantidade"])
+
+        if st.session_state.carrinho_livros:
+            passo_pedido_ngi(2, "Confira o carrinho", detalhe=texto_qtd_itens_ngi(len(st.session_state.carrinho_livros)))
+            renderizar_carrinho_ngi("carrinho_livros", "4")
+
+            passo_pedido_ngi(3, "Informe a coordenação, a justificativa e envie")
+            lista_siglas_coord_livro_user = dados_sob_demanda_ngi("coordenacoes")["Sigla"].tolist() if not dados_sob_demanda_ngi("coordenacoes").empty else ["GERAL"]
+            col_env_lv1, col_env_lv2 = st.columns([1, 2])
+            coord_sol_livro = col_env_lv1.selectbox("Coordenação: *", lista_siglas_coord_livro_user, key="coord_carrinho_livro")
+            justificativa_sol_livro = col_env_lv2.text_area("Justificativa: *", placeholder="Explique o motivo da solicitação (ex: atividade de educação ambiental, distribuição em evento, etc.)", key="obs_carrinho_livro")
+
+            if st.button(f"Enviar solicitação ({texto_qtd_itens_ngi(len(st.session_state.carrinho_livros))})", type="primary", icon=":material/send:", key="enviar_carrinho_livro"):
+                if not justificativa_sol_livro.strip():
+                    st.error("A Justificativa é obrigatória para solicitar livros/livretos!")
+                else:
+                    try:
+                        lote_id_livro = str(uuid.uuid4())
+                        cursor = conn.cursor()
+                        for item_carr_lv in st.session_state.carrinho_livros:
+                            cursor.execute("""
+                    INSERT INTO solicitacoes_almoxarifado 
+                    (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, status, observacao, lote_id, origem_estoque)
+                    VALUES ('MATERIAL', %s, %s, %s, %s, %s, %s, 'PENDENTE', %s, %s, 'LIVROS');
+                """, (item_carr_lv["codigo"], item_carr_lv["item"], item_carr_lv["quantidade"], st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_livro, justificativa_sol_livro.strip(), lote_id_livro))
+                        conn.commit()
+                        st.session_state.carrinho_livros = []
+                        st.session_state["msg_sucesso_livros"] = True
+                        st.rerun()
+                    except Exception as ex_livro:
+                        conn.rollback()
+                        st.error(f"Erro ao enviar solicitação: {ex_livro}")
+        else:
+            carrinho_vazio_ngi("livros", campos=("Coordenação: *", "Justificativa: *"))
+
+
 # Controlador de cookies do navegador (mantém o login sem sujar a URL)
 # Na primeira execução de cada aba o leitor de cookies é criado; nas seguintes,
 # leitura_cookies_pendente indica se o navegador ainda não respondeu.
@@ -3321,8 +3381,8 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
 
                 aba_livros_admin = option_menu(
                     menu_title=None,
-                    options=["Itens Disponíveis", "Cadastrar Item", "Registro de Entrada", "Registro de Saída", "Histórico de Movimentação", "Editar / Excluir Item"],
-                    icons=["images", "plus-circle", "arrow-down-circle", "arrow-up-circle", "journal-text", "pencil-square"],
+                    options=["Itens Disponíveis", "Fazer Solicitação", "Cadastrar Item", "Registro de Entrada", "Registro de Saída", "Histórico de Movimentação", "Editar / Excluir Item"],
+                    icons=["images", "cart-plus", "plus-circle", "arrow-down-circle", "arrow-up-circle", "journal-text", "pencil-square"],
                     orientation="horizontal",
                     styles=ESTILO_MENU_HORIZONTAL
                 )
@@ -3337,6 +3397,21 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                         st.info("Nenhum livro ou produto cadastrado ainda.")
                     else:
                         renderizar_catalogo_visual_ngi(df_raw_livros)
+
+                # ---------------------------------------------------------------
+                # FAZER SOLICITAÇÃO (administrador pedindo para si, mesmo fluxo
+                # de aprovação do usuário comum)
+                # ---------------------------------------------------------------
+                elif aba_livros_admin == "Fazer Solicitação":
+                    st.caption("Sua solicitação seguirá o fluxo normal de aprovação, como qualquer outra.")
+                    if st.session_state.get("msg_sucesso_livros"):
+                        st.success("Sua solicitação foi encaminhada com sucesso!")
+                        del st.session_state["msg_sucesso_livros"]
+                    df_disp_livros_admin = df_raw_livros[df_raw_livros["quantidade"] > 0].reset_index(drop=True)
+                    if df_disp_livros_admin.empty:
+                        st.info("Nenhum livro ou produto disponível no momento.")
+                    else:
+                        formulario_solicitacao_livros_ngi(df_disp_livros_admin)
 
                 # ---------------------------------------------------------------
                 # ABA 2: CADASTRAR ITEM (FOTO OBRIGATÓRIA)
@@ -3545,61 +3620,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                         renderizar_catalogo_visual_ngi(df_disp_livros)
 
                     with aba_solicitar_livros:
-                        if "carrinho_livros" not in st.session_state:
-                            st.session_state.carrinho_livros = []
-
-                        with st.container(border=True):
-                            cabecalho_pedido_ngi("Nova solicitação de livros/produtos", "Siga os 3 passos. Todos os itens do carrinho seguem juntos em um único pedido.")
-                            passo_pedido_ngi(1, 'Escolha o item e clique em "Adicionar ao carrinho"')
-                            col_add_lv1, col_add_lv2, col_add_lv3 = st.columns([3, 1, 1.3])
-                            opcao_sol_livro = col_add_lv1.selectbox(
-                                "Item:",
-                                df_disp_livros.index,
-                                format_func=lambda x: f"{df_disp_livros.loc[x, 'titulo']} (Disponível: {df_disp_livros.loc[x, 'quantidade']})",
-                                key="select_livro_carrinho"
-                            )
-                            qtd_sol_livro = col_add_lv2.number_input("Quantidade:", min_value=1, max_value=int(df_disp_livros.loc[opcao_sol_livro, "quantidade"]), value=1, step=1, key="qtd_livro_carrinho")
-                            col_add_lv3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                            with col_add_lv3:
-                                with st.container(key="btn_add_5"):
-                                    clicou_add_5 = st.button("Adicionar ao carrinho", icon=":material/add_shopping_cart:", key="add_carrinho_livro", use_container_width=True)
-                            if clicou_add_5:
-                                cod_sel_livro = df_disp_livros.loc[opcao_sol_livro, "codigo"]
-                                titulo_sel_livro = df_disp_livros.loc[opcao_sol_livro, "titulo"]
-                                adicionar_item_carrinho_ngi("carrinho_livros", {"codigo": cod_sel_livro, "item": titulo_sel_livro, "quantidade": int(qtd_sol_livro)}, df_disp_livros.loc[opcao_sol_livro, "quantidade"])
-
-                            if st.session_state.carrinho_livros:
-                                passo_pedido_ngi(2, "Confira o carrinho", detalhe=texto_qtd_itens_ngi(len(st.session_state.carrinho_livros)))
-                                renderizar_carrinho_ngi("carrinho_livros", "4")
-
-                                passo_pedido_ngi(3, "Informe a coordenação, a justificativa e envie")
-                                lista_siglas_coord_livro_user = dados_sob_demanda_ngi("coordenacoes")["Sigla"].tolist() if not dados_sob_demanda_ngi("coordenacoes").empty else ["GERAL"]
-                                col_env_lv1, col_env_lv2 = st.columns([1, 2])
-                                coord_sol_livro = col_env_lv1.selectbox("Coordenação: *", lista_siglas_coord_livro_user, key="coord_carrinho_livro")
-                                justificativa_sol_livro = col_env_lv2.text_area("Justificativa: *", placeholder="Explique o motivo da solicitação (ex: atividade de educação ambiental, distribuição em evento, etc.)", key="obs_carrinho_livro")
-
-                                if st.button(f"Enviar solicitação ({texto_qtd_itens_ngi(len(st.session_state.carrinho_livros))})", type="primary", icon=":material/send:", key="enviar_carrinho_livro"):
-                                    if not justificativa_sol_livro.strip():
-                                        st.error("A Justificativa é obrigatória para solicitar livros/livretos!")
-                                    else:
-                                        try:
-                                            lote_id_livro = str(uuid.uuid4())
-                                            cursor = conn.cursor()
-                                            for item_carr_lv in st.session_state.carrinho_livros:
-                                                cursor.execute("""
-                                        INSERT INTO solicitacoes_almoxarifado 
-                                        (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, status, observacao, lote_id, origem_estoque)
-                                        VALUES ('MATERIAL', %s, %s, %s, %s, %s, %s, 'PENDENTE', %s, %s, 'LIVROS');
-                                    """, (item_carr_lv["codigo"], item_carr_lv["item"], item_carr_lv["quantidade"], st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, coord_sol_livro, justificativa_sol_livro.strip(), lote_id_livro))
-                                            conn.commit()
-                                            st.session_state.carrinho_livros = []
-                                            st.session_state["msg_sucesso_livros"] = True
-                                            st.rerun()
-                                        except Exception as ex_livro:
-                                            conn.rollback()
-                                            st.error(f"Erro ao enviar solicitação: {ex_livro}")
-                            else:
-                                carrinho_vazio_ngi("livros", campos=("Coordenação: *", "Justificativa: *"))
+                        formulario_solicitacao_livros_ngi(df_disp_livros)
 
             # =========================================================================
             # NOVO MÓDULO DE SOLICITAÇÃO — TELA (PERFIL USUÁRIO): EMPRÉSTIMO DISPONÍVEL
