@@ -922,7 +922,7 @@ def detalhes_solicitacao_ngi(sol, conn):
         if sol['tipo'] == 'EMPRESTIMO':
             cursor_saldo.execute('SELECT quantidade_disponivel FROM emprestimo_itens WHERE id = %s;', (int(sol['referencia_codigo']),))
         else:
-            tabela = {'BRIGADA':'produtos_brigada','LIVROS':'produtos_livros'}.get(sol.get('origem_estoque'),'produtos')
+            tabela = {'BRIGADA':'produtos_brigada','PESQUISA':'produtos_pesquisa','LIVROS':'produtos_livros'}.get(sol.get('origem_estoque'),'produtos')
             cursor_saldo.execute(f'SELECT quantidade FROM {tabela} WHERE codigo = %s;', (sol['referencia_codigo'],))
         registro = cursor_saldo.fetchone()
         if registro is not None:saldo = registro[0]
@@ -1396,6 +1396,36 @@ def inicializar_banco_automatico():
     """)
 
     cursor.execute("ALTER TABLE solicitacoes_almoxarifado ADD COLUMN IF NOT EXISTS origem_estoque TEXT DEFAULT 'GERAL';")
+
+    # =========================================================================
+    # NOVO MÓDULO: MATERIAIS PESQUISA (estoque separado, acesso restrito à COLMOP)
+    # =========================================================================
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS produtos_pesquisa (
+            codigo TEXT PRIMARY KEY,
+            item TEXT,
+            quantidade INTEGER,
+            categoria TEXT,
+            valor_unitario REAL
+        );
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS movimentacoes_pesquisa (
+            id SERIAL PRIMARY KEY,
+            data TEXT,
+            tipo TEXT,
+            codigo TEXT,
+            item TEXT,
+            quantidade INTEGER,
+            responsavel TEXT,
+            coordenacao TEXT
+        );
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS categorias_pesquisa (
+            nome TEXT PRIMARY KEY
+        );
+    """)
 
     # =========================================================================
     # NOVO MÓDULO: LIVROS E PRODUTOS (com foto obrigatória)
@@ -2341,6 +2371,9 @@ with ConexaoExecucaoNGI() as conn:
                     if coordenacao_logada_normalizada == "BRIGADA":
                         opcoes_menu_user.append("Materiais Brigada")
                         icones_menu_user.append("fire")
+                    if coordenacao_logada_normalizada == "COLMOP":
+                        opcoes_menu_user.append("Materiais Pesquisa")
+                        icones_menu_user.append("binoculars")
 
                     opcoes_menu_user += ["Minhas Solicitações", "Sair do Sistema"]
                     icones_menu_user += ["clock-history", "box-arrow-right"]
@@ -2373,6 +2406,7 @@ with ConexaoExecucaoNGI() as conn:
                             "Empréstimo de Material",
                             "Cadastrar Produto", 
                             "Materiais Brigada",
+                            "Materiais Pesquisa",
                             "Livros e Produtos",
                             "Cadastrar Categoria", 
                             "Cadastrar Usuário", 
@@ -2383,7 +2417,7 @@ with ConexaoExecucaoNGI() as conn:
                             "Controle de Equipamentos Emprestados",
                             "Sair do Sistema"
                         ],
-                        icons=["grid", "box-seam", "arrow-repeat", "box", "fire", "book", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "laptop", "box-arrow-right"],
+                        icons=["grid", "box-seam", "arrow-repeat", "box", "fire", "binoculars", "book", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "laptop", "box-arrow-right"],
                         menu_icon="cast",
                         default_index=0,
                         styles=ESTILO_MENU_LATERAL_NGI,
@@ -3372,6 +3406,319 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                                 carrinho_vazio_ngi("brigada", campos=("Observações (opcional):",))
 
             # =========================================================================
+            # NOVO MÓDULO: MATERIAIS PESQUISA — GESTÃO (ADMINISTRADOR)
+            # =========================================================================
+            elif escolha == "Materiais Pesquisa" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum":
+                renderizar_banner("Materiais Pesquisa", "Estoque próprio de materiais de pesquisa (COLMOP), separado do almoxarifado geral")
+                aba_pesquisa_admin = option_menu(
+                    menu_title=None,
+                    options=["Itens Disponíveis", "Cadastrar Item", "Gerenciar Categorias", "Registro de Entrada", "Registro de Saída", "Histórico de Movimentação", "Editar / Excluir Item"],
+                    icons=["box-seam", "plus-circle", "tags", "arrow-down-circle", "arrow-up-circle", "journal-text", "pencil-square"],
+                    orientation="horizontal",
+                    styles=ESTILO_MENU_HORIZONTAL
+                )
+
+                df_raw_pesq = pd.read_sql_query("SELECT * FROM produtos_pesquisa ORDER BY codigo ASC;", conn)
+                lista_siglas_coord_pesq = dados_sob_demanda_ngi("coordenacoes")["Sigla"].tolist() if not dados_sob_demanda_ngi("coordenacoes").empty else ["GERAL"]
+
+                # ---------------------------------------------------------------
+                # ABA 1: ITENS DISPONÍVEIS
+                # ---------------------------------------------------------------
+                if aba_pesquisa_admin == "Itens Disponíveis":
+                    if df_raw_pesq.empty:
+                        st.info("Nenhum material cadastrado no estoque de Pesquisa ainda.")
+                    else:
+                        df_display_pesq = df_raw_pesq.rename(columns={"codigo": "Código", "item": "Item", "quantidade": "Quantidade", "categoria": "Categoria", "valor_unitario": "Valor Unitário"})
+                        df_display_pesq["Valor Unitário"] = df_display_pesq["Valor Unitário"].map("R$ {:.2f}".format)
+                        st.dataframe(df_display_pesq, use_container_width=True, hide_index=True)
+
+                # ---------------------------------------------------------------
+                # ABA 2: CADASTRAR ITEM
+                # ---------------------------------------------------------------
+                elif aba_pesquisa_admin == "Cadastrar Item":
+                    df_cat_pesquisa = pd.read_sql_query("SELECT nome FROM categorias_pesquisa ORDER BY nome ASC;", conn)
+                    lista_categorias_pesquisa = df_cat_pesquisa["nome"].tolist()
+
+                    with st.form("form_novo_produto_pesquisa", clear_on_submit=True):
+                        col_ba, col_bb = st.columns(2)
+                        cod_pesq = col_ba.text_input("Código")
+                        nome_it_pesq = col_bb.text_input("Nome do Material")
+                        cat_it_pesq = col_ba.selectbox("Categoria", lista_categorias_pesquisa if lista_categorias_pesquisa else ["Nenhuma categoria cadastrada"])
+                        val_unit_pesq = col_bb.number_input("Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
+                        qtd_inicial_pesq = st.number_input("Quantidade Inicial:", min_value=0, value=0, step=1)
+
+                        if st.form_submit_button("Finalizar Cadastro", type="primary"):
+                            if cod_pesq and nome_it_pesq:
+                                try:
+                                    cursor = conn.cursor()
+                                    cursor.execute("INSERT INTO produtos_pesquisa VALUES (%s, %s, %s, %s, %s);", (cod_pesq.strip(), nome_it_pesq.strip(), int(qtd_inicial_pesq), cat_it_pesq, float(val_unit_pesq)))
+                                    conn.commit()
+                                    st.success(f"Sucesso! {nome_it_pesq} adicionado ao estoque de Pesquisa.")
+                                    st.rerun()
+                                except psycopg2.IntegrityError:
+                                    conn.rollback()
+                                    st.error(f"Erro! Código {cod_pesq} já existe.")
+                            else:
+                                st.error("Preencha ao menos o Código e o Nome do Material!")
+
+                # ---------------------------------------------------------------
+                # ABA 3: GERENCIAR CATEGORIAS
+                # ---------------------------------------------------------------
+                elif aba_pesquisa_admin == "Gerenciar Categorias":
+                    df_cat_pesquisa_aba = pd.read_sql_query("SELECT nome FROM categorias_pesquisa ORDER BY nome ASC;", conn)
+                    lista_categorias_pesquisa_aba = df_cat_pesquisa_aba["nome"].tolist()
+
+                    st.markdown("### Categorias atuais")
+                    if lista_categorias_pesquisa_aba:
+                        st.dataframe(
+                            df_cat_pesquisa_aba.rename(columns={"nome": "Categoria"}),
+                            use_container_width=True, hide_index=True,
+                            height=min(450, max(120, 38 * (len(lista_categorias_pesquisa_aba) + 1))),
+                        )
+                        with st.expander("Excluir uma categoria"):
+                            cat_existente_pesq = st.selectbox("Categoria para excluir:", lista_categorias_pesquisa_aba, key="cat_pesquisa_excluir_visual")
+                            if st.button("Excluir categoria selecionada", key=f"del_cat_pesq_{cat_existente_pesq}"):
+                                cursor = conn.cursor()
+                                cursor.execute("DELETE FROM categorias_pesquisa WHERE nome = %s;", (cat_existente_pesq,))
+                                conn.commit()
+                                st.rerun()
+                    else:
+                        st.info("Nenhuma categoria cadastrada ainda.")
+
+                    st.markdown("### Adicionar categoria")
+                    nova_cat_pesq = st.text_input("Nova categoria:", placeholder="Ex: Coleta, Campo, Laboratório, Monitoramento", key="nova_cat_pesquisa")
+                    with st.container(key="btn_add_3"):
+                        clicou_add_cat_pesq = st.button("Adicionar Categoria", key="add_cat_pesquisa")
+                    if clicou_add_cat_pesq:
+                        if nova_cat_pesq and nova_cat_pesq.strip():
+                            try:
+                                cursor = conn.cursor()
+                                cursor.execute("INSERT INTO categorias_pesquisa VALUES (%s);", (nova_cat_pesq.strip(),))
+                                conn.commit()
+                                st.success("Categoria adicionada!")
+                                st.rerun()
+                            except psycopg2.IntegrityError:
+                                conn.rollback()
+                                st.error("Esta categoria já existe.")
+
+                # ---------------------------------------------------------------
+                # ABA 4: REGISTRO DE ENTRADA
+                # ---------------------------------------------------------------
+                elif aba_pesquisa_admin == "Registro de Entrada":
+                    if df_raw_pesq.empty:
+                        st.warning("Nenhum material cadastrado para movimentar.")
+                    else:
+                        with st.form("form_entrada_pesquisa", clear_on_submit=True):
+                            col_be1, col_be2 = st.columns(2)
+                            data_mov_pesq = col_be1.date_input("Data da Movimentação:", value=datetime.today(), format="DD/MM/YYYY").strftime("%Y-%m-%d")
+                            opcao_prod_pesq_ent = col_be2.selectbox(
+                                "Selecione o Material:",
+                                df_raw_pesq.index,
+                                format_func=lambda x: f"{df_raw_pesq.loc[x, 'codigo']} - {df_raw_pesq.loc[x, 'item']} (Saldo: {df_raw_pesq.loc[x, 'quantidade']})"
+                            )
+                            qtd_mov_pesq_ent = col_be1.number_input("Quantidade:", min_value=1, step=1, value=1)
+
+                            if st.form_submit_button("Registrar Entrada", type="primary"):
+                                prod_codigo_pesq = df_raw_pesq.loc[opcao_prod_pesq_ent, "codigo"]
+                                prod_nome_pesq = df_raw_pesq.loc[opcao_prod_pesq_ent, "item"]
+                                nova_qtd_pesq = int(df_raw_pesq.loc[opcao_prod_pesq_ent, "quantidade"]) + qtd_mov_pesq_ent
+                                try:
+                                    cursor = conn.cursor()
+                                    cursor.execute("UPDATE produtos_pesquisa SET quantidade = %s WHERE codigo = %s;", (nova_qtd_pesq, prod_codigo_pesq))
+                                    cursor.execute("""
+                                INSERT INTO movimentacoes_pesquisa (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s);
+                            """, (data_mov_pesq, "Entrada", prod_codigo_pesq, prod_nome_pesq, qtd_mov_pesq_ent, st.session_state.NOME_USUARIO_LOGADO, "Pesquisa"))
+                                    conn.commit()
+                                    st.success(f"Entrada de {qtd_mov_pesq_ent} un. de '{prod_nome_pesq}' registrada! Novo saldo: {nova_qtd_pesq}.")
+                                    st.rerun()
+                                except Exception as ex_ent_pesq:
+                                    conn.rollback()
+                                    st.error(f"Erro ao salvar entrada: {ex_ent_pesq}")
+
+                # ---------------------------------------------------------------
+                # ABA 5: REGISTRO DE SAÍDA
+                # ---------------------------------------------------------------
+                elif aba_pesquisa_admin == "Registro de Saída":
+                    if df_raw_pesq.empty:
+                        st.warning("Nenhum material cadastrado para movimentar.")
+                    else:
+                        with st.form("form_saida_pesquisa", clear_on_submit=True):
+                            col_bs1, col_bs2 = st.columns(2)
+                            data_mov_pesq_s = col_bs1.date_input("Data da Movimentação:", value=datetime.today(), format="DD/MM/YYYY").strftime("%Y-%m-%d")
+                            opcao_prod_pesq_sai = col_bs2.selectbox(
+                                "Selecione o Material:",
+                                df_raw_pesq.index,
+                                format_func=lambda x: f"{df_raw_pesq.loc[x, 'codigo']} - {df_raw_pesq.loc[x, 'item']} (Saldo: {df_raw_pesq.loc[x, 'quantidade']})",
+                                key="select_saida_pesquisa"
+                            )
+                            qtd_mov_pesq_sai = col_bs1.number_input("Quantidade da Movimentação:", min_value=1, step=1, value=1)
+                            resp_mov_pesq = col_bs2.text_input("Nome da Pessoa Responsável pela Retirada:")
+                            coord_mov_pesq = col_bs1.selectbox("Coordenação Destino:", lista_siglas_coord_pesq)
+
+                            if st.form_submit_button("Registrar Saída", type="primary"):
+                                if not resp_mov_pesq.strip():
+                                    st.error("Por favor, digite o nome da pessoa responsável pela retirada.")
+                                else:
+                                    prod_codigo_pesq_s = df_raw_pesq.loc[opcao_prod_pesq_sai, "codigo"]
+                                    prod_nome_pesq_s = df_raw_pesq.loc[opcao_prod_pesq_sai, "item"]
+                                    prod_qtd_atual_pesq = int(df_raw_pesq.loc[opcao_prod_pesq_sai, "quantidade"])
+
+                                    if prod_qtd_atual_pesq >= qtd_mov_pesq_sai:
+                                        nova_qtd_pesq_s = prod_qtd_atual_pesq - qtd_mov_pesq_sai
+                                        try:
+                                            cursor = conn.cursor()
+                                            cursor.execute("UPDATE produtos_pesquisa SET quantidade = %s WHERE codigo = %s;", (nova_qtd_pesq_s, prod_codigo_pesq_s))
+                                            cursor.execute("""
+                                        INSERT INTO movimentacoes_pesquisa (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s);
+                                    """, (data_mov_pesq_s, "Saída", prod_codigo_pesq_s, prod_nome_pesq_s, qtd_mov_pesq_sai, resp_mov_pesq.strip(), coord_mov_pesq))
+                                            conn.commit()
+                                            st.success(f"Saída de {qtd_mov_pesq_sai} un. de '{prod_nome_pesq_s}' registrada! Novo saldo: {nova_qtd_pesq_s}.")
+                                            st.rerun()
+                                        except Exception as ex_sai_pesq:
+                                            conn.rollback()
+                                            st.error(f"Erro ao salvar saída: {ex_sai_pesq}")
+                                    else:
+                                        st.error(f"Saldo Insuficiente! O material possui apenas {prod_qtd_atual_pesq} unidades no estoque.")
+
+                # ---------------------------------------------------------------
+                # ABA 6: HISTÓRICO DE MOVIMENTAÇÃO
+                # ---------------------------------------------------------------
+                elif aba_pesquisa_admin == "Histórico de Movimentação":
+                    df_mov_pesq = pd.read_sql_query("SELECT data AS Data, tipo AS Tipo, codigo AS Código, item AS Item, quantidade AS Quantidade, responsavel AS Responsável, coordenacao AS Coordenação FROM movimentacoes_pesquisa ORDER BY id DESC;", conn)
+                    if df_mov_pesq.empty:
+                        st.info("Nenhuma movimentação registrada até o momento.")
+                    else:
+                        st.dataframe(df_mov_pesq, use_container_width=True, hide_index=True)
+
+                # ---------------------------------------------------------------
+                # ABA 7: EDITAR / EXCLUIR ITEM
+                # ---------------------------------------------------------------
+                elif aba_pesquisa_admin == "Editar / Excluir Item":
+                    if df_raw_pesq.empty:
+                        st.info("Nenhum material cadastrado no estoque de Pesquisa ainda.")
+                    else:
+                        opcao_pesq_edit = st.selectbox("Selecione para modificar:", df_raw_pesq.index, format_func=lambda x: f"{df_raw_pesq.loc[x, 'codigo']} - {df_raw_pesq.loc[x, 'item']}")
+                        cod_atual_pesq = df_raw_pesq.loc[opcao_pesq_edit, "codigo"]
+
+                        col_edb1, col_edb2 = st.columns(2)
+                        edit_cod_pesq = col_edb1.text_input("Código:", value=df_raw_pesq.loc[opcao_pesq_edit, "codigo"])
+                        edit_item_pesq = col_edb2.text_input("Nome:", value=df_raw_pesq.loc[opcao_pesq_edit, "item"])
+                        edit_qtd_pesq = col_edb1.number_input("Quantidade (Ajuste):", min_value=0, value=int(df_raw_pesq.loc[opcao_pesq_edit, "quantidade"]))
+                        df_cat_pesquisa_edit = pd.read_sql_query("SELECT nome FROM categorias_pesquisa ORDER BY nome ASC;", conn)
+                        lista_categorias_pesquisa_edit = df_cat_pesquisa_edit["nome"].tolist()
+                        cat_atual_pesq_edit = df_raw_pesq.loc[opcao_pesq_edit, "categoria"]
+                        if cat_atual_pesq_edit and cat_atual_pesq_edit not in lista_categorias_pesquisa_edit:
+                            lista_categorias_pesquisa_edit = [cat_atual_pesq_edit] + lista_categorias_pesquisa_edit
+                        idx_cat_pesq_edit = lista_categorias_pesquisa_edit.index(cat_atual_pesq_edit) if cat_atual_pesq_edit in lista_categorias_pesquisa_edit else 0
+                        edit_cat_pesq = col_edb2.selectbox("Categoria:", lista_categorias_pesquisa_edit if lista_categorias_pesquisa_edit else ["Nenhuma categoria cadastrada"], index=idx_cat_pesq_edit)
+                        edit_val_pesq = st.number_input("Valor Unitário:", min_value=0.0, step=0.01, format="%.2f", value=float(df_raw_pesq.loc[opcao_pesq_edit, "valor_unitario"] or 0))
+
+                        col_bbtn1, col_bbtn2 = st.columns([1, 4])
+                        with col_bbtn1:
+                            if st.button("Salvar Alterações", type="primary"):
+                                cursor = conn.cursor()
+                                cursor.execute("""
+                            UPDATE produtos_pesquisa 
+                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
+                            WHERE codigo = %s;
+                        """, (edit_cod_pesq.strip(), edit_item_pesq.strip(), edit_qtd_pesq, edit_cat_pesq.strip(), float(edit_val_pesq), cod_atual_pesq))
+                                conn.commit()
+                                st.success("Modificado com sucesso!")
+                                st.rerun()
+
+                        with col_bbtn2:
+                            if st.button("Excluir Produto"):
+                                cursor = conn.cursor()
+                                cursor.execute("DELETE FROM produtos_pesquisa WHERE codigo = %s;", (cod_atual_pesq,))
+                                conn.commit()
+                                st.warning("Removido com sucesso.")
+                                st.rerun()
+
+            # =========================================================================
+            # NOVO MÓDULO: MATERIAIS PESQUISA — SOLICITAÇÃO (USUÁRIO DA COORDENAÇÃO COLMOP)
+            # =========================================================================
+            elif escolha == "Materiais Pesquisa" and st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
+                if (st.session_state.get("COORDENACAO_USUARIO_LOGADO") or "").strip().upper() != "COLMOP":
+                    st.error("Acesso restrito à coordenação COLMOP.")
+                else:
+                    renderizar_banner("Materiais Pesquisa", "Estoque próprio de materiais de pesquisa (COLMOP), separado do almoxarifado geral")
+
+                    if st.session_state.get("msg_sucesso_pesquisa"):
+                        st.success("Sua solicitação foi encaminhada com sucesso!")
+                        del st.session_state["msg_sucesso_pesquisa"]
+
+                    df_disp_pesquisa = pd.read_sql_query("SELECT codigo, item, quantidade, categoria, valor_unitario FROM produtos_pesquisa WHERE quantidade > 0 ORDER BY codigo ASC;", conn)
+
+                    if df_disp_pesquisa.empty:
+                        st.info("Nenhum material disponível no estoque de Pesquisa no momento.")
+                    else:
+                        st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #147746; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
+
+                        termo_busca_pesq = st.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...", key="busca_material_pesquisa")
+                        df_disp_pesquisa_filtrado = df_disp_pesquisa.copy()
+                        if termo_busca_pesq:
+                            df_disp_pesquisa_filtrado = df_disp_pesquisa_filtrado[
+                                df_disp_pesquisa_filtrado['item'].str.contains(termo_busca_pesq, case=False, na=False) |
+                                df_disp_pesquisa_filtrado['codigo'].str.contains(termo_busca_pesq, case=False, na=False)
+                            ]
+
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        st.dataframe(df_disp_pesquisa_filtrado.rename(columns={"codigo": "Código", "item": "Item", "quantidade": "Quantidade", "categoria": "Categoria"}).drop(columns=["valor_unitario"]), use_container_width=True, hide_index=True)
+
+                        if "carrinho_pesquisa" not in st.session_state:
+                            st.session_state.carrinho_pesquisa = []
+
+                        with st.container(border=True):
+                            cabecalho_pedido_ngi("Nova solicitação de material de pesquisa", "Siga os 3 passos. Todos os itens do carrinho seguem juntos em um único pedido.")
+                            passo_pedido_ngi(1, 'Escolha o material e clique em "Adicionar ao carrinho"')
+
+                            col_add_br1, col_add_br2, col_add_br3 = st.columns([3, 1, 1.3])
+                            opcao_sol_pesq = col_add_br1.selectbox(
+                                "Material:",
+                                df_disp_pesquisa.index,
+                                format_func=lambda x: f"{df_disp_pesquisa.loc[x, 'codigo']} - {df_disp_pesquisa.loc[x, 'item']} (Saldo: {df_disp_pesquisa.loc[x, 'quantidade']})",
+                                key="select_material_pesquisa"
+                            )
+                            qtd_sol_pesq = col_add_br2.number_input("Quantidade:", min_value=1, max_value=int(df_disp_pesquisa.loc[opcao_sol_pesq, "quantidade"]), value=1, step=1, key="qtd_material_pesquisa")
+                            col_add_br3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                            with col_add_br3:
+                                with st.container(key="btn_add_7"):
+                                    clicou_add_7 = st.button("Adicionar ao carrinho", icon=":material/add_shopping_cart:", key="add_carrinho_pesquisa", use_container_width=True)
+                            if clicou_add_7:
+                                cod_sel_pesq = df_disp_pesquisa.loc[opcao_sol_pesq, "codigo"]
+                                nome_sel_pesq = df_disp_pesquisa.loc[opcao_sol_pesq, "item"]
+                                adicionar_item_carrinho_ngi("carrinho_pesquisa", {"codigo": cod_sel_pesq, "item": nome_sel_pesq, "quantidade": int(qtd_sol_pesq)}, df_disp_pesquisa.loc[opcao_sol_pesq, "quantidade"])
+
+                            if st.session_state.carrinho_pesquisa:
+                                passo_pedido_ngi(2, "Confira o carrinho", detalhe=texto_qtd_itens_ngi(len(st.session_state.carrinho_pesquisa)))
+                                renderizar_carrinho_ngi("carrinho_pesquisa", "6")
+
+                                passo_pedido_ngi(3, "Adicione uma observação, se precisar, e envie")
+                                obs_sol_pesq = st.text_input("Observações (opcional):", placeholder="Ex.: material para a campanha de campo da próxima semana", key="obs_carrinho_pesquisa")
+
+                                if st.button(f"Enviar solicitação ({texto_qtd_itens_ngi(len(st.session_state.carrinho_pesquisa))})", type="primary", icon=":material/send:", key="enviar_carrinho_pesquisa"):
+                                    try:
+                                        lote_id_pesq = str(uuid.uuid4())
+                                        cursor = conn.cursor()
+                                        for item_carr_br in st.session_state.carrinho_pesquisa:
+                                            cursor.execute("""
+                                    INSERT INTO solicitacoes_almoxarifado 
+                                    (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, status, observacao, lote_id, origem_estoque)
+                                    VALUES ('MATERIAL', %s, %s, %s, %s, %s, 'COLMOP', 'PENDENTE', %s, %s, 'PESQUISA');
+                                """, (item_carr_br["codigo"], item_carr_br["item"], item_carr_br["quantidade"], st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, obs_sol_pesq.strip(), lote_id_pesq))
+                                        conn.commit()
+                                        st.session_state.carrinho_pesquisa = []
+                                        st.session_state["msg_sucesso_pesquisa"] = True
+                                        st.rerun()
+                                    except Exception as ex_pesq:
+                                        conn.rollback()
+                                        st.error(f"Erro ao enviar solicitação: {ex_pesq}")
+                            else:
+                                carrinho_vazio_ngi("pesquisa", campos=("Observações (opcional):",))
+
+            # =========================================================================
             # NOVO MÓDULO: LIVROS E PRODUTOS — GESTÃO (ADMINISTRADOR)
             # =========================================================================
             elif escolha == "Livros e Produtos" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum":
@@ -3926,6 +4273,8 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                                                 origem_sol = sol.get("origem_estoque")
                                                 if origem_sol == "BRIGADA":
                                                     tabela_estoque, tabela_movimentacao, coluna_item_mov = "produtos_brigada", "movimentacoes_brigada", "item"
+                                                elif origem_sol == "PESQUISA":
+                                                    tabela_estoque, tabela_movimentacao, coluna_item_mov = "produtos_pesquisa", "movimentacoes_pesquisa", "item"
                                                 elif origem_sol == "LIVROS":
                                                     tabela_estoque, tabela_movimentacao, coluna_item_mov = "produtos_livros", "movimentacoes_livros", "titulo"
                                                 else:
@@ -4210,7 +4559,7 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                         e = st.text_input("E-mail")
                         s = st.text_input("Senha", type="password")
                         p = st.selectbox("Perfil", ["Administrador", "Usuário Comum"])
-                        coord_novo_user = st.selectbox("Coordenação:", lista_coord_user, help="Coordenação à qual a pessoa está vinculada. Algumas telas do sistema (como Materiais Brigada) só ficam visíveis para coordenações específicas.")
+                        coord_novo_user = st.selectbox("Coordenação:", lista_coord_user, help="Coordenação à qual a pessoa está vinculada. Algumas telas do sistema (como Materiais Brigada e Materiais Pesquisa) só ficam visíveis para coordenações específicas.")
                 
                         if st.form_submit_button("Salvar", type="primary"):
                             if n and e:
