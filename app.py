@@ -535,6 +535,112 @@ ESTILO_MENU_LATERAL_NGI = {
                           "font-weight": "600", "border-left": "3px solid #55bd75"},
 }
 
+# =============================================================================
+# MENU LATERAL DO ADMINISTRADOR (com o grupo "Cadastros" que abre e fecha)
+# =============================================================================
+# Cada item: (texto exibido, valor de "escolha" usado nas telas, ícone)
+GRUPO_CADASTROS_NGI = [
+    ("Produtos", "Cadastrar Produto"),
+    ("Categorias", "Cadastrar Categoria"),
+    ("Coordenações", "Cadastrar Coordenação"),
+    ("Usuários", "Cadastrar Usuário"),
+]
+
+CSS_MENU_ADMIN_NGI = """
+<style>
+section[data-testid="stSidebar"] [class*="st-key-ngi_nav_"] button {
+    background: transparent !important; border: 0 !important; border-left: 3px solid transparent !important;
+    border-radius: 7px !important; justify-content: flex-start !important; text-align: left !important;
+    padding: 9px 12px !important; min-height: 40px !important; margin: 1px 0 !important; box-shadow: none !important;
+}
+section[data-testid="stSidebar"] [class*="st-key-ngi_nav_"] button > div,
+section[data-testid="stSidebar"] [class*="st-key-ngi_nav_"] button > div > span {
+    width: 100% !important; justify-content: flex-start !important; text-align: left !important;
+}
+section[data-testid="stSidebar"] [class*="st-key-ngi_nav_"] button [data-testid="stMarkdownContainer"] { flex: 1 1 auto; text-align: left !important; }
+section[data-testid="stSidebar"] [class*="st-key-ngi_nav_"] button p {
+    color: #e3eee8 !important; font-size: 13px !important; font-weight: 500 !important; text-align: left !important;
+}
+section[data-testid="stSidebar"] [class*="st-key-ngi_nav_"] button [data-testid="stIconMaterial"] {
+    color: #afcdbd !important; font-size: 19px !important; margin-right: 6px !important;
+}
+section[data-testid="stSidebar"] [class*="st-key-ngi_nav_"] button:hover { background: #164335 !important; }
+section[data-testid="stSidebar"] [class*="st-key-ngi_nav_on_"] button {
+    background: #194b38 !important; border-left-color: #55bd75 !important;
+}
+section[data-testid="stSidebar"] [class*="st-key-ngi_nav_on_"] button p { color: #ffffff !important; font-weight: 700 !important; }
+/* cabeçalho do grupo: seta à direita */
+section[data-testid="stSidebar"] [class*="st-key-ngi_nav_grupo"] button { position: relative; }
+section[data-testid="stSidebar"] [class*="st-key-ngi_nav_grupo"] button::after {
+    content: ""; position: absolute; right: 14px; top: 50%; width: 7px; height: 7px;
+    border-right: 2px solid #cfe0d6; border-bottom: 2px solid #cfe0d6; transform: translateY(-70%) rotate(45deg);
+}
+section[data-testid="stSidebar"] [class*="st-key-ngi_nav_grupo_aberto"] button::after { transform: translateY(-20%) rotate(-135deg); }
+/* subitens: recuo e linha vertical à esquerda */
+section[data-testid="stSidebar"] [class*="st-key-ngi_subnav"] {
+    margin: 2px 0 6px 21px; padding-left: 14px; border-left: 1px solid #2c5a49; gap: 0 !important;
+}
+section[data-testid="stSidebar"] [class*="st-key-ngi_subnav"] button { min-height: 36px !important; padding: 7px 12px !important; }
+section[data-testid="stSidebar"] [class*="st-key-ngi_navsep"] { border-top: 1px solid #234e40; margin: 10px 0 6px; }
+section[data-testid="stSidebar"] [class*="st-key-ngi_menu_admin"] { gap: 0 !important; }
+</style>
+"""
+
+
+def _selecionar_menu_admin_ngi(valor):
+    st.session_state.menu_admin_escolha = valor
+
+
+def _alternar_cadastros_ngi():
+    st.session_state.menu_cadastros_aberto = not st.session_state.get("menu_cadastros_aberto", False)
+
+
+def menu_lateral_admin_ngi(label_solicitacoes):
+    """Desenha o menu do administrador e devolve a tela escolhida."""
+    if "menu_admin_escolha" not in st.session_state:
+        st.session_state.menu_admin_escolha = "Painel Geral"
+    escolha_atual = st.session_state.menu_admin_escolha
+    if str(escolha_atual).startswith("Solicitações"):
+        escolha_atual = st.session_state.menu_admin_escolha = label_solicitacoes
+    valores_cadastro = [valor for _, valor in GRUPO_CADASTROS_NGI]
+    if "menu_cadastros_aberto" not in st.session_state:
+        st.session_state.menu_cadastros_aberto = escolha_atual in valores_cadastro
+
+    st.markdown(CSS_MENU_ADMIN_NGI, unsafe_allow_html=True)
+
+    def item(texto, valor, icone, chave):
+        ativo = escolha_atual == valor
+        with st.container(key=f"ngi_nav_{'on_' if ativo else ''}{chave}"):
+            st.button(texto, key=f"botao_menu_{chave}", icon=icone, use_container_width=True,
+                      on_click=_selecionar_menu_admin_ngi, args=(valor,))
+
+    with st.container(key="ngi_menu_admin"):
+        item("Painel Geral", "Painel Geral", ":material/grid_view:", "painel")
+        item("Materiais Disponíveis", "Materiais Disponíveis", ":material/inventory_2:", "materiais")
+        item("Empréstimo de Material", "Empréstimo de Material", ":material/sync:", "emprestimo")
+        item("Materiais Brigada", "Materiais Brigada", ":material/local_fire_department:", "brigada")
+        item("Materiais Pesquisa", "Materiais Pesquisa", ":material/travel_explore:", "pesquisa")
+        item("Livros e Produtos", "Livros e Produtos", ":material/menu_book:", "livros")
+
+        aberto = st.session_state.menu_cadastros_aberto
+        with st.container(key=f"ngi_nav_grupo_{'aberto' if aberto else 'fechado'}"):
+            st.button("Cadastros", key="botao_menu_cadastros", icon=":material/format_list_bulleted:",
+                      use_container_width=True, on_click=_alternar_cadastros_ngi)
+        if aberto:
+            with st.container(key="ngi_subnav_cadastros"):
+                for texto, valor in GRUPO_CADASTROS_NGI:
+                    item(texto, valor, None, "cad_" + valor.split()[-1].lower())
+
+        item("Movimentação de Estoque", "Movimentação de Estoque", ":material/swap_horiz:", "movimentacao")
+        item(label_solicitacoes, label_solicitacoes, ":material/notifications:", "solicitacoes")
+        item("Relatórios", "Relatórios", ":material/bar_chart:", "relatorios")
+        item("Controle de Equipamentos Emprestados", "Controle de Equipamentos Emprestados", ":material/laptop_chromebook:", "equipamentos")
+
+        st.container(key="ngi_navsep_sair", height=1, border=False)
+        item("Sair", "Sair do Sistema", ":material/logout:", "sair")
+
+    return escolha_atual
+
 def renderizar_indicadores_painel_ngi(total_itens, produtos_esgotados, total_movimentacoes):
     """Apresentação dos três indicadores existentes, sem mudar seus cálculos."""
     itens = (
@@ -2402,35 +2508,7 @@ with ConexaoExecucaoNGI() as conn:
 
                     label_solicitacoes = f"Solicitações ({qtd_pendentes_badge})" if qtd_pendentes_badge > 0 else "Solicitações"
 
-                    escolha = option_menu(
-                        menu_title=None,
-                        options=[
-                            "Painel Geral", 
-                            "Materiais Disponíveis",
-                            "Empréstimo de Material",
-                            "Cadastrar Produto", 
-                            "Materiais Brigada",
-                            "Materiais Pesquisa",
-                            "Livros e Produtos",
-                            "Cadastrar Categoria", 
-                            "Cadastrar Usuário", 
-                            "Cadastrar Coordenação",
-                            "Movimentação de Estoque",
-                            label_solicitacoes,
-                            "Relatórios",
-                            "Controle de Equipamentos Emprestados",
-                            "Sair do Sistema"
-                        ],
-                        icons=["grid", "box-seam", "arrow-repeat", "box", "fire", "binoculars", "book", "folder", "person-plus", "building", "arrow-left-right", "bell", "bar-chart-line", "laptop", "box-arrow-right"],
-                        menu_icon="cast",
-                        default_index=0,
-                        styles=ESTILO_MENU_LATERAL_NGI,
-                        # Chave fixa: quando o número de pendentes muda (ex.: ao aprovar),
-                        # o menu continua na tela atual em vez de voltar ao Painel Geral.
-                        key="menu_lateral_admin_ngi"
-                    )
-                    if str(escolha or "").startswith("Solicitações"):
-                        escolha = label_solicitacoes
+                    escolha = menu_lateral_admin_ngi(label_solicitacoes)
 
             st.markdown('<div class="ngi-breadcrumb">NGI Carajás &nbsp; / &nbsp; ' + html.escape(str(escolha)) + '</div>', unsafe_allow_html=True)
 
@@ -2455,6 +2533,9 @@ with ConexaoExecucaoNGI() as conn:
                 st.session_state.PERFIL_USUARIO_LOGADO = ""
                 st.session_state.EMAIL_USUARIO_LOGADO = ""
                 st.session_state.SESSION_TOKEN = ""
+                # O próximo login começa de novo pelo Painel Geral.
+                st.session_state.pop("menu_admin_escolha", None)
+                st.session_state.pop("menu_cadastros_aberto", None)
                 st.rerun()
 
             # --- TELA: PAINEL GERAL ---
