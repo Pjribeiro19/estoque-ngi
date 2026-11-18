@@ -318,6 +318,34 @@ def verificar_senha(senha_digitada, senha_banco):
         return False
 
 
+# Senhas fáceis demais: quem entrar com uma delas é obrigado a criar outra.
+SENHAS_FRACAS_NGI = {
+    "123", "1234", "12345", "123456", "1234567", "12345678", "123456789",
+    "000000", "111111", "123123", "654321", "abc123", "senha", "senha123",
+    "admin", "admin123", "ngi", "ngi123", "icmbio", "icmbio123", "carajas", "qwerty",
+}
+TAMANHO_MINIMO_SENHA_NGI = 6
+
+
+def senha_fraca_ngi(senha):
+    senha = str(senha or "").strip()
+    return len(senha) < TAMANHO_MINIMO_SENHA_NGI or senha.lower() in SENHAS_FRACAS_NGI
+
+
+def problema_nova_senha_ngi(senha, confirmacao):
+    """Devolve a mensagem de erro da nova senha, ou None se estiver tudo certo."""
+    senha = str(senha or "")
+    if not senha or not confirmacao:
+        return "Preencha os dois campos de senha."
+    if senha != confirmacao:
+        return "As senhas não coincidem."
+    if len(senha.strip()) < TAMANHO_MINIMO_SENHA_NGI:
+        return f"A senha deve ter pelo menos {TAMANHO_MINIMO_SENHA_NGI} caracteres."
+    if senha.strip().lower() in SENHAS_FRACAS_NGI:
+        return "Essa senha é muito fácil de adivinhar. Escolha outra."
+    return None
+
+
 def converter_para_horario_br(dt_utc):
     """O banco de dados (Neon Postgres) e o servidor (Railway) guardam os
     horários em UTC. Esta função converte para o horário de Brasília
@@ -622,6 +650,10 @@ def menu_lateral_admin_ngi(label_solicitacoes):
         item("Materiais Pesquisa", "Materiais Pesquisa", ":material/travel_explore:", "pesquisa")
         item("Livros e Produtos", "Livros e Produtos", ":material/menu_book:", "livros")
 
+        item("Movimentação de Estoque", "Movimentação de Estoque", ":material/swap_horiz:", "movimentacao")
+        item(label_solicitacoes, label_solicitacoes, ":material/notifications:", "solicitacoes")
+        item("Relatórios", "Relatórios", ":material/bar_chart:", "relatorios")
+
         aberto = st.session_state.menu_cadastros_aberto
         with st.container(key=f"ngi_nav_grupo_{'aberto' if aberto else 'fechado'}"):
             st.button("Cadastros", key="botao_menu_cadastros", icon=":material/format_list_bulleted:",
@@ -630,11 +662,6 @@ def menu_lateral_admin_ngi(label_solicitacoes):
             with st.container(key="ngi_subnav_cadastros"):
                 for texto, valor in GRUPO_CADASTROS_NGI:
                     item(texto, valor, None, "cad_" + valor.split()[-1].lower())
-
-        item("Movimentação de Estoque", "Movimentação de Estoque", ":material/swap_horiz:", "movimentacao")
-        item(label_solicitacoes, label_solicitacoes, ":material/notifications:", "solicitacoes")
-        item("Relatórios", "Relatórios", ":material/bar_chart:", "relatorios")
-        item("Controle de Equipamentos Emprestados", "Controle de Equipamentos Emprestados", ":material/laptop_chromebook:", "equipamentos")
 
         st.container(key="ngi_navsep_sair", height=1, border=False)
         item("Sair", "Sair do Sistema", ":material/logout:", "sair")
@@ -1220,46 +1247,6 @@ def carrinho_vazio_ngi(prefixo, campos=("Coordenação:", "Observações (opcion
         coluna.text_input(rotulo, value="", disabled=True, key=f"vazio_{prefixo}_{rotulo}")
     st.button("Enviar solicitação", type="primary", icon=":material/send:", disabled=True, key=f"enviar_vazio_{prefixo}")
 
-def gerar_excel_equipamentos_ngi(df_planilha, filtros_texto):
-    """Planilha formatada dos equipamentos emprestados (respeita os filtros da tela)."""
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    from openpyxl.utils import get_column_letter
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        df_planilha.to_excel(writer, sheet_name="Equipamentos", index=False, startrow=3)
-        ws = writer.sheets["Equipamentos"]
-        total_colunas = max(1, len(df_planilha.columns))
-        ws["A1"] = "Controle de Equipamentos Emprestados — NGI Carajás"
-        ws["A1"].font = Font(bold=True, size=14, color="147746")
-        agora_br = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%d/%m/%Y %H:%M")
-        ws["A2"] = f"Gerado em {agora_br} · {len(df_planilha)} registro(s) · {filtros_texto}"
-        ws["A2"].font = Font(italic=True, size=10, color="666666")
-        borda = Border(bottom=Side(style="thin", color="DCE5DF"))
-        for coluna in range(1, total_colunas + 1):
-            celula = ws.cell(row=4, column=coluna)
-            celula.font = Font(bold=True, color="FFFFFF")
-            celula.fill = PatternFill("solid", fgColor="147746")
-            celula.alignment = Alignment(vertical="center", wrap_text=True)
-            maior = max([len(str(celula.value or ""))] + [len(str(v)) for v in df_planilha.iloc[:, coluna - 1].fillna("")])
-            ws.column_dimensions[get_column_letter(coluna)].width = min(max(12, maior + 2), 50)
-        cores_status = {"Em uso": "D4EDDA", "Devolvido": "EEEEEE"}
-        coluna_status = list(df_planilha.columns).index("Status") + 1 if "Status" in df_planilha.columns else None
-        for linha in range(5, len(df_planilha) + 5):
-            for coluna in range(1, total_colunas + 1):
-                celula = ws.cell(row=linha, column=coluna)
-                celula.border = borda
-                celula.alignment = Alignment(vertical="top", wrap_text=True)
-                if hasattr(celula.value, "year"):
-                    celula.number_format = "DD/MM/YYYY"
-            if coluna_status:
-                cor = cores_status.get(str(ws.cell(row=linha, column=coluna_status).value))
-                if cor:
-                    ws.cell(row=linha, column=coluna_status).fill = PatternFill("solid", fgColor=cor)
-        ws.freeze_panes = "A5"
-        if len(df_planilha):
-            ws.auto_filter.ref = f"A4:{get_column_letter(total_colunas)}{len(df_planilha) + 4}"
-    return buffer.getvalue()
-
 def formulario_solicitacao_livros_ngi(df_disp_livros):
     """Carrinho de solicitação de livros/produtos. Usado pelo usuário comum
     (aba "Fazer solicitação") e pelo administrador (menu "Fazer Solicitação")."""
@@ -1318,6 +1305,517 @@ def formulario_solicitacao_livros_ngi(df_disp_livros):
                         st.error(f"Erro ao enviar solicitação: {ex_livro}")
         else:
             carrinho_vazio_ngi("livros", campos=("Coordenação: *", "Justificativa: *"))
+
+
+# =============================================================================
+# ESTOQUES SETORIAIS (Materiais Brigada, Materiais Pesquisa...)
+# =============================================================================
+# Os dois módulos funcionam igual: estoque próprio, categorias, entradas,
+# saídas, histórico e pedidos só para a coordenação dona do estoque.
+# O código é um só; o que muda de um para outro fica na configuração abaixo.
+# Para criar um novo estoque setorial: crie as 3 tabelas na inicialização,
+# acrescente uma configuração aqui e um item no menu.
+ESTOQUE_BRIGADA_NGI = {
+    "chave": "brigada",
+    "titulo": "Materiais Brigada",
+    "subtitulo": "Estoque próprio da Brigada, separado do almoxarifado geral",
+    "nome_estoque": "estoque da Brigada",
+    "coordenacao": "BRIGADA",            # quem pode pedir (coordenação do usuário)
+    "coordenacao_pedido": "Brigada",     # como o pedido aparece em Solicitações
+    "origem": "BRIGADA",                 # usado na aprovação para baixar o estoque certo
+    "rotulo_movimentacao": "Brigada",
+    "tabelas": ("produtos_brigada", "movimentacoes_brigada", "categorias_brigada"),
+    "titulo_pedido": "Nova solicitação de material da Brigada",
+    "exemplo_categorias": "Ex: EPI, Combate a Incêndio, Primeiros Socorros",
+    "exemplo_observacao": "Ex.: material para a operação de sábado",
+    "prefixo_botoes": "3",
+    "chave_botao_adicionar": "btn_add_4",
+}
+
+ESTOQUE_PESQUISA_NGI = {
+    "chave": "pesquisa",
+    "titulo": "Materiais Pesquisa",
+    "subtitulo": "Estoque próprio de materiais de pesquisa (COLMOP), separado do almoxarifado geral",
+    "nome_estoque": "estoque de Pesquisa",
+    "coordenacao": "COLMOP",
+    "coordenacao_pedido": "COLMOP",
+    "origem": "PESQUISA",
+    "rotulo_movimentacao": "Pesquisa",
+    "tabelas": ("produtos_pesquisa", "movimentacoes_pesquisa", "categorias_pesquisa"),
+    "titulo_pedido": "Nova solicitação de material de pesquisa",
+    "exemplo_categorias": "Ex: Coleta, Campo, Laboratório, Monitoramento",
+    "exemplo_observacao": "Ex.: material para a campanha de campo da próxima semana",
+    "prefixo_botoes": "6",
+    "chave_botao_adicionar": "btn_add_7",
+}
+
+
+def estoque_setorial_admin_ngi(cfg):
+    """Tela do administrador: gestão do estoque setorial."""
+    T_PROD, T_MOV, T_CAT = cfg["tabelas"]
+    cursor = conn.cursor()
+    renderizar_banner(cfg["titulo"], cfg["subtitulo"])
+    aba_admin = option_menu(
+        menu_title=None,
+        options=["Itens Disponíveis", "Cadastrar Item", "Gerenciar Categorias", "Registro de Entrada", "Registro de Saída", "Histórico de Movimentação", "Editar / Excluir Item"],
+        icons=["box-seam", "plus-circle", "tags", "arrow-down-circle", "arrow-up-circle", "journal-text", "pencil-square"],
+        orientation="horizontal",
+        styles=ESTILO_MENU_HORIZONTAL
+    )
+
+    df_raw_brig = pd.read_sql_query(f"SELECT * FROM {T_PROD} ORDER BY codigo ASC;", conn)
+    lista_siglas_coord_brig = dados_sob_demanda_ngi("coordenacoes")["Sigla"].tolist() if not dados_sob_demanda_ngi("coordenacoes").empty else ["GERAL"]
+
+    # ---------------------------------------------------------------
+    # ABA 1: ITENS DISPONÍVEIS
+    # ---------------------------------------------------------------
+    if aba_admin == "Itens Disponíveis":
+        if df_raw_brig.empty:
+            st.info(f"Nenhum material cadastrado no {cfg['nome_estoque']} ainda.")
+        else:
+            df_display_brig = df_raw_brig.rename(columns={"codigo": "Código", "item": "Item", "quantidade": "Quantidade", "categoria": "Categoria", "valor_unitario": "Valor Unitário"})
+            df_display_brig["Valor Unitário"] = df_display_brig["Valor Unitário"].map("R$ {:.2f}".format)
+            st.dataframe(df_display_brig, use_container_width=True, hide_index=True)
+
+    # ---------------------------------------------------------------
+    # ABA 2: CADASTRAR ITEM
+    # ---------------------------------------------------------------
+    elif aba_admin == "Cadastrar Item":
+        df_cat = pd.read_sql_query(f"SELECT nome FROM {T_CAT} ORDER BY nome ASC;", conn)
+        lista_categorias = df_cat["nome"].tolist()
+
+        with st.form(f"form_novo_produto_{cfg['chave']}", clear_on_submit=True):
+            col_ba, col_bb = st.columns(2)
+            cod_brig = col_ba.text_input("Código")
+            nome_it_brig = col_bb.text_input("Nome do Material")
+            cat_it_brig = col_ba.selectbox("Categoria", lista_categorias if lista_categorias else ["Nenhuma categoria cadastrada"])
+            val_unit_brig = col_bb.number_input("Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
+            qtd_inicial_brig = st.number_input("Quantidade Inicial:", min_value=0, value=0, step=1)
+
+            if st.form_submit_button("Finalizar Cadastro", type="primary"):
+                if cod_brig and nome_it_brig:
+                    try:
+                        cursor = conn.cursor()
+                        cursor.execute(f"INSERT INTO {T_PROD} VALUES (%s, %s, %s, %s, %s);", (cod_brig.strip(), nome_it_brig.strip(), int(qtd_inicial_brig), cat_it_brig, float(val_unit_brig)))
+                        conn.commit()
+                        st.success(f"Sucesso! {nome_it_brig} adicionado ao {cfg['nome_estoque']}.")
+                        st.rerun()
+                    except psycopg2.IntegrityError:
+                        conn.rollback()
+                        st.error(f"Erro! Código {cod_brig} já existe.")
+                else:
+                    st.error("Preencha ao menos o Código e o Nome do Material!")
+
+    # ---------------------------------------------------------------
+    # ABA 3: GERENCIAR CATEGORIAS
+    # ---------------------------------------------------------------
+    elif aba_admin == "Gerenciar Categorias":
+        df_cat_aba = pd.read_sql_query(f"SELECT nome FROM {T_CAT} ORDER BY nome ASC;", conn)
+        lista_categorias_aba = df_cat_aba["nome"].tolist()
+
+        st.markdown("### Categorias atuais")
+        if lista_categorias_aba:
+            st.dataframe(
+                df_cat_aba.rename(columns={"nome": "Categoria"}),
+                use_container_width=True, hide_index=True,
+                height=min(450, max(120, 38 * (len(lista_categorias_aba) + 1))),
+            )
+            with st.expander("Excluir uma categoria"):
+                cat_existente_brig = st.selectbox("Categoria para excluir:", lista_categorias_aba, key=f"cat_{cfg['chave']}_excluir_visual")
+                if st.button("Excluir categoria selecionada", key=f"del_cat_brig_{cat_existente_brig}"):
+                    cursor = conn.cursor()
+                    cursor.execute(f"DELETE FROM {T_CAT} WHERE nome = %s;", (cat_existente_brig,))
+                    conn.commit()
+                    st.rerun()
+        else:
+            st.info("Nenhuma categoria cadastrada ainda.")
+
+        st.markdown("### Adicionar categoria")
+        nova_cat_brig = st.text_input("Nova categoria:", placeholder=cfg["exemplo_categorias"], key=f"nova_cat_{cfg['chave']}")
+        with st.container(key="btn_add_3"):
+            clicou_add_cat_brig = st.button("Adicionar Categoria", key=f"add_cat_{cfg['chave']}")
+        if clicou_add_cat_brig:
+            if nova_cat_brig and nova_cat_brig.strip():
+                try:
+                    cursor = conn.cursor()
+                    cursor.execute(f"INSERT INTO {T_CAT} VALUES (%s);", (nova_cat_brig.strip(),))
+                    conn.commit()
+                    st.success("Categoria adicionada!")
+                    st.rerun()
+                except psycopg2.IntegrityError:
+                    conn.rollback()
+                    st.error("Esta categoria já existe.")
+
+    # ---------------------------------------------------------------
+    # ABA 4: REGISTRO DE ENTRADA
+    # ---------------------------------------------------------------
+    elif aba_admin == "Registro de Entrada":
+        if df_raw_brig.empty:
+            st.warning("Nenhum material cadastrado para movimentar.")
+        else:
+            with st.form(f"form_entrada_{cfg['chave']}", clear_on_submit=True):
+                col_be1, col_be2 = st.columns(2)
+                data_mov_brig = col_be1.date_input("Data da Movimentação:", value=datetime.today(), format="DD/MM/YYYY").strftime("%Y-%m-%d")
+                opcao_prod_brig_ent = col_be2.selectbox(
+                    "Selecione o Material:",
+                    df_raw_brig.index,
+                    format_func=lambda x: f"{df_raw_brig.loc[x, 'codigo']} - {df_raw_brig.loc[x, 'item']} (Saldo: {df_raw_brig.loc[x, 'quantidade']})"
+                )
+                qtd_mov_brig_ent = col_be1.number_input("Quantidade:", min_value=1, step=1, value=1)
+
+                if st.form_submit_button("Registrar Entrada", type="primary"):
+                    prod_codigo_brig = df_raw_brig.loc[opcao_prod_brig_ent, "codigo"]
+                    prod_nome_brig = df_raw_brig.loc[opcao_prod_brig_ent, "item"]
+                    nova_qtd_brig = int(df_raw_brig.loc[opcao_prod_brig_ent, "quantidade"]) + qtd_mov_brig_ent
+                    try:
+                        cursor = conn.cursor()
+                        cursor.execute(f"UPDATE {T_PROD} SET quantidade = %s WHERE codigo = %s;", (nova_qtd_brig, prod_codigo_brig))
+                        cursor.execute(f"""
+                    INSERT INTO {T_MOV} (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s);
+                """, (data_mov_brig, "Entrada", prod_codigo_brig, prod_nome_brig, qtd_mov_brig_ent, st.session_state.NOME_USUARIO_LOGADO, cfg["rotulo_movimentacao"]))
+                        conn.commit()
+                        st.success(f"Entrada de {qtd_mov_brig_ent} un. de '{prod_nome_brig}' registrada! Novo saldo: {nova_qtd_brig}.")
+                        st.rerun()
+                    except Exception as ex_ent_brig:
+                        conn.rollback()
+                        st.error(f"Erro ao salvar entrada: {ex_ent_brig}")
+
+    # ---------------------------------------------------------------
+    # ABA 5: REGISTRO DE SAÍDA
+    # ---------------------------------------------------------------
+    elif aba_admin == "Registro de Saída":
+        if df_raw_brig.empty:
+            st.warning("Nenhum material cadastrado para movimentar.")
+        else:
+            with st.form(f"form_saida_{cfg['chave']}", clear_on_submit=True):
+                col_bs1, col_bs2 = st.columns(2)
+                data_mov_brig_s = col_bs1.date_input("Data da Movimentação:", value=datetime.today(), format="DD/MM/YYYY").strftime("%Y-%m-%d")
+                opcao_prod_brig_sai = col_bs2.selectbox(
+                    "Selecione o Material:",
+                    df_raw_brig.index,
+                    format_func=lambda x: f"{df_raw_brig.loc[x, 'codigo']} - {df_raw_brig.loc[x, 'item']} (Saldo: {df_raw_brig.loc[x, 'quantidade']})",
+                    key=f"select_saida_{cfg['chave']}"
+                )
+                qtd_mov_brig_sai = col_bs1.number_input("Quantidade da Movimentação:", min_value=1, step=1, value=1)
+                resp_mov_brig = col_bs2.text_input("Nome da Pessoa Responsável pela Retirada:")
+                coord_mov_brig = col_bs1.selectbox("Coordenação Destino:", lista_siglas_coord_brig)
+
+                if st.form_submit_button("Registrar Saída", type="primary"):
+                    if not resp_mov_brig.strip():
+                        st.error("Por favor, digite o nome da pessoa responsável pela retirada.")
+                    else:
+                        prod_codigo_brig_s = df_raw_brig.loc[opcao_prod_brig_sai, "codigo"]
+                        prod_nome_brig_s = df_raw_brig.loc[opcao_prod_brig_sai, "item"]
+                        prod_qtd_atual_brig = int(df_raw_brig.loc[opcao_prod_brig_sai, "quantidade"])
+
+                        if prod_qtd_atual_brig >= qtd_mov_brig_sai:
+                            nova_qtd_brig_s = prod_qtd_atual_brig - qtd_mov_brig_sai
+                            try:
+                                cursor = conn.cursor()
+                                cursor.execute(f"UPDATE {T_PROD} SET quantidade = %s WHERE codigo = %s;", (nova_qtd_brig_s, prod_codigo_brig_s))
+                                cursor.execute(f"""
+                            INSERT INTO {T_MOV} (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s);
+                        """, (data_mov_brig_s, "Saída", prod_codigo_brig_s, prod_nome_brig_s, qtd_mov_brig_sai, resp_mov_brig.strip(), coord_mov_brig))
+                                conn.commit()
+                                st.success(f"Saída de {qtd_mov_brig_sai} un. de '{prod_nome_brig_s}' registrada! Novo saldo: {nova_qtd_brig_s}.")
+                                st.rerun()
+                            except Exception as ex_sai_brig:
+                                conn.rollback()
+                                st.error(f"Erro ao salvar saída: {ex_sai_brig}")
+                        else:
+                            st.error(f"Saldo Insuficiente! O material possui apenas {prod_qtd_atual_brig} unidades no estoque.")
+
+    # ---------------------------------------------------------------
+    # ABA 6: HISTÓRICO DE MOVIMENTAÇÃO
+    # ---------------------------------------------------------------
+    elif aba_admin == "Histórico de Movimentação":
+        df_mov_brig = pd.read_sql_query(f"SELECT data AS Data, tipo AS Tipo, codigo AS Código, item AS Item, quantidade AS Quantidade, responsavel AS Responsável, coordenacao AS Coordenação FROM {T_MOV} ORDER BY id DESC;", conn)
+        if df_mov_brig.empty:
+            st.info("Nenhuma movimentação registrada até o momento.")
+        else:
+            st.dataframe(df_mov_brig, use_container_width=True, hide_index=True)
+
+    # ---------------------------------------------------------------
+    # ABA 7: EDITAR / EXCLUIR ITEM
+    # ---------------------------------------------------------------
+    elif aba_admin == "Editar / Excluir Item":
+        if df_raw_brig.empty:
+            st.info(f"Nenhum material cadastrado no {cfg['nome_estoque']} ainda.")
+        else:
+            opcao_brig_edit = st.selectbox("Selecione para modificar:", df_raw_brig.index, format_func=lambda x: f"{df_raw_brig.loc[x, 'codigo']} - {df_raw_brig.loc[x, 'item']}")
+            cod_atual_brig = df_raw_brig.loc[opcao_brig_edit, "codigo"]
+
+            col_edb1, col_edb2 = st.columns(2)
+            edit_cod_brig = col_edb1.text_input("Código:", value=df_raw_brig.loc[opcao_brig_edit, "codigo"])
+            edit_item_brig = col_edb2.text_input("Nome:", value=df_raw_brig.loc[opcao_brig_edit, "item"])
+            edit_qtd_brig = col_edb1.number_input("Quantidade (Ajuste):", min_value=0, value=int(df_raw_brig.loc[opcao_brig_edit, "quantidade"]))
+            df_cat_edit = pd.read_sql_query(f"SELECT nome FROM {T_CAT} ORDER BY nome ASC;", conn)
+            lista_categorias_edit = df_cat_edit["nome"].tolist()
+            cat_atual_brig_edit = df_raw_brig.loc[opcao_brig_edit, "categoria"]
+            if cat_atual_brig_edit and cat_atual_brig_edit not in lista_categorias_edit:
+                lista_categorias_edit = [cat_atual_brig_edit] + lista_categorias_edit
+            idx_cat_brig_edit = lista_categorias_edit.index(cat_atual_brig_edit) if cat_atual_brig_edit in lista_categorias_edit else 0
+            edit_cat_brig = col_edb2.selectbox("Categoria:", lista_categorias_edit if lista_categorias_edit else ["Nenhuma categoria cadastrada"], index=idx_cat_brig_edit)
+            edit_val_brig = st.number_input("Valor Unitário:", min_value=0.0, step=0.01, format="%.2f", value=float(df_raw_brig.loc[opcao_brig_edit, "valor_unitario"] or 0))
+
+            col_bbtn1, col_bbtn2 = st.columns([1, 4])
+            with col_bbtn1:
+                if st.button("Salvar Alterações", type="primary"):
+                    cursor = conn.cursor()
+                    cursor.execute(f"""
+                UPDATE {T_PROD} 
+                SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
+                WHERE codigo = %s;
+            """, (edit_cod_brig.strip(), edit_item_brig.strip(), edit_qtd_brig, edit_cat_brig.strip(), float(edit_val_brig), cod_atual_brig))
+                    conn.commit()
+                    st.success("Modificado com sucesso!")
+                    st.rerun()
+
+            with col_bbtn2:
+                if st.button("Excluir Produto"):
+                    cursor = conn.cursor()
+                    cursor.execute(f"DELETE FROM {T_PROD} WHERE codigo = %s;", (cod_atual_brig,))
+                    conn.commit()
+                    st.warning("Removido com sucesso.")
+                    st.rerun()
+
+
+def estoque_setorial_usuario_ngi(cfg):
+    """Tela do usuário da coordenação dona do estoque: consulta e pedido."""
+    T_PROD, T_MOV, T_CAT = cfg["tabelas"]
+    CARRINHO = f"carrinho_{cfg['chave']}"
+    MSG_SUCESSO = f"msg_sucesso_{cfg['chave']}"
+    cursor = conn.cursor()
+    if (st.session_state.get("COORDENACAO_USUARIO_LOGADO") or "").strip().upper() != cfg["coordenacao"]:
+        st.error(f"Acesso restrito à coordenação {cfg['coordenacao']}.")
+    else:
+        renderizar_banner(cfg["titulo"], cfg["subtitulo"])
+
+        if st.session_state.get(MSG_SUCESSO):
+            st.success("Sua solicitação foi encaminhada com sucesso!")
+            del st.session_state[MSG_SUCESSO]
+
+        df_disp = pd.read_sql_query(f"SELECT codigo, item, quantidade, categoria, valor_unitario FROM {T_PROD} WHERE quantidade > 0 ORDER BY codigo ASC;", conn)
+
+        if df_disp.empty:
+            st.info(f"Nenhum material disponível no {cfg['nome_estoque']} no momento.")
+        else:
+            st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #147746; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
+
+            termo_busca_brig = st.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...", key=f"busca_material_{cfg['chave']}")
+            df_disp_filtrado = df_disp.copy()
+            if termo_busca_brig:
+                df_disp_filtrado = df_disp_filtrado[
+                    df_disp_filtrado['item'].str.contains(termo_busca_brig, case=False, na=False) |
+                    df_disp_filtrado['codigo'].str.contains(termo_busca_brig, case=False, na=False)
+                ]
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.dataframe(df_disp_filtrado.rename(columns={"codigo": "Código", "item": "Item", "quantidade": "Quantidade", "categoria": "Categoria"}).drop(columns=["valor_unitario"]), use_container_width=True, hide_index=True)
+
+            if CARRINHO not in st.session_state:
+                st.session_state[CARRINHO] = []
+
+            with st.container(border=True):
+                cabecalho_pedido_ngi(cfg["titulo_pedido"], "Siga os 3 passos. Todos os itens do carrinho seguem juntos em um único pedido.")
+                passo_pedido_ngi(1, 'Escolha o material e clique em "Adicionar ao carrinho"')
+
+                col_add_br1, col_add_br2, col_add_br3 = st.columns([3, 1, 1.3])
+                opcao_sol_brig = col_add_br1.selectbox(
+                    "Material:",
+                    df_disp.index,
+                    format_func=lambda x: f"{df_disp.loc[x, 'codigo']} - {df_disp.loc[x, 'item']} (Saldo: {df_disp.loc[x, 'quantidade']})",
+                    key=f"select_material_{cfg['chave']}"
+                )
+                qtd_sol_brig = col_add_br2.number_input("Quantidade:", min_value=1, max_value=int(df_disp.loc[opcao_sol_brig, "quantidade"]), value=1, step=1, key=f"qtd_material_{cfg['chave']}")
+                col_add_br3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
+                with col_add_br3:
+                    with st.container(key=cfg["chave_botao_adicionar"]):
+                        clicou_add_4 = st.button("Adicionar ao carrinho", icon=":material/add_shopping_cart:", key=f"add_carrinho_{cfg['chave']}", use_container_width=True)
+                if clicou_add_4:
+                    cod_sel_brig = df_disp.loc[opcao_sol_brig, "codigo"]
+                    nome_sel_brig = df_disp.loc[opcao_sol_brig, "item"]
+                    adicionar_item_carrinho_ngi(CARRINHO, {"codigo": cod_sel_brig, "item": nome_sel_brig, "quantidade": int(qtd_sol_brig)}, df_disp.loc[opcao_sol_brig, "quantidade"])
+
+                if st.session_state[CARRINHO]:
+                    passo_pedido_ngi(2, "Confira o carrinho", detalhe=texto_qtd_itens_ngi(len(st.session_state[CARRINHO])))
+                    renderizar_carrinho_ngi(CARRINHO, cfg["prefixo_botoes"])
+
+                    passo_pedido_ngi(3, "Adicione uma observação, se precisar, e envie")
+                    obs_sol_brig = st.text_input("Observações (opcional):", placeholder=cfg["exemplo_observacao"], key=f"obs_carrinho_{cfg['chave']}")
+
+                    if st.button(f"Enviar solicitação ({texto_qtd_itens_ngi(len(st.session_state[CARRINHO]))})", type="primary", icon=":material/send:", key=f"enviar_carrinho_{cfg['chave']}"):
+                        try:
+                            lote_id_brig = str(uuid.uuid4())
+                            cursor = conn.cursor()
+                            for item_carr_br in st.session_state[CARRINHO]:
+                                cursor.execute("""
+                        INSERT INTO solicitacoes_almoxarifado 
+                        (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, status, observacao, lote_id, origem_estoque)
+                        VALUES ('MATERIAL', %s, %s, %s, %s, %s, %s, 'PENDENTE', %s, %s, %s);
+                    """, (item_carr_br["codigo"], item_carr_br["item"], item_carr_br["quantidade"], st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, cfg["coordenacao_pedido"], obs_sol_brig.strip(), lote_id_brig, cfg["origem"]))
+                            conn.commit()
+                            st.session_state[CARRINHO] = []
+                            st.session_state[MSG_SUCESSO] = True
+                            st.rerun()
+                        except Exception as ex_brig:
+                            conn.rollback()
+                            st.error(f"Erro ao enviar solicitação: {ex_brig}")
+                else:
+                    carrinho_vazio_ngi(cfg["chave"], campos=("Observações (opcional):",))
+
+
+def tela_trocar_senha_obrigatoria_ngi():
+    """Quem entrou com senha fraca cria uma nova antes de usar o sistema."""
+    _, col_centro, _ = st.columns([1, 1.3, 1])
+    with col_centro:
+        st.markdown("<div style='height:40px'></div>", unsafe_allow_html=True)
+        with st.container(border=True):
+            st.markdown(
+                '<div class="ngi-stock-heading"><h3>Crie uma nova senha</h3>'
+                f'<p>Olá, {html.escape(str(st.session_state.get("NOME_USUARIO_LOGADO", "")))}. Sua senha atual é muito fácil de adivinhar. '
+                f'Para proteger o sistema, crie uma senha nova com pelo menos {TAMANHO_MINIMO_SENHA_NGI} caracteres antes de continuar.</p></div>',
+                unsafe_allow_html=True)
+            with st.form("form_troca_senha_obrigatoria"):
+                nova = st.text_input("Nova senha", type="password")
+                confirmacao = st.text_input("Confirmar nova senha", type="password")
+                salvar = st.form_submit_button("Salvar e continuar", type="primary", use_container_width=True)
+            if salvar:
+                problema = problema_nova_senha_ngi(nova, confirmacao)
+                if problema:
+                    st.error(problema)
+                else:
+                    try:
+                        with conn.cursor() as cursor_troca:
+                            cursor_troca.execute(
+                                "UPDATE usuarios SET senha = %s, trocar_senha = FALSE WHERE LOWER(email) = %s;",
+                                (gerar_hash_senha(nova.strip()), str(st.session_state.EMAIL_USUARIO_LOGADO).lower()))
+                        conn.commit()
+                        st.session_state.TROCAR_SENHA_OBRIGATORIO = False
+                        st.toast("Senha alterada com sucesso!")
+                        st.rerun()
+                    except Exception as erro_troca:
+                        conn.rollback()
+                        st.error(f"Não foi possível salvar a nova senha: {erro_troca}")
+            if st.button("Sair do sistema", use_container_width=True, key="sair_troca_senha"):
+                try:
+                    with conn.cursor() as cursor_sair:
+                        cursor_sair.execute("DELETE FROM sessoes_login WHERE token = %s;", (st.session_state.get("SESSION_TOKEN", ""),))
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                try:
+                    cookie_controller.remove("session")
+                except Exception:
+                    pass
+                for chave in ("NOME_USUARIO_LOGADO", "PERFIL_USUARIO_LOGADO", "EMAIL_USUARIO_LOGADO", "SESSION_TOKEN"):
+                    st.session_state[chave] = ""
+                st.session_state.autenticado = False
+                st.session_state.TROCAR_SENHA_OBRIGATORIO = False
+                st.rerun()
+
+
+# Tabelas que NÃO entram no backup (dados temporários de login).
+TABELAS_FORA_DO_BACKUP_NGI = {"sessoes_login", "recuperacoes_senha", "config_sistema", "backups_sistema"}
+BACKUPS_GUARDADOS_NGI = 7          # quantos backups diários ficam guardados no sistema
+HORA_BACKUP_AUTOMATICO_NGI = 6     # a partir de que hora (Brasília) o backup do dia é feito
+
+
+def gerar_backup_excel_ngi(conexao, gerado_por="Backup automático"):
+    """Uma aba por tabela do banco. Fica de fora: fotos, senhas e sessões.
+    Recebe a conexão para poder rodar também em segundo plano (sem tela)."""
+    from openpyxl.styles import Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    with conexao.cursor() as cursor_bkp:
+        cursor_bkp.execute("""
+            SELECT table_name, column_name, data_type FROM information_schema.columns
+            WHERE table_schema = 'public' ORDER BY table_name, ordinal_position;
+        """)
+        colunas_por_tabela = {}
+        for tabela, coluna, tipo in cursor_bkp.fetchall():
+            if tabela in TABELAS_FORA_DO_BACKUP_NGI or tipo == "bytea":
+                continue
+            if tabela == "usuarios" and coluna == "senha":
+                continue
+            colunas_por_tabela.setdefault(tabela, []).append(coluna)
+    resumo = []
+    destino = io.BytesIO()
+    with pd.ExcelWriter(destino, engine="openpyxl") as writer:
+        pd.DataFrame().to_excel(writer, sheet_name="Resumo", index=False)
+        for tabela, colunas in colunas_por_tabela.items():
+            lista = ", ".join('"' + c.replace('"', '""') + '"' for c in colunas)
+            df_tabela = pd.read_sql_query(f'SELECT {lista} FROM "{tabela}";', conexao)
+            for coluna in df_tabela.columns:
+                if isinstance(df_tabela[coluna].dtype, pd.DatetimeTZDtype):
+                    df_tabela[coluna] = df_tabela[coluna].dt.tz_localize(None)
+            df_tabela.to_excel(writer, sheet_name=tabela[:31], index=False)
+            ws = writer.sheets[tabela[:31]]
+            for indice, coluna in enumerate(df_tabela.columns, start=1):
+                celula = ws.cell(row=1, column=indice)
+                celula.font = Font(bold=True, color="FFFFFF")
+                celula.fill = PatternFill("solid", fgColor="147746")
+                ws.column_dimensions[get_column_letter(indice)].width = min(45, max(12, len(str(coluna)) + 4))
+            ws.freeze_panes = "A2"
+            resumo.append((tabela, len(df_tabela)))
+        ws_resumo = writer.sheets["Resumo"]
+        agora_br = datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%d/%m/%Y %H:%M")
+        ws_resumo["A1"] = "Backup do SIGAL — NGI Carajás"
+        ws_resumo["A1"].font = Font(bold=True, size=14, color="147746")
+        ws_resumo["A2"] = f"Gerado em {agora_br} ({gerado_por})"
+        ws_resumo["A3"] = "Não incluídos por segurança: fotos, senhas e sessões de login."
+        ws_resumo["A5"], ws_resumo["B5"] = "Tabela", "Registros"
+        ws_resumo["A5"].font = ws_resumo["B5"].font = Font(bold=True)
+        for linha, (tabela, total) in enumerate(resumo, start=6):
+            ws_resumo.cell(row=linha, column=1, value=tabela)
+            ws_resumo.cell(row=linha, column=2, value=total)
+        ws_resumo.column_dimensions["A"].width = 32
+        ws_resumo.column_dimensions["B"].width = 12
+    return destino.getvalue(), sum(total for _, total in resumo), len(resumo)
+
+
+def painel_backup_ngi():
+    """Mostra os backups automáticos (feitos todo dia, sem ninguém precisar clicar)."""
+    with st.container(border=True):
+        st.markdown('<div class="ngi-stock-heading"><h3>Backup automático</h3>'
+                    f'<p>Todo dia, a partir das {HORA_BACKUP_AUTOMATICO_NGI}h, o sistema gera sozinho um Excel com todas as tabelas, '
+                    'envia por e-mail e guarda aqui os últimos ' + str(BACKUPS_GUARDADOS_NGI) + ' dias. '
+                    'Fotos, senhas e sessões de login não entram no arquivo.</p></div>', unsafe_allow_html=True)
+        try:
+            df_bkp = pd.read_sql_query(
+                "SELECT id, criado_em, tabelas, registros, enviado_para, situacao_email FROM backups_sistema ORDER BY criado_em DESC;", conn)
+        except Exception:
+            conn.rollback()
+            df_bkp = pd.DataFrame()
+        if df_bkp.empty:
+            st.info("O primeiro backup automático será feito hoje, a partir das "
+                    f"{HORA_BACKUP_AUTOMATICO_NGI}h (ou nos próximos minutos, se já passou desse horário).")
+            return
+        ultimo = df_bkp.iloc[0]
+        quando = pd.to_datetime(ultimo["criado_em"])
+        situacao = str(ultimo["situacao_email"] or "")
+        texto_email = f"enviado para {ultimo['enviado_para']}" if situacao == "enviado" else f"e-mail não enviado ({situacao})"
+        st.caption(f"Último backup: {quando.strftime('%d/%m/%Y às %H:%M')} · {int(ultimo['tabelas'])} tabelas, "
+                   f"{int(ultimo['registros'])} registros · {texto_email}.")
+        col_sel, col_bt = st.columns([2, 1], vertical_alignment="bottom")
+        opcao = col_sel.selectbox(
+            "Baixar um backup guardado:", df_bkp.index,
+            format_func=lambda x: pd.to_datetime(df_bkp.loc[x, "criado_em"]).strftime("%d/%m/%Y às %H:%M"),
+            key="backup_escolhido")
+        id_bkp = int(df_bkp.loc[opcao, "id"])
+        if st.session_state.get("backup_baixar_id") != id_bkp:
+            with conn.cursor() as cursor_arq:
+                cursor_arq.execute("SELECT arquivo FROM backups_sistema WHERE id = %s;", (id_bkp,))
+                registro = cursor_arq.fetchone()
+            st.session_state.backup_baixar_id = id_bkp
+            st.session_state.backup_baixar_dados = bytes(registro[0]) if registro and registro[0] is not None else b""
+        col_bt.download_button(
+            "Baixar (Excel)", data=st.session_state.backup_baixar_dados,
+            file_name=f"Backup_SIGAL_{pd.to_datetime(df_bkp.loc[opcao, 'criado_em']).strftime('%Y%m%d_%H%M')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            icon=":material/download:", type="primary", use_container_width=True, key="baixar_backup",
+            disabled=not st.session_state.backup_baixar_dados)
 
 
 # Controlador de cookies do navegador (mantém o login sem sujar a URL)
@@ -1475,6 +1973,20 @@ def inicializar_banco_automatico():
     # NOVO MÓDULO: MATERIAIS BRIGADA (estoque separado, acesso restrito)
     # =========================================================================
     cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS coordenacao TEXT;")
+    # Backups automáticos diários (guarda os 7 mais recentes)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS backups_sistema (
+            id SERIAL PRIMARY KEY,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            arquivo BYTEA,
+            tabelas INTEGER,
+            registros INTEGER,
+            enviado_para TEXT,
+            situacao_email TEXT
+        );
+    """)
+    # Marca quem precisa trocar a senha no próximo acesso (senha fraca).
+    cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS trocar_senha BOOLEAN DEFAULT FALSE;")
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS produtos_brigada (
@@ -1857,43 +2369,60 @@ def limpar_caches_ngi():
 
 @st.cache_resource(show_spinner=False)
 def estado_lembretes_ngi():
-    return {"lock": threading.Lock(), "proxima": 0.0, "executando": False}
+    return {"lock": threading.Lock(), "iniciado": False}
+
+
+INTERVALO_ROTINAS_NGI = 1800   # segundos entre uma verificação e outra (30 min)
 
 
 def agendar_lembretes_ngi():
-    """Executa lembretes fora da tela, em conexão exclusiva, sem usar APIs do Streamlit na thread."""
+    """Liga, uma única vez por servidor, o relógio interno que roda sozinho em
+    segundo plano: lembrete de devolução em atraso e backup diário.
+    Não depende de ninguém estar usando o sistema depois que ele subiu."""
     estado = estado_lembretes_ngi()
     with estado["lock"]:
-        if estado["executando"] or time.monotonic() < estado["proxima"]:
+        if estado["iniciado"]:
             return
         dsn = os.environ.get("POSTGRES_URL") or st.secrets["postgres"]["url"]
-        estado["executando"] = True
-        estado["proxima"] = time.monotonic() + 600
+        estado["iniciado"] = True
 
-    def tarefa():
+    def rodar_uma_vez():
         conexao = None
         try:
             conexao = psycopg2.connect(dsn, connect_timeout=10)
-            # Trava transacional evita duas instâncias enviarem o mesmo lote ao mesmo tempo.
+            # Trava: se houver mais de um servidor, só um executa por vez.
             with conexao.cursor() as trava:
-                trava.execute("SELECT pg_try_advisory_xact_lock(684217903);")
+                trava.execute("SELECT pg_try_advisory_lock(684217903);")
                 pode_executar = trava.fetchone()[0]
+            conexao.commit()
             if pode_executar:
-                verificar_e_notificar_emprestimos_atrasados(conexao)
+                try:
+                    verificar_e_notificar_emprestimos_atrasados(conexao)
+                    executar_backup_automatico_ngi(conexao)
+                finally:
+                    with conexao.cursor() as trava:
+                        trava.execute("SELECT pg_advisory_unlock(684217903);")
+                    conexao.commit()
         except Exception as erro:
-            print(f"[LEMBRETE ATRASO] Falha no processamento em segundo plano: {type(erro).__name__}")
+            print(f"[ROTINAS] Falha no processamento em segundo plano: {type(erro).__name__}: {erro}")
         finally:
-            try:
-                if conexao is not None:
+            if conexao is not None:
+                try:
                     conexao.close()
-            finally:
-                with estado["lock"]:
-                    estado["executando"] = False
+                except Exception:
+                    pass
+
+    def relogio():
+        time.sleep(20)   # deixa o sistema terminar de subir
+        while True:
+            rodar_uma_vez()
+            time.sleep(INTERVALO_ROTINAS_NGI)
+
     try:
-        threading.Thread(target=tarefa, name="ngi-lembretes", daemon=True).start()
+        threading.Thread(target=relogio, name="ngi-rotinas", daemon=True).start()
     except Exception:
         with estado["lock"]:
-            estado["executando"] = False
+            estado["iniciado"] = False
         raise
 
 
@@ -1962,7 +2491,7 @@ with ConexaoExecucaoNGI() as conn:
         texto = texto.replace("&nbsp;", " ").strip()
         return texto
 
-    def enviar_email_notificacao(destinatario, assunto, corpo_html):
+    def enviar_email_notificacao(destinatario, assunto, corpo_html, anexos=None):
         if not RESEND_API_KEY or not RESEND_REMETENTE or not destinatario:
             print(f"[EMAIL] Envio ignorado - Resend não configurado ou destinatário vazio (destino={destinatario})")
             return False, "Envio de e-mail não configurado no sistema (variáveis RESEND_API_KEY / RESEND_FROM_EMAIL ausentes)."
@@ -1996,9 +2525,13 @@ with ConexaoExecucaoNGI() as conn:
                     "to": [destinatario],
                     "subject": assunto,
                     "html": corpo_html_completo,
-                    "text": corpo_texto
+                    "text": corpo_texto,
+                    **({"attachments": [
+                        {"filename": nome_anexo, "content": base64.b64encode(conteudo_anexo).decode("utf-8")}
+                        for nome_anexo, conteudo_anexo in anexos
+                    ]} if anexos else {})
                 },
-                timeout=10
+                timeout=60 if anexos else 10
             )
             if resposta.status_code in (200, 201):
                 print(f"[EMAIL] Enviado com sucesso para {destinatario} - Assunto: {assunto}")
@@ -2069,7 +2602,94 @@ with ConexaoExecucaoNGI() as conn:
             conexao.rollback()
             print(f"[LEMBRETE ATRASO] Erro ao verificar empréstimos atrasados: {ex_atraso}")
 
-    # Lembretes são agendados somente após autenticação, sem bloquear a tela.
+    # =============================================================================
+    # BACKUP AUTOMÁTICO DIÁRIO (roda sozinho, 1x por dia, em segundo plano)
+    # =============================================================================
+    # Destino do e-mail: variável BACKUP_EMAILS no Render (vários e-mails
+    # separados por vírgula). Sem ela, vai para todos os administradores.
+    def destinatarios_backup_ngi(conexao):
+        configurados = os.environ.get("BACKUP_EMAILS", "")
+        if not configurados:
+            try:
+                configurados = st.secrets["backup"]["emails"]
+            except Exception:
+                configurados = ""
+        lista = [e.strip() for e in str(configurados).replace(";", ",").split(",") if e.strip()]
+        if lista:
+            return lista
+        with conexao.cursor() as cursor_dest:
+            cursor_dest.execute("SELECT email FROM usuarios WHERE perfil = 'Administrador' AND email IS NOT NULL AND email <> 'admin@ngi.com';")
+            return [linha[0] for linha in cursor_dest.fetchall()]
+
+    def executar_backup_automatico_ngi(conexao, forcar=False):
+        agora = datetime.now(ZoneInfo("America/Sao_Paulo"))
+        hoje_str = agora.date().isoformat()
+        try:
+            with conexao.cursor() as cursor_bkp:
+                # O relógio pode rodar antes da primeira tela criar as tabelas.
+                cursor_bkp.execute("""
+                    CREATE TABLE IF NOT EXISTS backups_sistema (
+                        id SERIAL PRIMARY KEY, criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP, arquivo BYTEA,
+                        tabelas INTEGER, registros INTEGER, enviado_para TEXT, situacao_email TEXT);
+                """)
+                cursor_bkp.execute("CREATE TABLE IF NOT EXISTS config_sistema (chave TEXT PRIMARY KEY, valor TEXT);")
+                conexao.commit()
+                cursor_bkp.execute("SELECT valor FROM config_sistema WHERE chave = 'ultimo_backup_automatico';")
+                registro = cursor_bkp.fetchone()
+            conexao.rollback()
+            if not forcar and ((registro and registro[0] == hoje_str) or agora.hour < HORA_BACKUP_AUTOMATICO_NGI):
+                return False
+
+            arquivo, registros, tabelas = gerar_backup_excel_ngi(conexao)
+            nome_arquivo = f"Backup_SIGAL_{agora.strftime('%Y%m%d_%H%M')}.xlsx"
+
+            destinos = destinatarios_backup_ngi(conexao)
+            enviados, falhas = [], []
+            for destino in destinos:
+                sucesso, erro = enviar_email_notificacao(
+                    destino,
+                    f"Backup diário do SIGAL — {agora.strftime('%d/%m/%Y')}",
+                    f"""
+                <p>Segue em anexo o backup automático do Sistema de Gestão de Almoxarifado (SIGAL), gerado em
+                {agora.strftime('%d/%m/%Y às %H:%M')}.</p>
+                <p><b>Tabelas:</b> {tabelas}<br><b>Registros:</b> {registros}</p>
+                <p>Guarde este arquivo em local seguro. Fotos, senhas e sessões de login não fazem parte do backup.</p>
+                """,
+                    anexos=[(nome_arquivo, arquivo)]
+                )
+                (enviados if sucesso else falhas).append(destino if sucesso else f"{destino}: {erro}")
+            if not destinos:
+                situacao = "sem destinatário configurado"
+            elif falhas and not enviados:
+                situacao = "falha: " + "; ".join(falhas)[:300]
+            else:
+                situacao = "enviado"
+
+            with conexao.cursor() as cursor_bkp:
+                cursor_bkp.execute(
+                    "INSERT INTO backups_sistema (criado_em, arquivo, tabelas, registros, enviado_para, situacao_email) VALUES (%s, %s, %s, %s, %s, %s);",
+                    (agora.replace(tzinfo=None), psycopg2.Binary(arquivo), tabelas, registros, ", ".join(enviados) or "—", situacao))
+                cursor_bkp.execute(
+                    "DELETE FROM backups_sistema WHERE id NOT IN (SELECT id FROM backups_sistema ORDER BY criado_em DESC LIMIT %s);",
+                    (BACKUPS_GUARDADOS_NGI,))
+                cursor_bkp.execute("""
+                INSERT INTO config_sistema (chave, valor) VALUES ('ultimo_backup_automatico', %s)
+                ON CONFLICT (chave) DO UPDATE SET valor = %s;
+            """, (hoje_str, hoje_str))
+            conexao.commit()
+            print(f"[BACKUP] Backup diário gerado ({tabelas} tabelas, {registros} registros) - e-mail: {situacao}")
+            return True
+        except Exception as erro_bkp:
+            conexao.rollback()
+            print(f"[BACKUP] Erro no backup automático: {erro_bkp}")
+            return False
+
+    # Lembretes e backup rodam em segundo plano (ver agendar_lembretes_ngi).
+    # O relógio é ligado no primeiro acesso ao sistema (inclusive na tela de login).
+    try:
+        agendar_lembretes_ngi()
+    except Exception as erro_relogio:
+        print(f"[ROTINAS] Não foi possível iniciar o relógio interno: {erro_relogio}")
 
 
     # =============================================================================
@@ -2219,9 +2839,10 @@ with ConexaoExecucaoNGI() as conn:
                         st.session_state.EMAIL_USUARIO_LOGADO = email_sessao
                         st.session_state.SESSION_TOKEN = token_cookie
 
-                        cursor_sessao.execute("SELECT coordenacao FROM usuarios WHERE LOWER(email) = %s;", (email_sessao.lower(),))
+                        cursor_sessao.execute("SELECT coordenacao, COALESCE(trocar_senha, FALSE) FROM usuarios WHERE LOWER(email) = %s;", (email_sessao.lower(),))
                         resultado_coord_sessao = cursor_sessao.fetchone()
                         st.session_state.COORDENACAO_USUARIO_LOGADO = resultado_coord_sessao[0] if resultado_coord_sessao else None
+                        st.session_state.TROCAR_SENHA_OBRIGATORIO = bool(resultado_coord_sessao[1]) if resultado_coord_sessao else False
 
                         nova_expiracao = datetime.now() + timedelta(minutes=SESSAO_DURACAO_MINUTOS)
                         cursor_sessao.execute(
@@ -2294,16 +2915,13 @@ with ConexaoExecucaoNGI() as conn:
                         confirmar_senha_reset = st.text_input("Confirmar nova senha", type="password")
 
                         if st.button("Salvar Nova Senha", type="primary", use_container_width=True):
-                            if not nova_senha_reset or not confirmar_senha_reset:
-                                st.warning("Preencha os dois campos de senha.")
-                            elif nova_senha_reset != confirmar_senha_reset:
-                                st.error("As senhas não coincidem.")
-                            elif len(nova_senha_reset) < 4:
-                                st.warning("A senha deve ter pelo menos 4 caracteres.")
+                            problema_reset = problema_nova_senha_ngi(nova_senha_reset, confirmar_senha_reset)
+                            if problema_reset:
+                                st.error(problema_reset)
                             else:
                                 try:
                                     cursor_reset.execute(
-                                        "UPDATE usuarios SET senha = %s WHERE LOWER(email) = %s;",
+                                        "UPDATE usuarios SET senha = %s, trocar_senha = FALSE WHERE LOWER(email) = %s;",
                                         (gerar_hash_senha(nova_senha_reset), email_reset)
                                     )
                                     cursor_reset.execute(
@@ -2360,6 +2978,15 @@ with ConexaoExecucaoNGI() as conn:
                                         st.session_state.PERFIL_USUARIO_LOGADO = perfil_banco
                                         st.session_state.EMAIL_USUARIO_LOGADO = email_banco
                                         st.session_state.COORDENACAO_USUARIO_LOGADO = coordenacao_banco
+
+                                        # Senha fraca (ex.: 123): obriga a criar uma nova antes de usar o sistema.
+                                        precisa_trocar = senha_fraca_ngi(senha_input)
+                                        st.session_state.TROCAR_SENHA_OBRIGATORIO = precisa_trocar
+                                        try:
+                                            cursor.execute("UPDATE usuarios SET trocar_senha = %s WHERE email = %s;", (precisa_trocar, email_banco))
+                                            conn.commit()
+                                        except Exception:
+                                            conn.rollback()
 
                                         # Cria uma sessão persistente (mantém o login após atualizar a página)
                                         novo_token = str(uuid.uuid4())
@@ -2453,11 +3080,17 @@ with ConexaoExecucaoNGI() as conn:
         # FLUXO 2: SISTEMA PRINCIPAL (PÓS-AUTENTICAÇÃO)
         # =============================================================================
         else:
-            agendar_lembretes_ngi()
             # --- MENU LATERAL ---
             label_solicitacoes = "Solicitações"
 
             st.markdown(CSS_VISUAL_NGI, unsafe_allow_html=True)
+
+            # Senha fraca: só libera o sistema depois de criar uma senha nova.
+            if st.session_state.get("TROCAR_SENHA_OBRIGATORIO"):
+                manter_sessao_ngi()
+                tela_trocar_senha_obrigatoria_ngi()
+                st.stop()
+
             with st.sidebar:
                 st.markdown(
                     '<div class="ngi-profile"><div class="ngi-avatar">' +
@@ -3178,630 +3811,21 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                             carrinho_vazio_ngi("material")
 
             # =========================================================================
-            # NOVO MÓDULO: MATERIAIS BRIGADA — GESTÃO (ADMINISTRADOR)
+            # ESTOQUES SETORIAIS: MATERIAIS BRIGADA E MATERIAIS PESQUISA
+            # (código único em estoque_setorial_admin_ngi / estoque_setorial_usuario_ngi)
             # =========================================================================
             elif escolha == "Materiais Brigada" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum":
-                renderizar_banner("Materiais Brigada", "Estoque próprio da Brigada, separado do almoxarifado geral")
-                aba_brigada_admin = option_menu(
-                    menu_title=None,
-                    options=["Itens Disponíveis", "Cadastrar Item", "Gerenciar Categorias", "Registro de Entrada", "Registro de Saída", "Histórico de Movimentação", "Editar / Excluir Item"],
-                    icons=["box-seam", "plus-circle", "tags", "arrow-down-circle", "arrow-up-circle", "journal-text", "pencil-square"],
-                    orientation="horizontal",
-                    styles=ESTILO_MENU_HORIZONTAL
-                )
+                estoque_setorial_admin_ngi(ESTOQUE_BRIGADA_NGI)
 
-                df_raw_brig = pd.read_sql_query("SELECT * FROM produtos_brigada ORDER BY codigo ASC;", conn)
-                lista_siglas_coord_brig = dados_sob_demanda_ngi("coordenacoes")["Sigla"].tolist() if not dados_sob_demanda_ngi("coordenacoes").empty else ["GERAL"]
-
-                # ---------------------------------------------------------------
-                # ABA 1: ITENS DISPONÍVEIS
-                # ---------------------------------------------------------------
-                if aba_brigada_admin == "Itens Disponíveis":
-                    if df_raw_brig.empty:
-                        st.info("Nenhum material cadastrado no estoque da Brigada ainda.")
-                    else:
-                        df_display_brig = df_raw_brig.rename(columns={"codigo": "Código", "item": "Item", "quantidade": "Quantidade", "categoria": "Categoria", "valor_unitario": "Valor Unitário"})
-                        df_display_brig["Valor Unitário"] = df_display_brig["Valor Unitário"].map("R$ {:.2f}".format)
-                        st.dataframe(df_display_brig, use_container_width=True, hide_index=True)
-
-                # ---------------------------------------------------------------
-                # ABA 2: CADASTRAR ITEM
-                # ---------------------------------------------------------------
-                elif aba_brigada_admin == "Cadastrar Item":
-                    df_cat_brigada = pd.read_sql_query("SELECT nome FROM categorias_brigada ORDER BY nome ASC;", conn)
-                    lista_categorias_brigada = df_cat_brigada["nome"].tolist()
-
-                    with st.form("form_novo_produto_brigada", clear_on_submit=True):
-                        col_ba, col_bb = st.columns(2)
-                        cod_brig = col_ba.text_input("Código")
-                        nome_it_brig = col_bb.text_input("Nome do Material")
-                        cat_it_brig = col_ba.selectbox("Categoria", lista_categorias_brigada if lista_categorias_brigada else ["Nenhuma categoria cadastrada"])
-                        val_unit_brig = col_bb.number_input("Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
-                        qtd_inicial_brig = st.number_input("Quantidade Inicial:", min_value=0, value=0, step=1)
-
-                        if st.form_submit_button("Finalizar Cadastro", type="primary"):
-                            if cod_brig and nome_it_brig:
-                                try:
-                                    cursor = conn.cursor()
-                                    cursor.execute("INSERT INTO produtos_brigada VALUES (%s, %s, %s, %s, %s);", (cod_brig.strip(), nome_it_brig.strip(), int(qtd_inicial_brig), cat_it_brig, float(val_unit_brig)))
-                                    conn.commit()
-                                    st.success(f"Sucesso! {nome_it_brig} adicionado ao estoque da Brigada.")
-                                    st.rerun()
-                                except psycopg2.IntegrityError:
-                                    conn.rollback()
-                                    st.error(f"Erro! Código {cod_brig} já existe.")
-                            else:
-                                st.error("Preencha ao menos o Código e o Nome do Material!")
-
-                # ---------------------------------------------------------------
-                # ABA 3: GERENCIAR CATEGORIAS
-                # ---------------------------------------------------------------
-                elif aba_brigada_admin == "Gerenciar Categorias":
-                    df_cat_brigada_aba = pd.read_sql_query("SELECT nome FROM categorias_brigada ORDER BY nome ASC;", conn)
-                    lista_categorias_brigada_aba = df_cat_brigada_aba["nome"].tolist()
-
-                    st.markdown("### Categorias atuais")
-                    if lista_categorias_brigada_aba:
-                        st.dataframe(
-                            df_cat_brigada_aba.rename(columns={"nome": "Categoria"}),
-                            use_container_width=True, hide_index=True,
-                            height=min(450, max(120, 38 * (len(lista_categorias_brigada_aba) + 1))),
-                        )
-                        with st.expander("Excluir uma categoria"):
-                            cat_existente_brig = st.selectbox("Categoria para excluir:", lista_categorias_brigada_aba, key="cat_brigada_excluir_visual")
-                            if st.button("Excluir categoria selecionada", key=f"del_cat_brig_{cat_existente_brig}"):
-                                cursor = conn.cursor()
-                                cursor.execute("DELETE FROM categorias_brigada WHERE nome = %s;", (cat_existente_brig,))
-                                conn.commit()
-                                st.rerun()
-                    else:
-                        st.info("Nenhuma categoria cadastrada ainda.")
-
-                    st.markdown("### Adicionar categoria")
-                    nova_cat_brig = st.text_input("Nova categoria:", placeholder="Ex: EPI, Combate a Incêndio, Primeiros Socorros", key="nova_cat_brigada")
-                    with st.container(key="btn_add_3"):
-                        clicou_add_cat_brig = st.button("Adicionar Categoria", key="add_cat_brigada")
-                    if clicou_add_cat_brig:
-                        if nova_cat_brig and nova_cat_brig.strip():
-                            try:
-                                cursor = conn.cursor()
-                                cursor.execute("INSERT INTO categorias_brigada VALUES (%s);", (nova_cat_brig.strip(),))
-                                conn.commit()
-                                st.success("Categoria adicionada!")
-                                st.rerun()
-                            except psycopg2.IntegrityError:
-                                conn.rollback()
-                                st.error("Esta categoria já existe.")
-
-                # ---------------------------------------------------------------
-                # ABA 4: REGISTRO DE ENTRADA
-                # ---------------------------------------------------------------
-                elif aba_brigada_admin == "Registro de Entrada":
-                    if df_raw_brig.empty:
-                        st.warning("Nenhum material cadastrado para movimentar.")
-                    else:
-                        with st.form("form_entrada_brigada", clear_on_submit=True):
-                            col_be1, col_be2 = st.columns(2)
-                            data_mov_brig = col_be1.date_input("Data da Movimentação:", value=datetime.today(), format="DD/MM/YYYY").strftime("%Y-%m-%d")
-                            opcao_prod_brig_ent = col_be2.selectbox(
-                                "Selecione o Material:",
-                                df_raw_brig.index,
-                                format_func=lambda x: f"{df_raw_brig.loc[x, 'codigo']} - {df_raw_brig.loc[x, 'item']} (Saldo: {df_raw_brig.loc[x, 'quantidade']})"
-                            )
-                            qtd_mov_brig_ent = col_be1.number_input("Quantidade:", min_value=1, step=1, value=1)
-
-                            if st.form_submit_button("Registrar Entrada", type="primary"):
-                                prod_codigo_brig = df_raw_brig.loc[opcao_prod_brig_ent, "codigo"]
-                                prod_nome_brig = df_raw_brig.loc[opcao_prod_brig_ent, "item"]
-                                nova_qtd_brig = int(df_raw_brig.loc[opcao_prod_brig_ent, "quantidade"]) + qtd_mov_brig_ent
-                                try:
-                                    cursor = conn.cursor()
-                                    cursor.execute("UPDATE produtos_brigada SET quantidade = %s WHERE codigo = %s;", (nova_qtd_brig, prod_codigo_brig))
-                                    cursor.execute("""
-                                INSERT INTO movimentacoes_brigada (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s);
-                            """, (data_mov_brig, "Entrada", prod_codigo_brig, prod_nome_brig, qtd_mov_brig_ent, st.session_state.NOME_USUARIO_LOGADO, "Brigada"))
-                                    conn.commit()
-                                    st.success(f"Entrada de {qtd_mov_brig_ent} un. de '{prod_nome_brig}' registrada! Novo saldo: {nova_qtd_brig}.")
-                                    st.rerun()
-                                except Exception as ex_ent_brig:
-                                    conn.rollback()
-                                    st.error(f"Erro ao salvar entrada: {ex_ent_brig}")
-
-                # ---------------------------------------------------------------
-                # ABA 5: REGISTRO DE SAÍDA
-                # ---------------------------------------------------------------
-                elif aba_brigada_admin == "Registro de Saída":
-                    if df_raw_brig.empty:
-                        st.warning("Nenhum material cadastrado para movimentar.")
-                    else:
-                        with st.form("form_saida_brigada", clear_on_submit=True):
-                            col_bs1, col_bs2 = st.columns(2)
-                            data_mov_brig_s = col_bs1.date_input("Data da Movimentação:", value=datetime.today(), format="DD/MM/YYYY").strftime("%Y-%m-%d")
-                            opcao_prod_brig_sai = col_bs2.selectbox(
-                                "Selecione o Material:",
-                                df_raw_brig.index,
-                                format_func=lambda x: f"{df_raw_brig.loc[x, 'codigo']} - {df_raw_brig.loc[x, 'item']} (Saldo: {df_raw_brig.loc[x, 'quantidade']})",
-                                key="select_saida_brigada"
-                            )
-                            qtd_mov_brig_sai = col_bs1.number_input("Quantidade da Movimentação:", min_value=1, step=1, value=1)
-                            resp_mov_brig = col_bs2.text_input("Nome da Pessoa Responsável pela Retirada:")
-                            coord_mov_brig = col_bs1.selectbox("Coordenação Destino:", lista_siglas_coord_brig)
-
-                            if st.form_submit_button("Registrar Saída", type="primary"):
-                                if not resp_mov_brig.strip():
-                                    st.error("Por favor, digite o nome da pessoa responsável pela retirada.")
-                                else:
-                                    prod_codigo_brig_s = df_raw_brig.loc[opcao_prod_brig_sai, "codigo"]
-                                    prod_nome_brig_s = df_raw_brig.loc[opcao_prod_brig_sai, "item"]
-                                    prod_qtd_atual_brig = int(df_raw_brig.loc[opcao_prod_brig_sai, "quantidade"])
-
-                                    if prod_qtd_atual_brig >= qtd_mov_brig_sai:
-                                        nova_qtd_brig_s = prod_qtd_atual_brig - qtd_mov_brig_sai
-                                        try:
-                                            cursor = conn.cursor()
-                                            cursor.execute("UPDATE produtos_brigada SET quantidade = %s WHERE codigo = %s;", (nova_qtd_brig_s, prod_codigo_brig_s))
-                                            cursor.execute("""
-                                        INSERT INTO movimentacoes_brigada (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
-                                        VALUES (%s, %s, %s, %s, %s, %s, %s);
-                                    """, (data_mov_brig_s, "Saída", prod_codigo_brig_s, prod_nome_brig_s, qtd_mov_brig_sai, resp_mov_brig.strip(), coord_mov_brig))
-                                            conn.commit()
-                                            st.success(f"Saída de {qtd_mov_brig_sai} un. de '{prod_nome_brig_s}' registrada! Novo saldo: {nova_qtd_brig_s}.")
-                                            st.rerun()
-                                        except Exception as ex_sai_brig:
-                                            conn.rollback()
-                                            st.error(f"Erro ao salvar saída: {ex_sai_brig}")
-                                    else:
-                                        st.error(f"Saldo Insuficiente! O material possui apenas {prod_qtd_atual_brig} unidades no estoque.")
-
-                # ---------------------------------------------------------------
-                # ABA 6: HISTÓRICO DE MOVIMENTAÇÃO
-                # ---------------------------------------------------------------
-                elif aba_brigada_admin == "Histórico de Movimentação":
-                    df_mov_brig = pd.read_sql_query("SELECT data AS Data, tipo AS Tipo, codigo AS Código, item AS Item, quantidade AS Quantidade, responsavel AS Responsável, coordenacao AS Coordenação FROM movimentacoes_brigada ORDER BY id DESC;", conn)
-                    if df_mov_brig.empty:
-                        st.info("Nenhuma movimentação registrada até o momento.")
-                    else:
-                        st.dataframe(df_mov_brig, use_container_width=True, hide_index=True)
-
-                # ---------------------------------------------------------------
-                # ABA 7: EDITAR / EXCLUIR ITEM
-                # ---------------------------------------------------------------
-                elif aba_brigada_admin == "Editar / Excluir Item":
-                    if df_raw_brig.empty:
-                        st.info("Nenhum material cadastrado no estoque da Brigada ainda.")
-                    else:
-                        opcao_brig_edit = st.selectbox("Selecione para modificar:", df_raw_brig.index, format_func=lambda x: f"{df_raw_brig.loc[x, 'codigo']} - {df_raw_brig.loc[x, 'item']}")
-                        cod_atual_brig = df_raw_brig.loc[opcao_brig_edit, "codigo"]
-
-                        col_edb1, col_edb2 = st.columns(2)
-                        edit_cod_brig = col_edb1.text_input("Código:", value=df_raw_brig.loc[opcao_brig_edit, "codigo"])
-                        edit_item_brig = col_edb2.text_input("Nome:", value=df_raw_brig.loc[opcao_brig_edit, "item"])
-                        edit_qtd_brig = col_edb1.number_input("Quantidade (Ajuste):", min_value=0, value=int(df_raw_brig.loc[opcao_brig_edit, "quantidade"]))
-                        df_cat_brigada_edit = pd.read_sql_query("SELECT nome FROM categorias_brigada ORDER BY nome ASC;", conn)
-                        lista_categorias_brigada_edit = df_cat_brigada_edit["nome"].tolist()
-                        cat_atual_brig_edit = df_raw_brig.loc[opcao_brig_edit, "categoria"]
-                        if cat_atual_brig_edit and cat_atual_brig_edit not in lista_categorias_brigada_edit:
-                            lista_categorias_brigada_edit = [cat_atual_brig_edit] + lista_categorias_brigada_edit
-                        idx_cat_brig_edit = lista_categorias_brigada_edit.index(cat_atual_brig_edit) if cat_atual_brig_edit in lista_categorias_brigada_edit else 0
-                        edit_cat_brig = col_edb2.selectbox("Categoria:", lista_categorias_brigada_edit if lista_categorias_brigada_edit else ["Nenhuma categoria cadastrada"], index=idx_cat_brig_edit)
-                        edit_val_brig = st.number_input("Valor Unitário:", min_value=0.0, step=0.01, format="%.2f", value=float(df_raw_brig.loc[opcao_brig_edit, "valor_unitario"] or 0))
-
-                        col_bbtn1, col_bbtn2 = st.columns([1, 4])
-                        with col_bbtn1:
-                            if st.button("Salvar Alterações", type="primary"):
-                                cursor = conn.cursor()
-                                cursor.execute("""
-                            UPDATE produtos_brigada 
-                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
-                            WHERE codigo = %s;
-                        """, (edit_cod_brig.strip(), edit_item_brig.strip(), edit_qtd_brig, edit_cat_brig.strip(), float(edit_val_brig), cod_atual_brig))
-                                conn.commit()
-                                st.success("Modificado com sucesso!")
-                                st.rerun()
-
-                        with col_bbtn2:
-                            if st.button("Excluir Produto"):
-                                cursor = conn.cursor()
-                                cursor.execute("DELETE FROM produtos_brigada WHERE codigo = %s;", (cod_atual_brig,))
-                                conn.commit()
-                                st.warning("Removido com sucesso.")
-                                st.rerun()
-
-            # =========================================================================
-            # NOVO MÓDULO: MATERIAIS BRIGADA — SOLICITAÇÃO (USUÁRIO DA COORDENAÇÃO BRIGADA)
-            # =========================================================================
             elif escolha == "Materiais Brigada" and st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
-                if (st.session_state.get("COORDENACAO_USUARIO_LOGADO") or "").strip().upper() != "BRIGADA":
-                    st.error("Acesso restrito à coordenação Brigada.")
-                else:
-                    renderizar_banner("Materiais Brigada", "Estoque próprio da Brigada, separado do almoxarifado geral")
+                estoque_setorial_usuario_ngi(ESTOQUE_BRIGADA_NGI)
 
-                    if st.session_state.get("msg_sucesso_brigada"):
-                        st.success("Sua solicitação foi encaminhada com sucesso!")
-                        del st.session_state["msg_sucesso_brigada"]
-
-                    df_disp_brigada = pd.read_sql_query("SELECT codigo, item, quantidade, categoria, valor_unitario FROM produtos_brigada WHERE quantidade > 0 ORDER BY codigo ASC;", conn)
-
-                    if df_disp_brigada.empty:
-                        st.info("Nenhum material disponível no estoque da Brigada no momento.")
-                    else:
-                        st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #147746; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
-
-                        termo_busca_brig = st.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...", key="busca_material_brigada")
-                        df_disp_brigada_filtrado = df_disp_brigada.copy()
-                        if termo_busca_brig:
-                            df_disp_brigada_filtrado = df_disp_brigada_filtrado[
-                                df_disp_brigada_filtrado['item'].str.contains(termo_busca_brig, case=False, na=False) |
-                                df_disp_brigada_filtrado['codigo'].str.contains(termo_busca_brig, case=False, na=False)
-                            ]
-
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        st.dataframe(df_disp_brigada_filtrado.rename(columns={"codigo": "Código", "item": "Item", "quantidade": "Quantidade", "categoria": "Categoria"}).drop(columns=["valor_unitario"]), use_container_width=True, hide_index=True)
-
-                        if "carrinho_brigada" not in st.session_state:
-                            st.session_state.carrinho_brigada = []
-
-                        with st.container(border=True):
-                            cabecalho_pedido_ngi("Nova solicitação de material da Brigada", "Siga os 3 passos. Todos os itens do carrinho seguem juntos em um único pedido.")
-                            passo_pedido_ngi(1, 'Escolha o material e clique em "Adicionar ao carrinho"')
-
-                            col_add_br1, col_add_br2, col_add_br3 = st.columns([3, 1, 1.3])
-                            opcao_sol_brig = col_add_br1.selectbox(
-                                "Material:",
-                                df_disp_brigada.index,
-                                format_func=lambda x: f"{df_disp_brigada.loc[x, 'codigo']} - {df_disp_brigada.loc[x, 'item']} (Saldo: {df_disp_brigada.loc[x, 'quantidade']})",
-                                key="select_material_brigada"
-                            )
-                            qtd_sol_brig = col_add_br2.number_input("Quantidade:", min_value=1, max_value=int(df_disp_brigada.loc[opcao_sol_brig, "quantidade"]), value=1, step=1, key="qtd_material_brigada")
-                            col_add_br3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                            with col_add_br3:
-                                with st.container(key="btn_add_4"):
-                                    clicou_add_4 = st.button("Adicionar ao carrinho", icon=":material/add_shopping_cart:", key="add_carrinho_brigada", use_container_width=True)
-                            if clicou_add_4:
-                                cod_sel_brig = df_disp_brigada.loc[opcao_sol_brig, "codigo"]
-                                nome_sel_brig = df_disp_brigada.loc[opcao_sol_brig, "item"]
-                                adicionar_item_carrinho_ngi("carrinho_brigada", {"codigo": cod_sel_brig, "item": nome_sel_brig, "quantidade": int(qtd_sol_brig)}, df_disp_brigada.loc[opcao_sol_brig, "quantidade"])
-
-                            if st.session_state.carrinho_brigada:
-                                passo_pedido_ngi(2, "Confira o carrinho", detalhe=texto_qtd_itens_ngi(len(st.session_state.carrinho_brigada)))
-                                renderizar_carrinho_ngi("carrinho_brigada", "3")
-
-                                passo_pedido_ngi(3, "Adicione uma observação, se precisar, e envie")
-                                obs_sol_brig = st.text_input("Observações (opcional):", placeholder="Ex.: material para a operação de sábado", key="obs_carrinho_brigada")
-
-                                if st.button(f"Enviar solicitação ({texto_qtd_itens_ngi(len(st.session_state.carrinho_brigada))})", type="primary", icon=":material/send:", key="enviar_carrinho_brigada"):
-                                    try:
-                                        lote_id_brig = str(uuid.uuid4())
-                                        cursor = conn.cursor()
-                                        for item_carr_br in st.session_state.carrinho_brigada:
-                                            cursor.execute("""
-                                    INSERT INTO solicitacoes_almoxarifado 
-                                    (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, status, observacao, lote_id, origem_estoque)
-                                    VALUES ('MATERIAL', %s, %s, %s, %s, %s, 'Brigada', 'PENDENTE', %s, %s, 'BRIGADA');
-                                """, (item_carr_br["codigo"], item_carr_br["item"], item_carr_br["quantidade"], st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, obs_sol_brig.strip(), lote_id_brig))
-                                        conn.commit()
-                                        st.session_state.carrinho_brigada = []
-                                        st.session_state["msg_sucesso_brigada"] = True
-                                        st.rerun()
-                                    except Exception as ex_brig:
-                                        conn.rollback()
-                                        st.error(f"Erro ao enviar solicitação: {ex_brig}")
-                            else:
-                                carrinho_vazio_ngi("brigada", campos=("Observações (opcional):",))
-
-            # =========================================================================
-            # NOVO MÓDULO: MATERIAIS PESQUISA — GESTÃO (ADMINISTRADOR)
-            # =========================================================================
             elif escolha == "Materiais Pesquisa" and st.session_state.PERFIL_USUARIO_LOGADO != "Usuário Comum":
-                renderizar_banner("Materiais Pesquisa", "Estoque próprio de materiais de pesquisa (COLMOP), separado do almoxarifado geral")
-                aba_pesquisa_admin = option_menu(
-                    menu_title=None,
-                    options=["Itens Disponíveis", "Cadastrar Item", "Gerenciar Categorias", "Registro de Entrada", "Registro de Saída", "Histórico de Movimentação", "Editar / Excluir Item"],
-                    icons=["box-seam", "plus-circle", "tags", "arrow-down-circle", "arrow-up-circle", "journal-text", "pencil-square"],
-                    orientation="horizontal",
-                    styles=ESTILO_MENU_HORIZONTAL
-                )
+                estoque_setorial_admin_ngi(ESTOQUE_PESQUISA_NGI)
 
-                df_raw_pesq = pd.read_sql_query("SELECT * FROM produtos_pesquisa ORDER BY codigo ASC;", conn)
-                lista_siglas_coord_pesq = dados_sob_demanda_ngi("coordenacoes")["Sigla"].tolist() if not dados_sob_demanda_ngi("coordenacoes").empty else ["GERAL"]
-
-                # ---------------------------------------------------------------
-                # ABA 1: ITENS DISPONÍVEIS
-                # ---------------------------------------------------------------
-                if aba_pesquisa_admin == "Itens Disponíveis":
-                    if df_raw_pesq.empty:
-                        st.info("Nenhum material cadastrado no estoque de Pesquisa ainda.")
-                    else:
-                        df_display_pesq = df_raw_pesq.rename(columns={"codigo": "Código", "item": "Item", "quantidade": "Quantidade", "categoria": "Categoria", "valor_unitario": "Valor Unitário"})
-                        df_display_pesq["Valor Unitário"] = df_display_pesq["Valor Unitário"].map("R$ {:.2f}".format)
-                        st.dataframe(df_display_pesq, use_container_width=True, hide_index=True)
-
-                # ---------------------------------------------------------------
-                # ABA 2: CADASTRAR ITEM
-                # ---------------------------------------------------------------
-                elif aba_pesquisa_admin == "Cadastrar Item":
-                    df_cat_pesquisa = pd.read_sql_query("SELECT nome FROM categorias_pesquisa ORDER BY nome ASC;", conn)
-                    lista_categorias_pesquisa = df_cat_pesquisa["nome"].tolist()
-
-                    with st.form("form_novo_produto_pesquisa", clear_on_submit=True):
-                        col_ba, col_bb = st.columns(2)
-                        cod_pesq = col_ba.text_input("Código")
-                        nome_it_pesq = col_bb.text_input("Nome do Material")
-                        cat_it_pesq = col_ba.selectbox("Categoria", lista_categorias_pesquisa if lista_categorias_pesquisa else ["Nenhuma categoria cadastrada"])
-                        val_unit_pesq = col_bb.number_input("Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f")
-                        qtd_inicial_pesq = st.number_input("Quantidade Inicial:", min_value=0, value=0, step=1)
-
-                        if st.form_submit_button("Finalizar Cadastro", type="primary"):
-                            if cod_pesq and nome_it_pesq:
-                                try:
-                                    cursor = conn.cursor()
-                                    cursor.execute("INSERT INTO produtos_pesquisa VALUES (%s, %s, %s, %s, %s);", (cod_pesq.strip(), nome_it_pesq.strip(), int(qtd_inicial_pesq), cat_it_pesq, float(val_unit_pesq)))
-                                    conn.commit()
-                                    st.success(f"Sucesso! {nome_it_pesq} adicionado ao estoque de Pesquisa.")
-                                    st.rerun()
-                                except psycopg2.IntegrityError:
-                                    conn.rollback()
-                                    st.error(f"Erro! Código {cod_pesq} já existe.")
-                            else:
-                                st.error("Preencha ao menos o Código e o Nome do Material!")
-
-                # ---------------------------------------------------------------
-                # ABA 3: GERENCIAR CATEGORIAS
-                # ---------------------------------------------------------------
-                elif aba_pesquisa_admin == "Gerenciar Categorias":
-                    df_cat_pesquisa_aba = pd.read_sql_query("SELECT nome FROM categorias_pesquisa ORDER BY nome ASC;", conn)
-                    lista_categorias_pesquisa_aba = df_cat_pesquisa_aba["nome"].tolist()
-
-                    st.markdown("### Categorias atuais")
-                    if lista_categorias_pesquisa_aba:
-                        st.dataframe(
-                            df_cat_pesquisa_aba.rename(columns={"nome": "Categoria"}),
-                            use_container_width=True, hide_index=True,
-                            height=min(450, max(120, 38 * (len(lista_categorias_pesquisa_aba) + 1))),
-                        )
-                        with st.expander("Excluir uma categoria"):
-                            cat_existente_pesq = st.selectbox("Categoria para excluir:", lista_categorias_pesquisa_aba, key="cat_pesquisa_excluir_visual")
-                            if st.button("Excluir categoria selecionada", key=f"del_cat_pesq_{cat_existente_pesq}"):
-                                cursor = conn.cursor()
-                                cursor.execute("DELETE FROM categorias_pesquisa WHERE nome = %s;", (cat_existente_pesq,))
-                                conn.commit()
-                                st.rerun()
-                    else:
-                        st.info("Nenhuma categoria cadastrada ainda.")
-
-                    st.markdown("### Adicionar categoria")
-                    nova_cat_pesq = st.text_input("Nova categoria:", placeholder="Ex: Coleta, Campo, Laboratório, Monitoramento", key="nova_cat_pesquisa")
-                    with st.container(key="btn_add_3"):
-                        clicou_add_cat_pesq = st.button("Adicionar Categoria", key="add_cat_pesquisa")
-                    if clicou_add_cat_pesq:
-                        if nova_cat_pesq and nova_cat_pesq.strip():
-                            try:
-                                cursor = conn.cursor()
-                                cursor.execute("INSERT INTO categorias_pesquisa VALUES (%s);", (nova_cat_pesq.strip(),))
-                                conn.commit()
-                                st.success("Categoria adicionada!")
-                                st.rerun()
-                            except psycopg2.IntegrityError:
-                                conn.rollback()
-                                st.error("Esta categoria já existe.")
-
-                # ---------------------------------------------------------------
-                # ABA 4: REGISTRO DE ENTRADA
-                # ---------------------------------------------------------------
-                elif aba_pesquisa_admin == "Registro de Entrada":
-                    if df_raw_pesq.empty:
-                        st.warning("Nenhum material cadastrado para movimentar.")
-                    else:
-                        with st.form("form_entrada_pesquisa", clear_on_submit=True):
-                            col_be1, col_be2 = st.columns(2)
-                            data_mov_pesq = col_be1.date_input("Data da Movimentação:", value=datetime.today(), format="DD/MM/YYYY").strftime("%Y-%m-%d")
-                            opcao_prod_pesq_ent = col_be2.selectbox(
-                                "Selecione o Material:",
-                                df_raw_pesq.index,
-                                format_func=lambda x: f"{df_raw_pesq.loc[x, 'codigo']} - {df_raw_pesq.loc[x, 'item']} (Saldo: {df_raw_pesq.loc[x, 'quantidade']})"
-                            )
-                            qtd_mov_pesq_ent = col_be1.number_input("Quantidade:", min_value=1, step=1, value=1)
-
-                            if st.form_submit_button("Registrar Entrada", type="primary"):
-                                prod_codigo_pesq = df_raw_pesq.loc[opcao_prod_pesq_ent, "codigo"]
-                                prod_nome_pesq = df_raw_pesq.loc[opcao_prod_pesq_ent, "item"]
-                                nova_qtd_pesq = int(df_raw_pesq.loc[opcao_prod_pesq_ent, "quantidade"]) + qtd_mov_pesq_ent
-                                try:
-                                    cursor = conn.cursor()
-                                    cursor.execute("UPDATE produtos_pesquisa SET quantidade = %s WHERE codigo = %s;", (nova_qtd_pesq, prod_codigo_pesq))
-                                    cursor.execute("""
-                                INSERT INTO movimentacoes_pesquisa (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s);
-                            """, (data_mov_pesq, "Entrada", prod_codigo_pesq, prod_nome_pesq, qtd_mov_pesq_ent, st.session_state.NOME_USUARIO_LOGADO, "Pesquisa"))
-                                    conn.commit()
-                                    st.success(f"Entrada de {qtd_mov_pesq_ent} un. de '{prod_nome_pesq}' registrada! Novo saldo: {nova_qtd_pesq}.")
-                                    st.rerun()
-                                except Exception as ex_ent_pesq:
-                                    conn.rollback()
-                                    st.error(f"Erro ao salvar entrada: {ex_ent_pesq}")
-
-                # ---------------------------------------------------------------
-                # ABA 5: REGISTRO DE SAÍDA
-                # ---------------------------------------------------------------
-                elif aba_pesquisa_admin == "Registro de Saída":
-                    if df_raw_pesq.empty:
-                        st.warning("Nenhum material cadastrado para movimentar.")
-                    else:
-                        with st.form("form_saida_pesquisa", clear_on_submit=True):
-                            col_bs1, col_bs2 = st.columns(2)
-                            data_mov_pesq_s = col_bs1.date_input("Data da Movimentação:", value=datetime.today(), format="DD/MM/YYYY").strftime("%Y-%m-%d")
-                            opcao_prod_pesq_sai = col_bs2.selectbox(
-                                "Selecione o Material:",
-                                df_raw_pesq.index,
-                                format_func=lambda x: f"{df_raw_pesq.loc[x, 'codigo']} - {df_raw_pesq.loc[x, 'item']} (Saldo: {df_raw_pesq.loc[x, 'quantidade']})",
-                                key="select_saida_pesquisa"
-                            )
-                            qtd_mov_pesq_sai = col_bs1.number_input("Quantidade da Movimentação:", min_value=1, step=1, value=1)
-                            resp_mov_pesq = col_bs2.text_input("Nome da Pessoa Responsável pela Retirada:")
-                            coord_mov_pesq = col_bs1.selectbox("Coordenação Destino:", lista_siglas_coord_pesq)
-
-                            if st.form_submit_button("Registrar Saída", type="primary"):
-                                if not resp_mov_pesq.strip():
-                                    st.error("Por favor, digite o nome da pessoa responsável pela retirada.")
-                                else:
-                                    prod_codigo_pesq_s = df_raw_pesq.loc[opcao_prod_pesq_sai, "codigo"]
-                                    prod_nome_pesq_s = df_raw_pesq.loc[opcao_prod_pesq_sai, "item"]
-                                    prod_qtd_atual_pesq = int(df_raw_pesq.loc[opcao_prod_pesq_sai, "quantidade"])
-
-                                    if prod_qtd_atual_pesq >= qtd_mov_pesq_sai:
-                                        nova_qtd_pesq_s = prod_qtd_atual_pesq - qtd_mov_pesq_sai
-                                        try:
-                                            cursor = conn.cursor()
-                                            cursor.execute("UPDATE produtos_pesquisa SET quantidade = %s WHERE codigo = %s;", (nova_qtd_pesq_s, prod_codigo_pesq_s))
-                                            cursor.execute("""
-                                        INSERT INTO movimentacoes_pesquisa (data, tipo, codigo, item, quantidade, responsavel, coordenacao)
-                                        VALUES (%s, %s, %s, %s, %s, %s, %s);
-                                    """, (data_mov_pesq_s, "Saída", prod_codigo_pesq_s, prod_nome_pesq_s, qtd_mov_pesq_sai, resp_mov_pesq.strip(), coord_mov_pesq))
-                                            conn.commit()
-                                            st.success(f"Saída de {qtd_mov_pesq_sai} un. de '{prod_nome_pesq_s}' registrada! Novo saldo: {nova_qtd_pesq_s}.")
-                                            st.rerun()
-                                        except Exception as ex_sai_pesq:
-                                            conn.rollback()
-                                            st.error(f"Erro ao salvar saída: {ex_sai_pesq}")
-                                    else:
-                                        st.error(f"Saldo Insuficiente! O material possui apenas {prod_qtd_atual_pesq} unidades no estoque.")
-
-                # ---------------------------------------------------------------
-                # ABA 6: HISTÓRICO DE MOVIMENTAÇÃO
-                # ---------------------------------------------------------------
-                elif aba_pesquisa_admin == "Histórico de Movimentação":
-                    df_mov_pesq = pd.read_sql_query("SELECT data AS Data, tipo AS Tipo, codigo AS Código, item AS Item, quantidade AS Quantidade, responsavel AS Responsável, coordenacao AS Coordenação FROM movimentacoes_pesquisa ORDER BY id DESC;", conn)
-                    if df_mov_pesq.empty:
-                        st.info("Nenhuma movimentação registrada até o momento.")
-                    else:
-                        st.dataframe(df_mov_pesq, use_container_width=True, hide_index=True)
-
-                # ---------------------------------------------------------------
-                # ABA 7: EDITAR / EXCLUIR ITEM
-                # ---------------------------------------------------------------
-                elif aba_pesquisa_admin == "Editar / Excluir Item":
-                    if df_raw_pesq.empty:
-                        st.info("Nenhum material cadastrado no estoque de Pesquisa ainda.")
-                    else:
-                        opcao_pesq_edit = st.selectbox("Selecione para modificar:", df_raw_pesq.index, format_func=lambda x: f"{df_raw_pesq.loc[x, 'codigo']} - {df_raw_pesq.loc[x, 'item']}")
-                        cod_atual_pesq = df_raw_pesq.loc[opcao_pesq_edit, "codigo"]
-
-                        col_edb1, col_edb2 = st.columns(2)
-                        edit_cod_pesq = col_edb1.text_input("Código:", value=df_raw_pesq.loc[opcao_pesq_edit, "codigo"])
-                        edit_item_pesq = col_edb2.text_input("Nome:", value=df_raw_pesq.loc[opcao_pesq_edit, "item"])
-                        edit_qtd_pesq = col_edb1.number_input("Quantidade (Ajuste):", min_value=0, value=int(df_raw_pesq.loc[opcao_pesq_edit, "quantidade"]))
-                        df_cat_pesquisa_edit = pd.read_sql_query("SELECT nome FROM categorias_pesquisa ORDER BY nome ASC;", conn)
-                        lista_categorias_pesquisa_edit = df_cat_pesquisa_edit["nome"].tolist()
-                        cat_atual_pesq_edit = df_raw_pesq.loc[opcao_pesq_edit, "categoria"]
-                        if cat_atual_pesq_edit and cat_atual_pesq_edit not in lista_categorias_pesquisa_edit:
-                            lista_categorias_pesquisa_edit = [cat_atual_pesq_edit] + lista_categorias_pesquisa_edit
-                        idx_cat_pesq_edit = lista_categorias_pesquisa_edit.index(cat_atual_pesq_edit) if cat_atual_pesq_edit in lista_categorias_pesquisa_edit else 0
-                        edit_cat_pesq = col_edb2.selectbox("Categoria:", lista_categorias_pesquisa_edit if lista_categorias_pesquisa_edit else ["Nenhuma categoria cadastrada"], index=idx_cat_pesq_edit)
-                        edit_val_pesq = st.number_input("Valor Unitário:", min_value=0.0, step=0.01, format="%.2f", value=float(df_raw_pesq.loc[opcao_pesq_edit, "valor_unitario"] or 0))
-
-                        col_bbtn1, col_bbtn2 = st.columns([1, 4])
-                        with col_bbtn1:
-                            if st.button("Salvar Alterações", type="primary"):
-                                cursor = conn.cursor()
-                                cursor.execute("""
-                            UPDATE produtos_pesquisa 
-                            SET codigo = %s, item = %s, quantidade = %s, categoria = %s, valor_unitario = %s 
-                            WHERE codigo = %s;
-                        """, (edit_cod_pesq.strip(), edit_item_pesq.strip(), edit_qtd_pesq, edit_cat_pesq.strip(), float(edit_val_pesq), cod_atual_pesq))
-                                conn.commit()
-                                st.success("Modificado com sucesso!")
-                                st.rerun()
-
-                        with col_bbtn2:
-                            if st.button("Excluir Produto"):
-                                cursor = conn.cursor()
-                                cursor.execute("DELETE FROM produtos_pesquisa WHERE codigo = %s;", (cod_atual_pesq,))
-                                conn.commit()
-                                st.warning("Removido com sucesso.")
-                                st.rerun()
-
-            # =========================================================================
-            # NOVO MÓDULO: MATERIAIS PESQUISA — SOLICITAÇÃO (USUÁRIO DA COORDENAÇÃO COLMOP)
-            # =========================================================================
             elif escolha == "Materiais Pesquisa" and st.session_state.PERFIL_USUARIO_LOGADO == "Usuário Comum":
-                if (st.session_state.get("COORDENACAO_USUARIO_LOGADO") or "").strip().upper() != "COLMOP":
-                    st.error("Acesso restrito à coordenação COLMOP.")
-                else:
-                    renderizar_banner("Materiais Pesquisa", "Estoque próprio de materiais de pesquisa (COLMOP), separado do almoxarifado geral")
+                estoque_setorial_usuario_ngi(ESTOQUE_PESQUISA_NGI)
 
-                    if st.session_state.get("msg_sucesso_pesquisa"):
-                        st.success("Sua solicitação foi encaminhada com sucesso!")
-                        del st.session_state["msg_sucesso_pesquisa"]
-
-                    df_disp_pesquisa = pd.read_sql_query("SELECT codigo, item, quantidade, categoria, valor_unitario FROM produtos_pesquisa WHERE quantidade > 0 ORDER BY codigo ASC;", conn)
-
-                    if df_disp_pesquisa.empty:
-                        st.info("Nenhum material disponível no estoque de Pesquisa no momento.")
-                    else:
-                        st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #147746; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
-
-                        termo_busca_pesq = st.text_input("Buscar por Nome do Material ou Código:", placeholder="Digite o termo para pesquisar...", key="busca_material_pesquisa")
-                        df_disp_pesquisa_filtrado = df_disp_pesquisa.copy()
-                        if termo_busca_pesq:
-                            df_disp_pesquisa_filtrado = df_disp_pesquisa_filtrado[
-                                df_disp_pesquisa_filtrado['item'].str.contains(termo_busca_pesq, case=False, na=False) |
-                                df_disp_pesquisa_filtrado['codigo'].str.contains(termo_busca_pesq, case=False, na=False)
-                            ]
-
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        st.dataframe(df_disp_pesquisa_filtrado.rename(columns={"codigo": "Código", "item": "Item", "quantidade": "Quantidade", "categoria": "Categoria"}).drop(columns=["valor_unitario"]), use_container_width=True, hide_index=True)
-
-                        if "carrinho_pesquisa" not in st.session_state:
-                            st.session_state.carrinho_pesquisa = []
-
-                        with st.container(border=True):
-                            cabecalho_pedido_ngi("Nova solicitação de material de pesquisa", "Siga os 3 passos. Todos os itens do carrinho seguem juntos em um único pedido.")
-                            passo_pedido_ngi(1, 'Escolha o material e clique em "Adicionar ao carrinho"')
-
-                            col_add_br1, col_add_br2, col_add_br3 = st.columns([3, 1, 1.3])
-                            opcao_sol_pesq = col_add_br1.selectbox(
-                                "Material:",
-                                df_disp_pesquisa.index,
-                                format_func=lambda x: f"{df_disp_pesquisa.loc[x, 'codigo']} - {df_disp_pesquisa.loc[x, 'item']} (Saldo: {df_disp_pesquisa.loc[x, 'quantidade']})",
-                                key="select_material_pesquisa"
-                            )
-                            qtd_sol_pesq = col_add_br2.number_input("Quantidade:", min_value=1, max_value=int(df_disp_pesquisa.loc[opcao_sol_pesq, "quantidade"]), value=1, step=1, key="qtd_material_pesquisa")
-                            col_add_br3.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)
-                            with col_add_br3:
-                                with st.container(key="btn_add_7"):
-                                    clicou_add_7 = st.button("Adicionar ao carrinho", icon=":material/add_shopping_cart:", key="add_carrinho_pesquisa", use_container_width=True)
-                            if clicou_add_7:
-                                cod_sel_pesq = df_disp_pesquisa.loc[opcao_sol_pesq, "codigo"]
-                                nome_sel_pesq = df_disp_pesquisa.loc[opcao_sol_pesq, "item"]
-                                adicionar_item_carrinho_ngi("carrinho_pesquisa", {"codigo": cod_sel_pesq, "item": nome_sel_pesq, "quantidade": int(qtd_sol_pesq)}, df_disp_pesquisa.loc[opcao_sol_pesq, "quantidade"])
-
-                            if st.session_state.carrinho_pesquisa:
-                                passo_pedido_ngi(2, "Confira o carrinho", detalhe=texto_qtd_itens_ngi(len(st.session_state.carrinho_pesquisa)))
-                                renderizar_carrinho_ngi("carrinho_pesquisa", "6")
-
-                                passo_pedido_ngi(3, "Adicione uma observação, se precisar, e envie")
-                                obs_sol_pesq = st.text_input("Observações (opcional):", placeholder="Ex.: material para a campanha de campo da próxima semana", key="obs_carrinho_pesquisa")
-
-                                if st.button(f"Enviar solicitação ({texto_qtd_itens_ngi(len(st.session_state.carrinho_pesquisa))})", type="primary", icon=":material/send:", key="enviar_carrinho_pesquisa"):
-                                    try:
-                                        lote_id_pesq = str(uuid.uuid4())
-                                        cursor = conn.cursor()
-                                        for item_carr_br in st.session_state.carrinho_pesquisa:
-                                            cursor.execute("""
-                                    INSERT INTO solicitacoes_almoxarifado 
-                                    (tipo, referencia_codigo, item_nome, quantidade, solicitante_nome, solicitante_email, coordenacao, status, observacao, lote_id, origem_estoque)
-                                    VALUES ('MATERIAL', %s, %s, %s, %s, %s, 'COLMOP', 'PENDENTE', %s, %s, 'PESQUISA');
-                                """, (item_carr_br["codigo"], item_carr_br["item"], item_carr_br["quantidade"], st.session_state.NOME_USUARIO_LOGADO, st.session_state.EMAIL_USUARIO_LOGADO, obs_sol_pesq.strip(), lote_id_pesq))
-                                        conn.commit()
-                                        st.session_state.carrinho_pesquisa = []
-                                        st.session_state["msg_sucesso_pesquisa"] = True
-                                        st.rerun()
-                                    except Exception as ex_pesq:
-                                        conn.rollback()
-                                        st.error(f"Erro ao enviar solicitação: {ex_pesq}")
-                            else:
-                                carrinho_vazio_ngi("pesquisa", campos=("Observações (opcional):",))
 
             # =========================================================================
             # NOVO MÓDULO: LIVROS E PRODUTOS — GESTÃO (ADMINISTRADOR)
@@ -4652,9 +4676,9 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                                     senha_final = s if s else "123"
                                     cursor = conn.cursor()
                                     cursor.execute("""
-                                INSERT INTO usuarios (nome, email, senha, perfil, coordenacao) 
-                                VALUES (%s, %s, %s, %s, %s);
-                            """, (n.strip(), e.strip().lower(), gerar_hash_senha(senha_final), p, coord_novo_user))
+                                INSERT INTO usuarios (nome, email, senha, perfil, coordenacao, trocar_senha) 
+                                VALUES (%s, %s, %s, %s, %s, %s);
+                            """, (n.strip(), e.strip().lower(), gerar_hash_senha(senha_final), p, coord_novo_user, senha_fraca_ngi(senha_final)))
                                     conn.commit()
 
                                     if p == "Administrador":
@@ -4727,6 +4751,9 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                             SET nome = %s, email = %s, senha = %s, perfil = %s, coordenacao = %s 
                             WHERE email = %s;
                         """, (edit_n.strip(), edit_e.strip().lower(), senha_gravar, edit_p, edit_coord_user, email_chave))
+                                if edit_s:
+                                    # Senha nova fraca definida pelo administrador: a pessoa troca no próximo acesso.
+                                    cursor.execute("UPDATE usuarios SET trocar_senha = %s WHERE email = %s;", (senha_fraca_ngi(edit_s), edit_e.strip().lower()))
                                 conn.commit()
                                 st.success("Atualizado!")
                                 st.rerun()
@@ -4915,6 +4942,8 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                 </p>
             </div>
         """, unsafe_allow_html=True)
+
+                painel_backup_ngi()
 
                 # ---------------------------------------------------------------
                 # FILTRO DE PERÍODO (aplica-se a Solicitações e Movimentações)
@@ -5151,207 +5180,3 @@ A aceitação eletrônica deste Termo ficará vinculada à respectiva solicitaç
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         icon=":material/download:"
                     )
-
-            # =========================================================================
-            # NOVO MÓDULO: CONTROLE DE EQUIPAMENTOS EMPRESTADOS (PERFIL ADMINISTRADOR)
-            # =========================================================================
-            elif escolha == "Controle de Equipamentos Emprestados":
-                renderizar_banner("Controle de Equipamentos Emprestados", "Registre e acompanhe notebooks, desktops e acessórios emprestados por tempo indeterminado")
-                aba_equipamento = option_menu(
-                    menu_title=None,
-                    options=["Novo Registro", "Consultar / Editar / Excluir"],
-                    icons=["plus-circle", "pencil-square"],
-                    orientation="horizontal",
-                    styles=ESTILO_MENU_HORIZONTAL
-                )
-
-                lista_coord_equip = dados_sob_demanda_ngi("coordenacoes")["Sigla"].tolist() if not dados_sob_demanda_ngi("coordenacoes").empty else []
-
-                if aba_equipamento == "Novo Registro":
-                    col_eq7, col_eq8 = st.columns(2)
-                    data_retirada_eq = col_eq7.date_input("Data da Retirada:", value=date.today(), format="DD/MM/YYYY", key="data_retirada_novo_equip")
-
-                    periodo_indeterminado_eq = col_eq8.checkbox("Período Indeterminado", key="periodo_indeterminado_novo_equip")
-                    if periodo_indeterminado_eq:
-                        col_eq8.date_input("Data de Devolução:", value=None, format="DD/MM/YYYY", disabled=True, key="data_devolucao_novo_equip_disabled")
-                        data_prevista_eq = "Indeterminado"
-                    else:
-                        data_prevista_eq_bruta = col_eq8.date_input("Data de Devolução:", value=date.today(), format="DD/MM/YYYY", key="data_devolucao_novo_equip")
-                        data_prevista_eq = data_prevista_eq_bruta.strftime("%d/%m/%Y")
-
-                    with st.form("form_novo_equipamento", clear_on_submit=True):
-                        col_eq1, col_eq2 = st.columns(2)
-                        nome_item_eq = col_eq1.text_input("Nome do Item: *", placeholder="Ex: Notebook, Desktop completo, Apoio de punho")
-                        marca_modelo_eq = col_eq2.text_input("Marca/Modelo:")
-
-                        col_eq3, col_eq4 = st.columns(2)
-                        numero_serie_eq = col_eq3.text_input("Nº de Série: *", placeholder="Ex: PE9013216028 (ou N/A)")
-                        patrimonio_eq = col_eq4.text_input("Patrimônio:", placeholder="Ex: PA 100")
-
-                        col_eq5, col_eq6 = st.columns(2)
-                        solicitante_eq = col_eq5.text_input("Solicitante/Usuário: *")
-                        coordenacao_eq = col_eq6.selectbox("Coordenação:", lista_coord_equip if lista_coord_equip else ["GERAL"])
-
-                        data_devolucao_eq = None
-
-                        status_eq = st.selectbox("Status:", ["Em uso", "Devolvido"])
-                        observacao_eq = st.text_area("Observação (opcional):", placeholder="Preencher se o material foi entregue ou devolvido com alguma avaria.")
-
-                        if st.form_submit_button("Salvar Registro", type="primary"):
-                            if nome_item_eq.strip() and solicitante_eq.strip() and numero_serie_eq.strip():
-                                try:
-                                    cursor = conn.cursor()
-                                    cursor.execute("""
-                                INSERT INTO equipamentos_emprestados
-                                (nome_item, marca_modelo, numero_serie, patrimonio, solicitante_usuario, coordenacao, data_retirada, data_prevista_devolucao, status, data_devolucao, observacao)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
-                            """, (
-                                        nome_item_eq.strip(), marca_modelo_eq.strip(), numero_serie_eq.strip(), patrimonio_eq.strip(),
-                                        solicitante_eq.strip(), coordenacao_eq, data_retirada_eq, data_prevista_eq, status_eq, data_devolucao_eq, observacao_eq.strip()
-                                    ))
-                                    conn.commit()
-                                    st.success("Registrado com sucesso!")
-                                    st.rerun()
-                                except Exception as ex_equip:
-                                    conn.rollback()
-                                    st.error(f"Erro ao salvar registro: {ex_equip}")
-                            else:
-                                st.error("Preencha o Nome do Item, Nº de Série e o Solicitante/Usuário!")
-
-                elif aba_equipamento == "Consultar / Editar / Excluir":
-                    df_raw_equip = pd.read_sql_query("SELECT * FROM equipamentos_emprestados ORDER BY id DESC;", conn)
-
-                    if df_raw_equip.empty:
-                        st.info("Nenhum equipamento registrado até o momento.")
-                    else:
-                        st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #147746; margin-right: 8px; border-radius: 2px;"></span>Filtros de Consulta</h3>', unsafe_allow_html=True)
-
-                        col_feq1, col_feq2, col_feq3 = st.columns(3)
-                        busca_equip = col_feq1.text_input("Buscar por Item, Solicitante ou Patrimônio:", placeholder="Digite para pesquisar...")
-                        filtro_coord_equip = col_feq2.selectbox("Filtrar por Coordenação:", ["Todas"] + sorted(df_raw_equip["coordenacao"].dropna().unique().tolist()))
-                        filtro_status_equip = col_feq3.selectbox("Filtrar por Status:", ["Todos", "Em uso", "Devolvido"])
-
-                        df_filtrado_equip = df_raw_equip.copy()
-                        if busca_equip:
-                            df_filtrado_equip = df_filtrado_equip[
-                                df_filtrado_equip["nome_item"].str.contains(busca_equip, case=False, na=False) |
-                                df_filtrado_equip["solicitante_usuario"].str.contains(busca_equip, case=False, na=False) |
-                                df_filtrado_equip["patrimonio"].str.contains(busca_equip, case=False, na=False)
-                            ]
-                        if filtro_coord_equip != "Todas":
-                            df_filtrado_equip = df_filtrado_equip[df_filtrado_equip["coordenacao"] == filtro_coord_equip]
-                        if filtro_status_equip != "Todos":
-                            df_filtrado_equip = df_filtrado_equip[df_filtrado_equip["status"] == filtro_status_equip]
-
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        df_exibir_equip = df_filtrado_equip.rename(columns={
-                            "nome_item": "Nome do Item", "marca_modelo": "Marca/Modelo", "numero_serie": "Nº de Série",
-                            "patrimonio": "Patrimônio", "solicitante_usuario": "Solicitante/Usuário", "coordenacao": "Coordenação",
-                            "data_retirada": "Data da Retirada", "data_prevista_devolucao": "Data Prevista Devolução",
-                            "status": "Status", "observacao": "Observação", "data_devolucao": "Data da Devolução"
-                        })[["id", "Nome do Item", "Marca/Modelo", "Nº de Série", "Patrimônio", "Solicitante/Usuário", "Coordenação", "Data da Retirada", "Data Prevista Devolução", "Status", "Data da Devolução", "Observação"]]
-
-                        def destacar_status_equip(val):
-                            if val == 'Em uso':
-                                return 'background-color: #d4edda; color: #155724; font-weight: bold;'
-                            elif val == 'Devolvido':
-                                return 'background-color: rgba(120, 120, 120, 0.12); color: #555555; font-weight: bold;'
-                            return ''
-
-                        st.dataframe(
-                            df_exibir_equip.drop(columns=["id"]).style.map(destacar_status_equip, subset=['Status']),
-                            use_container_width=True, hide_index=True
-                        )
-
-                        # Exportação em Excel da lista exibida (com os filtros aplicados)
-                        filtros_aplicados_equip = []
-                        if busca_equip:
-                            filtros_aplicados_equip.append(f'busca "{busca_equip}"')
-                        if filtro_coord_equip != "Todas":
-                            filtros_aplicados_equip.append(f"coordenação {filtro_coord_equip}")
-                        if filtro_status_equip != "Todos":
-                            filtros_aplicados_equip.append(f"status {filtro_status_equip}")
-                        texto_filtros_equip = "Filtros: " + ", ".join(filtros_aplicados_equip) if filtros_aplicados_equip else "Sem filtros (todos os registros)"
-                        df_planilha_equip = df_exibir_equip.rename(columns={"id": "Registro Nº"})
-                        col_xl1, col_xl2 = st.columns([1, 2], vertical_alignment="center")
-                        col_xl1.download_button(
-                            label="Gerar relatório em Excel",
-                            data=gerar_excel_equipamentos_ngi(df_planilha_equip, texto_filtros_equip),
-                            file_name=f"Equipamentos_Emprestados_{date.today().strftime('%Y%m%d')}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            icon=":material/download:",
-                            type="primary",
-                            use_container_width=True,
-                            disabled=df_planilha_equip.empty,
-                            key="baixar_excel_equipamentos"
-                        )
-                        col_xl2.caption(f"A planilha traz a lista exibida acima ({len(df_planilha_equip)} registro(s)). {texto_filtros_equip}.")
-
-                        if df_filtrado_equip.empty:
-                            st.info("Nenhum equipamento encontrado com os filtros aplicados.")
-                        else:
-                            st.markdown("<br>", unsafe_allow_html=True)
-                            st.markdown('<h3 style="font-size: 18px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center;"><span style="display: inline-block; width: 6px; height: 18px; background-color: #147746; margin-right: 8px; border-radius: 2px;"></span>Editar / Excluir Registro</h3>', unsafe_allow_html=True)
-
-                            df_filtrado_equip_idx = df_filtrado_equip.reset_index(drop=True)
-                            opcao_equip = st.selectbox(
-                                "Selecione o registro:",
-                                df_filtrado_equip_idx.index,
-                                format_func=lambda x: f"Registro Nº {df_filtrado_equip_idx.loc[x, 'id']} - {df_filtrado_equip_idx.loc[x, 'nome_item']} ({df_filtrado_equip_idx.loc[x, 'solicitante_usuario']})"
-                            )
-                            id_equip_atual = int(df_filtrado_equip_idx.loc[opcao_equip, "id"])
-                            reg = df_filtrado_equip_idx.loc[opcao_equip]
-
-                            col_ee1, col_ee2 = st.columns(2)
-                            edit_nome_item = col_ee1.text_input("Nome do Item:", value=reg["nome_item"] or "")
-                            edit_marca_modelo = col_ee2.text_input("Marca/Modelo:", value=reg["marca_modelo"] or "")
-
-                            col_ee3, col_ee4 = st.columns(2)
-                            edit_numero_serie = col_ee3.text_input("Nº de Série:", value=reg["numero_serie"] or "")
-                            edit_patrimonio = col_ee4.text_input("Patrimônio:", value=reg["patrimonio"] or "")
-
-                            col_ee5, col_ee6 = st.columns(2)
-                            edit_solicitante = col_ee5.text_input("Solicitante/Usuário:", value=reg["solicitante_usuario"] or "")
-                            idx_coord_atual = lista_coord_equip.index(reg["coordenacao"]) if reg["coordenacao"] in lista_coord_equip else 0
-                            edit_coordenacao = col_ee6.selectbox("Coordenação:", lista_coord_equip if lista_coord_equip else ["GERAL"], index=idx_coord_atual, key=f"edit_coord_{id_equip_atual}")
-
-                            edit_data_prevista = st.text_input("Data Prevista para Devolução:", value=reg["data_prevista_devolucao"] or "Indeterminado")
-
-                            lista_status_equip = ["Em uso", "Devolvido"]
-                            idx_status_atual = lista_status_equip.index(reg["status"]) if reg["status"] in lista_status_equip else 0
-                            edit_status = st.selectbox("Status:", lista_status_equip, index=idx_status_atual, key=f"edit_status_{id_equip_atual}")
-
-                            edit_devolucao_indeterminada = st.checkbox("Data de devolução indeterminada", value=(reg["data_devolucao"] is None), key=f"edit_dev_indet_{id_equip_atual}")
-                            if not edit_devolucao_indeterminada:
-                                valor_data_devolucao = reg["data_devolucao"] if reg["data_devolucao"] is not None else date.today()
-                                edit_data_devolucao = st.date_input("Data da Devolução:", value=valor_data_devolucao, format="DD/MM/YYYY", key=f"edit_data_dev_{id_equip_atual}")
-                            else:
-                                edit_data_devolucao = None
-
-                            edit_observacao = st.text_area("Observação:", value=reg["observacao"] or "", key=f"edit_obs_{id_equip_atual}")
-
-                            col_be1, col_be2 = st.columns([1, 4])
-                            with col_be1:
-                                if st.button("Salvar Alterações", type="primary"):
-                                    cursor = conn.cursor()
-                                    cursor.execute("""
-                                UPDATE equipamentos_emprestados
-                                SET nome_item = %s, marca_modelo = %s, numero_serie = %s, patrimonio = %s,
-                                    solicitante_usuario = %s, coordenacao = %s, data_prevista_devolucao = %s,
-                                    status = %s, data_devolucao = %s, observacao = %s
-                                WHERE id = %s;
-                            """, (
-                                        edit_nome_item.strip(), edit_marca_modelo.strip(), edit_numero_serie.strip(), edit_patrimonio.strip(),
-                                        edit_solicitante.strip(), edit_coordenacao, edit_data_prevista.strip(),
-                                        edit_status, edit_data_devolucao, edit_observacao.strip(), id_equip_atual
-                                    ))
-                                    conn.commit()
-                                    st.success("Registro atualizado com sucesso!")
-                                    st.rerun()
-                            with col_be2:
-                                if st.button("Excluir Registro"):
-                                    cursor = conn.cursor()
-                                    cursor.execute("DELETE FROM equipamentos_emprestados WHERE id = %s;", (id_equip_atual,))
-                                    conn.commit()
-                                    st.warning("Registro removido com sucesso.")
-                                    st.rerun()
