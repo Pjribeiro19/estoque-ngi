@@ -23,9 +23,13 @@ import uuid
 from streamlit_cookies_controller import CookieController
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
+# O ícone da aba (favicon) fica no próprio repositório: static/favicon.png.
+# Antes ele vinha de um link do site gov.br; quando o link falhava, o ícone sumia.
+import os as _os_favicon
+CAMINHO_FAVICON = _os_favicon.path.join(_os_favicon.path.dirname(_os_favicon.path.abspath(__file__)), "static", "favicon.png")
 st.set_page_config(
     page_title="SISTEMA DE GESTÃO DE ALMOXARIFADO NGI CARAJÁS", 
-    page_icon="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png", 
+    page_icon=CAMINHO_FAVICON if _os_favicon.path.exists(CAMINHO_FAVICON) else "🌳", 
     layout="wide"
 )
 
@@ -232,9 +236,12 @@ def personalizar_titulo_inicial_streamlit():
             conteudo = f.read()
 
         titulo_novo = "Gestão de Almoxarifado NGI Carajás"
-        icone_url = "https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png"
-
-        ja_processado = f"<title>{titulo_novo}</title>" in conteudo
+        data_uri_icone = ""
+        if os.path.exists(CAMINHO_FAVICON):
+            with open(CAMINHO_FAVICON, "rb") as arquivo_icone:
+                data_uri_icone = "data:image/png;base64," + base64.b64encode(arquivo_icone.read()).decode("utf-8")
+        # Reprocessa sempre que o arquivo static/favicon.png for trocado.
+        ja_processado = f"<title>{titulo_novo}</title>" in conteudo and (not data_uri_icone or f'href="{data_uri_icone}"' in conteudo)
 
         conteudo_novo = re.sub(r"<title>.*?</title>", f"<title>{titulo_novo}</title>", conteudo, count=1)
 
@@ -242,11 +249,8 @@ def personalizar_titulo_inicial_streamlit():
         # forma de texto, dentro do próprio arquivo). Assim o ícone chega
         # junto com a primeira resposta da página - não existe uma segunda
         # requisição que possa demorar e deixar o ícone padrão aparecer.
-        if not ja_processado:
-            resposta_icone = requests.get(icone_url, timeout=10)
-            if resposta_icone.status_code == 200:
-                b64_icone = base64.b64encode(resposta_icone.content).decode("utf-8")
-                data_uri_icone = f"data:image/png;base64,{b64_icone}"
+        if not ja_processado and data_uri_icone:
+            if True:
                 conteudo_novo = re.sub(
                     r'<link[^>]*rel=["\'][^"\']*icon[^"\']*["\'][^>]*>',
                     f'<link rel="icon" href="{data_uri_icone}">',
@@ -2143,7 +2147,7 @@ with ConexaoExecucaoNGI() as conn:
                 st.write("<br><br>", unsafe_allow_html=True)
                 st.markdown("""
             <div class="img-container">
-                <img src="https://www.gov.br/icmbio/pt-br/assuntos/biodiversidade/unidade-de-conservacao/unidades-de-biomas/marinho/lista-de-ucs/parna-marinho-dos-abrolhos/fomulario-denuncia/icmbio-logo-1.png" width="280">
+                <img src="app/static/logo_icmbio.webp" width="280">
             </div>
         """, unsafe_allow_html=True)
                 st.markdown('<h3 style="display: flex; align-items: center; gap: 8px;"><span class="material-symbols-rounded" style="font-size: 22px; color: #147746;">lock</span>Criar Nova Senha</h3>', unsafe_allow_html=True)
